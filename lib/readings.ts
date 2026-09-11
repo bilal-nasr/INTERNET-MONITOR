@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
-import { sendQuotaAlert } from "@/lib/email";
+import { sendAlertEmail } from "@/lib/email";
+import { buildAlertReport, minimalAlertReport } from "@/lib/email-report";
 import { quotaBytes } from "@/lib/format";
 import type { SettingsRow } from "@/lib/settings";
 import { isWithinWindow, localParts, localTimeInstant, toHHMM } from "@/lib/time";
@@ -157,15 +158,22 @@ export async function recordReading(
     );
     if (claimed) {
       try {
-        await sendQuotaAlert({
-          to: settings.alert_email_to!,
+        // The extra aggregates run once a day, on the one push that trips the
+        // quota, and never on the pushes either side of it. If any of them
+        // fail the alert still goes out carrying the figures already in hand.
+        const figures = {
+          settings,
+          kind: "alert" as const,
           date: local.date,
           usedBytes: used,
           quotaBytes: quota,
-          windowStart: base.window.start,
-          windowEnd: base.window.end,
-          timezone: settings.timezone,
+          now,
+        };
+        const report = await buildAlertReport(figures).catch((err) => {
+          console.warn("[readings] could not build the full alert report", err);
+          return minimalAlertReport(figures);
         });
+        await sendAlertEmail(settings.alert_email_to!, report);
         alertSent = true;
       } catch (err) {
         await db.none("UPDATE daily_windows SET notified = false WHERE id = $1", [window!.id]);

@@ -1,15 +1,35 @@
 @import "tailwindcss";
 
+/*
+ * Chart colours come from a validated categorical palette: download is slot 1
+ * (blue), upload is slot 2 (orange). The pair clears colourblind separation and
+ * contrast against both surfaces, and every chart that uses it also carries a
+ * legend or direct labels, so identity is never colour alone.
+ *
+ * The heatmap uses a single-hue sequential ramp. Light mode runs pale to deep,
+ * dark mode deep to pale, so in both the near-zero end recedes into the surface.
+ */
 :root {
   --background: #fafaf9;
   --foreground: #171717;
   --surface: #ffffff;
   --border: #e5e5e5;
   --muted: #71717a;
+
   --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+
   --status-good: #0ca30c;
   --status-warning: #fab219;
   --status-critical: #d03b3b;
+
+  --scale-1: #cde2fb;
+  --scale-2: #9ec5f4;
+  --scale-3: #6da7ec;
+  --scale-4: #3987e5;
+  --scale-5: #256abf;
+  --scale-6: #184f95;
 }
 
 @theme inline {
@@ -19,6 +39,8 @@
   --color-border: var(--border);
   --color-muted: var(--muted);
   --color-series-1: var(--series-1);
+  --color-series-2: var(--series-2);
+  --color-series-3: var(--series-3);
   --color-status-good: var(--status-good);
   --color-status-warning: var(--status-warning);
   --color-status-critical: var(--status-critical);
@@ -33,11 +55,75 @@
     --surface: #1a1a19;
     --border: #2e2e2c;
     --muted: #a1a1aa;
-    --series-1: #5b9be6;
+
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+
+    --scale-1: #0d366b;
+    --scale-2: #104281;
+    --scale-3: #184f95;
+    --scale-4: #256abf;
+    --scale-5: #3987e5;
+    --scale-6: #6da7ec;
   }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
+}
+
+/*
+ * Arabic.
+ *
+ * Geist carries no Arabic glyphs, so without this the script falls through to
+ * whatever each machine happens to have and the page lands differently on every
+ * device. Cairo is a sans in the same register and covers both scripts, which
+ * matters because these pages mix Arabic prose with Latin identifiers that are
+ * never translated: GB, pppoe-out1, Asia/Beirut.
+ *
+ * Arabic has no capitals and its letters carry their weight lower, so the
+ * tracking that tightens Geist headings works against it; it is reset, and the
+ * line height is opened up for the ascenders and the dots below the baseline.
+ */
+:lang(ar) body {
+  font-family: var(--font-cairo), system-ui, sans-serif;
+  line-height: 1.7;
+}
+
+:lang(ar) .tracking-tight {
+  letter-spacing: normal;
+}
+
+/*
+ * Figures stay Latin in both languages, so a column of them still has to line
+ * up under a right-to-left heading. `tabular-nums` gives equal advance widths;
+ * isolation keeps a number from being reordered by the Arabic around it.
+ */
+[dir="rtl"] .tabular-nums {
+  unicode-bidi: isolate;
+}
+
+/*
+ * An input holding an identifier is marked dir="ltr" in the markup. Its text
+ * then starts on the left of the box, which inside a right-to-left form reads
+ * as the field being empty, so it is pushed back to the side the eye lands on.
+ */
+[dir="rtl"] input[dir="ltr"],
+[dir="rtl"] select[dir="ltr"] {
+  text-align: right;
+}
+
+/*
+ * A path, an identifier or an environment variable is not Arabic, and it is not
+ * English prose either: it is a literal that has to be read exactly as written.
+ * Left to the bidi algorithm inside a right-to-left sentence, the leading slash
+ * of "/api/ingest" is a neutral character and lands on the wrong end of the
+ * word. Isolating the element keeps it intact and lets the sentence around it
+ * run the other way.
+ */
+[dir="rtl"] code {
+  direction: ltr;
+  unicode-bidi: isolate;
 }

@@ -1,7 +1,10 @@
 import { formatBytes } from "@/lib/format";
+import { fill } from "@/lib/i18n";
+import { getI18n } from "@/lib/i18n/server";
 import type { TodayUsage } from "@/lib/usage";
 
-export function UsageProgress({ usage }: { usage: TodayUsage }) {
+export async function UsageProgress({ usage }: { usage: TodayUsage }) {
+  const { d, f } = await getI18n();
   const pct = Math.min(100, Math.max(0, usage.percent_of_quota));
   const over = usage.used_since_baseline > usage.quota_bytes;
   const warn = !over && pct >= 80;
@@ -10,10 +13,17 @@ export function UsageProgress({ usage }: { usage: TodayUsage }) {
   return (
     <section className="rounded-xl border border-border bg-surface p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-sm font-medium text-muted">Today in the quota window</h2>
+        <h2 className="text-sm font-medium text-muted">{d.dashboard.quotaWindowHeading}</h2>
+        {/* The window is a clock range, so it is read left to right in both
+            languages; only the sentence around it changes direction. */}
         <span className="text-xs text-muted">
-          {usage.window.start}-{usage.window.end} {usage.timezone}
-          {usage.window.active ? " (active now)" : ` (now ${usage.local_time})`}
+          <span dir="ltr">
+            {usage.window.start}-{usage.window.end}
+          </span>{" "}
+          {usage.timezone}{" "}
+          {usage.window.active
+            ? d.dashboard.windowActive
+            : fill(d.dashboard.windowInactive, { time: usage.local_time })}
         </span>
       </div>
 
@@ -23,10 +33,18 @@ export function UsageProgress({ usage }: { usage: TodayUsage }) {
             {formatBytes(usage.used_since_baseline)}
           </div>
           <div className="text-sm text-muted">
-            of {formatBytes(usage.quota_bytes)} quota ({usage.percent_of_quota.toFixed(0)}%)
+            {fill(d.dashboard.ofQuota, {
+              quota: formatBytes(usage.quota_bytes),
+              percent: usage.percent_of_quota.toFixed(0),
+            })}
           </div>
         </div>
-        <Badge over={over} warn={warn} notified={usage.notified} hasBaseline={usage.baseline !== null} />
+        <Badge
+          over={over}
+          warn={warn}
+          notified={usage.notified}
+          hasBaseline={usage.baseline !== null}
+        />
       </div>
 
       <div
@@ -34,7 +52,7 @@ export function UsageProgress({ usage }: { usage: TodayUsage }) {
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={Math.round(pct)}
-        aria-label="Usage as a percentage of the daily quota"
+        aria-label={d.dashboard.progressLabel}
         className="mt-4 h-3 w-full overflow-hidden rounded-full bg-border"
       >
         <div className={`h-full rounded-full ${barColor} transition-[width]`} style={{ width: `${pct}%` }} />
@@ -42,29 +60,29 @@ export function UsageProgress({ usage }: { usage: TodayUsage }) {
 
       <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-1 text-xs text-muted sm:grid-cols-4">
         <div>
-          <dt>Baseline set</dt>
+          <dt>{d.dashboard.baselineSet}</dt>
           <dd className="text-foreground">
-            {usage.baseline ? formatTime(usage.baseline.recorded_at, usage.timezone) : "not yet"}
+            {usage.baseline ? f.stamp(usage.baseline.recorded_at, usage.timezone) : d.common.notYet}
           </dd>
         </div>
         <div>
-          <dt>Readings today</dt>
-          <dd className="text-foreground tabular-nums">{usage.readings_count}</dd>
+          <dt>{d.dashboard.readingsToday}</dt>
+          <dd className="text-foreground tabular-nums">{f.count(usage.readings_count)}</dd>
         </div>
         <div>
-          <dt>Quota</dt>
+          <dt>{d.dashboard.quota}</dt>
           <dd className="text-foreground tabular-nums">{usage.quota_gb} GB</dd>
         </div>
         <div>
-          <dt>Alert sent</dt>
-          <dd className="text-foreground">{usage.notified ? "yes" : "no"}</dd>
+          <dt>{d.dashboard.alertSent}</dt>
+          <dd className="text-foreground">{usage.notified ? d.common.yes : d.common.no}</dd>
         </div>
       </dl>
     </section>
   );
 }
 
-function Badge({
+async function Badge({
   over,
   warn,
   notified,
@@ -75,36 +93,32 @@ function Badge({
   notified: boolean;
   hasBaseline: boolean;
 }) {
+  const { d } = await getI18n();
+
   if (!hasBaseline) {
-    return <span className="rounded-full border border-border px-2.5 py-1 text-xs text-muted">Waiting for window</span>;
+    return (
+      <span className="rounded-full border border-border px-2.5 py-1 text-xs text-muted">
+        {d.dashboard.waitingForWindow}
+      </span>
+    );
   }
   if (over) {
     return (
       <span className="rounded-full bg-status-critical/15 px-2.5 py-1 text-xs font-medium text-status-critical">
-        &#9888; Over quota{notified ? ", alerted" : ""}
+        &#9888; {notified ? d.dashboard.overQuotaAlerted : d.dashboard.overQuota}
       </span>
     );
   }
   if (warn) {
     return (
       <span className="rounded-full bg-status-warning/20 px-2.5 py-1 text-xs font-medium text-amber-700 dark:text-status-warning">
-        &#9650; Approaching quota
+        &#9650; {d.dashboard.approachingQuota}
       </span>
     );
   }
   return (
     <span className="rounded-full bg-status-good/15 px-2.5 py-1 text-xs font-medium text-green-700 dark:text-status-good">
-      &#10003; Within quota
+      &#10003; {d.dashboard.withinQuota}
     </span>
   );
-}
-
-export function formatTime(iso: string, timeZone: string): string {
-  return new Intl.DateTimeFormat("en-GB", {
-    timeZone,
-    hour: "2-digit",
-    minute: "2-digit",
-    day: "2-digit",
-    month: "short",
-  }).format(new Date(iso));
 }

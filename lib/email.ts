@@ -1,5 +1,8 @@
 import { Resend } from "resend";
 import { formatBytes } from "@/lib/format";
+import { DIRECTION, type Locale } from "@/lib/i18n/config";
+import { fill, getDictionaryFor } from "@/lib/i18n";
+import { renderAlertEmail, type AlertReport } from "@/lib/email-template";
 
 export class EmailError extends Error {
   constructor(message: string) {
@@ -30,8 +33,24 @@ async function send(to: string, subject: string, text: string, html: string): Pr
   return data?.id ?? "";
 }
 
+/**
+ * An alert is sent with no request behind it, so its language comes from the
+ * stored setting rather than from a header. The mail client has no stylesheet
+ * of ours either, so direction is set on the element itself: without it an
+ * Arabic alert would be laid out left to right by whatever is reading it.
+ */
+function shell(locale: Locale, body: string): string {
+  const dir = DIRECTION[locale];
+  const align = dir === "rtl" ? "right" : "left";
+  return `
+    <div dir="${dir}" style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:520px;text-align:${align}">
+      ${body}
+    </div>`;
+}
+
 export interface QuotaAlertInput {
   to: string;
+  locale: Locale;
   date: string;
   usedBytes: number;
   quotaBytes: number;
@@ -41,39 +60,67 @@ export interface QuotaAlertInput {
 }
 
 export function sendQuotaAlert(input: QuotaAlertInput): Promise<string> {
+  const d = getDictionaryFor(input.locale).email;
   const used = formatBytes(input.usedBytes);
   const quota = formatBytes(input.quotaBytes);
-  const pct = Math.round((input.usedBytes / input.quotaBytes) * 100);
-  const subject = `Internet quota exceeded: ${used} of ${quota} used (${input.date})`;
+  const percent = Math.round((input.usedBytes / input.quotaBytes) * 100);
+
+  const subject = fill(d.alertSubject, { used, quota, date: input.date });
+  const window = `${input.windowStart}-${input.windowEnd} (${input.timezone})`;
+  const usedValue = fill(d.usedValue, { used, percent, quota });
+
   const text = [
-    `Your home internet usage has exceeded the daily quota.`,
+    d.alertIntro,
     ``,
-    `Date:   ${input.date}`,
-    `Window: ${input.windowStart}-${input.windowEnd} (${input.timezone})`,
-    `Used:   ${used} (${pct}% of ${quota})`,
+    `${d.date}: ${input.date}`,
+    `${d.window}: ${window}`,
+    `${d.used}: ${usedValue}`,
     ``,
-    `This is the only alert you will receive for today.`,
+    d.onlyAlert,
   ].join("\n");
-  const html = `
-    <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:520px">
-      <h2 style="margin:0 0 12px">Internet quota exceeded</h2>
-      <p style="margin:0 0 16px;color:#444">Your home internet usage has exceeded the daily quota.</p>
+
+  const pad = "padding:4px 12px";
+  const html = shell(
+    input.locale,
+    `<h2 style="margin:0 0 12px">${d.alertHeading}</h2>
+      <p style="margin:0 0 16px;color:#444">${d.alertIntro}</p>
       <table style="border-collapse:collapse;font-size:14px">
-        <tr><td style="padding:4px 12px 4px 0;color:#666">Date</td><td>${input.date}</td></tr>
-        <tr><td style="padding:4px 12px 4px 0;color:#666">Window</td><td>${input.windowStart}-${input.windowEnd} (${input.timezone})</td></tr>
-        <tr><td style="padding:4px 12px 4px 0;color:#666">Used</td><td><strong>${used}</strong> (${pct}% of ${quota})</td></tr>
+        <tr><td style="${pad};color:#666">${d.date}</td><td>${input.date}</td></tr>
+        <tr><td style="${pad};color:#666">${d.window}</td><td>${window}</td></tr>
+        <tr><td style="${pad};color:#666">${d.used}</td><td>${fill(d.usedValue, {
+          used: `<strong>${used}</strong>`,
+          percent,
+          quota,
+        })}</td></tr>
       </table>
-      <p style="margin:16px 0 0;color:#888;font-size:12px">This is the only alert you will receive for today.</p>
-    </div>`;
+      <p style="margin:16px 0 0;color:#888;font-size:12px">${d.onlyAlert}</p>`,
+  );
+
   return send(input.to, subject, text, html);
 }
 
-export function sendTestEmail(to: string): Promise<string> {
+export function sendTestEmail(to: string, locale: Locale): Promise<string> {
+  const d = getDictionaryFor(locale).email;
   const now = new Date().toISOString();
+  const body = fill(d.testBody, { time: now });
   return send(
     to,
-    "Test alert from MikroTik quota monitor",
-    `This is a test email sent at ${now}. Alerts are working.`,
-    `<p style="font-family:system-ui,sans-serif">This is a test email sent at <code>${now}</code>. Alerts are working.</p>`,
+    d.testSubject,
+    body,
+    shell(locale, `<p>${fill(d.testBody, { time: `<code>${now}</code>` })}</p>`),
   );
+}
+
+/**
+ * Send a rendered report. The same function serves the real over-quota alert
+ * and the settings page's test send; `report.kind` is what tells them apart,
+ * which is why the test mail is a true preview rather than a separate template
+ * that can drift out of step with the one that matters.
+ *
+ * NOTE: this template is English-only and does not yet go through the i18n
+ * dictionaries that sendQuotaAlert below uses. The two need reconciling.
+ */
+export function sendAlertEmail(to: string, report: AlertReport): Promise<string> {
+  const { subject, text, html } = renderAlertEmail(report);
+  return send(to, subject, text, html);
 }

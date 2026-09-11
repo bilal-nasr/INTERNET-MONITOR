@@ -1,0 +1,161 @@
+"use client";
+
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useState, type FormEvent } from "react";
+import { useI18n } from "@/components/I18nProvider";
+import { rangeLabel, type RangePreset } from "@/lib/range";
+
+/**
+ * The time filter for the statistics and sessions pages.
+ *
+ * Selecting a range rewrites the URL rather than fetching: the server component
+ * re-renders with the new bounds, so every view is bookmarkable and shareable,
+ * and the browser never has to know how a range is resolved. The language is
+ * already in the path, so it travels with the range for free.
+ */
+
+const QUICK: RangePreset[] = [
+  "last_hour",
+  "last_6h",
+  "last_24h",
+  "today",
+  "yesterday",
+  "this_week",
+  "last_7d",
+  "this_cycle",
+  "last_cycle",
+  "last_30d",
+  "last_90d",
+  "this_year",
+  "all_time",
+];
+
+export function RangePicker({
+  preset,
+  from,
+  to,
+}: {
+  preset: string;
+  from: string | null;
+  to: string | null;
+}) {
+  const { d } = useI18n();
+  const router = useRouter();
+  const pathname = usePathname();
+  const params = useSearchParams();
+
+  // The panel is open whenever a custom range is showing, and can also be
+  // opened by hand from any preset.
+  const [requestedOpen, setRequestedOpen] = useState(false);
+  const open = requestedOpen || preset === "custom";
+
+  function go(next: Record<string, string | null>) {
+    const query = new URLSearchParams(params.toString());
+    for (const [key, value] of Object.entries(next)) {
+      if (value === null) query.delete(key);
+      else query.set(key, value);
+    }
+    router.push(`${pathname}?${query.toString()}`);
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap gap-1.5 sm:gap-2">
+        {QUICK.map((p) => (
+          <button
+            key={p}
+            type="button"
+            aria-pressed={p === preset}
+            onClick={() => go({ range: p, from: null, to: null })}
+            className={`rounded-md px-2 py-1 text-xs transition-colors sm:px-2.5 sm:py-1.5 ${
+              p === preset
+                ? "bg-foreground text-background"
+                : "border border-border text-muted hover:bg-border/60 hover:text-foreground"
+            }`}
+          >
+            {rangeLabel(d, p)}
+          </button>
+        ))}
+        <button
+          type="button"
+          aria-pressed={preset === "custom"}
+          aria-expanded={open}
+          onClick={() => setRequestedOpen((v) => !v)}
+          className={`rounded-md px-2 py-1 text-xs transition-colors sm:px-2.5 sm:py-1.5 ${
+            preset === "custom"
+              ? "bg-foreground text-background"
+              : "border border-border text-muted hover:bg-border/60 hover:text-foreground"
+          }`}
+        >
+          {d.rangePicker.custom}
+        </button>
+      </div>
+
+      {open && (
+        // Keyed on the applied range, so a range chosen elsewhere (the back
+        // button, a shared link) remounts the fields with those dates instead
+        // of an effect racing whatever is half-typed in them.
+        <CustomRangeForm
+          key={`${from ?? ""}|${to ?? ""}`}
+          initialFrom={from}
+          initialTo={to}
+          onApply={(next) => go({ range: "custom", ...next })}
+        />
+      )}
+    </div>
+  );
+}
+
+function CustomRangeForm({
+  initialFrom,
+  initialTo,
+  onApply,
+}: {
+  initialFrom: string | null;
+  initialTo: string | null;
+  onApply: (range: { from: string; to: string }) => void;
+}) {
+  const { d } = useI18n();
+  const [from, setFrom] = useState(initialFrom ?? "");
+  const [to, setTo] = useState(initialTo ?? "");
+
+  function submit(e: FormEvent) {
+    e.preventDefault();
+    if (from && to) onApply({ from, to });
+  }
+
+  const field =
+    "mt-1 block rounded-md border border-border bg-background px-2.5 py-1.5 text-sm text-foreground outline-none focus:border-series-1 focus:ring-2 focus:ring-series-1/30";
+
+  return (
+    <form onSubmit={submit} className="flex flex-wrap items-end gap-3">
+      <label className="text-xs text-muted">
+        {d.common.from}
+        <input
+          type="date"
+          required
+          value={from}
+          onChange={(e) => setFrom(e.target.value)}
+          className={field}
+        />
+      </label>
+      <label className="text-xs text-muted">
+        {d.common.to}
+        <input
+          type="date"
+          required
+          value={to}
+          onChange={(e) => setTo(e.target.value)}
+          className={field}
+        />
+      </label>
+      <button
+        type="submit"
+        className="rounded-md bg-foreground px-3 py-1.5 text-sm text-background transition-opacity hover:opacity-90"
+      >
+        {d.common.apply}
+      </button>
+      <span className="text-xs text-muted">{d.rangePicker.bothDaysIncluded}</span>
+    </form>
+  );
+}

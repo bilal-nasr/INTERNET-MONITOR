@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { useI18n } from "@/components/I18nProvider";
 
 export interface ToastState {
   kind: "success" | "error";
@@ -8,6 +9,8 @@ export interface ToastState {
 }
 
 export function Toast({ toast, onDismiss }: { toast: ToastState | null; onDismiss: () => void }) {
+  const { d } = useI18n();
+
   useEffect(() => {
     if (!toast) return;
     const t = setTimeout(onDismiss, toast.kind === "success" ? 4000 : 8000);
@@ -29,8 +32,8 @@ export function Toast({ toast, onDismiss }: { toast: ToastState | null; onDismis
       <button
         type="button"
         onClick={onDismiss}
-        className="ml-3 text-xs text-muted hover:text-foreground"
-        aria-label="Dismiss"
+        className="ms-3 text-xs text-muted hover:text-foreground"
+        aria-label={d.common.dismiss}
       >
         &#10005;
       </button>

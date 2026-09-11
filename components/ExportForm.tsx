@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useI18n } from "@/components/I18nProvider";
 
 function isoDate(d: Date): string {
   return d.toISOString().slice(0, 10);
@@ -10,6 +11,7 @@ const inputClass =
   "mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:border-series-1 focus:ring-2 focus:ring-series-1/30";
 
 export function ExportForm() {
+  const { locale, d } = useI18n();
   const today = new Date();
   const weekAgo = new Date(today);
   weekAgo.setUTCDate(weekAgo.getUTCDate() - 6);
@@ -20,15 +22,17 @@ export function ExportForm() {
 
   function download(format: "csv" | "json") {
     if (!from || !to) {
-      setError("Pick both dates.");
+      setError(d.export.pickBothDates);
       return;
     }
     if (from > to) {
-      setError("The start date must be on or before the end date.");
+      setError(d.export.startBeforeEnd);
       return;
     }
     setError(null);
-    const url = `/api/export?format=${format}&from=${from}&to=${to}`;
+    // The language travels with the request so anything the route rejects comes
+    // back worded the way the rest of the page is.
+    const url = `/api/export?format=${format}&from=${from}&to=${to}&lang=${locale}`;
     // The route sets Content-Disposition: attachment, so navigating triggers a download.
     const a = document.createElement("a");
     a.href = url;
@@ -42,18 +46,33 @@ export function ExportForm() {
     <section className="rounded-xl border border-border bg-surface p-5">
       <div className="grid gap-4 sm:max-w-md sm:grid-cols-2">
         <div>
-          <label htmlFor="from" className="block text-sm font-medium">From</label>
-          <input id="from" type="date" value={from} max={to} onChange={(e) => setFrom(e.target.value)} className={inputClass} />
+          <label htmlFor="from" className="block text-sm font-medium">
+            {d.common.from}
+          </label>
+          <input
+            id="from"
+            type="date"
+            value={from}
+            max={to}
+            onChange={(e) => setFrom(e.target.value)}
+            className={inputClass}
+          />
         </div>
         <div>
-          <label htmlFor="to" className="block text-sm font-medium">To</label>
-          <input id="to" type="date" value={to} min={from} onChange={(e) => setTo(e.target.value)} className={inputClass} />
+          <label htmlFor="to" className="block text-sm font-medium">
+            {d.common.to}
+          </label>
+          <input
+            id="to"
+            type="date"
+            value={to}
+            min={from}
+            onChange={(e) => setTo(e.target.value)}
+            className={inputClass}
+          />
         </div>
       </div>
-      <p className="mt-2 text-xs text-muted">
-        Dates are inclusive and interpreted in the timezone from Settings. Columns: recorded_at (ISO 8601 UTC), tx_bytes,
-        rx_bytes, total_bytes.
-      </p>
+      <p className="mt-2 text-xs text-muted">{d.export.columnsHint}</p>
       {error && <p className="mt-2 text-sm text-status-critical">{error}</p>}
       <div className="mt-4 flex gap-3">
         <button
@@ -61,14 +80,14 @@ export function ExportForm() {
           onClick={() => download("csv")}
           className="rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background hover:opacity-90"
         >
-          Download CSV
+          {d.export.downloadCsv}
         </button>
         <button
           type="button"
           onClick={() => download("json")}
           className="rounded-md border border-border px-4 py-2 text-sm hover:bg-border/60"
         >
-          Download JSON
+          {d.export.downloadJson}
         </button>
       </div>
     </section>

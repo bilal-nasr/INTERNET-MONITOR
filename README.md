@@ -27,6 +27,11 @@ Every minute the router runs a small script (`router/quota-push.rsc`) that reads
 
 Quota is decimal gigabytes: 8 GB = 8,000,000,000 bytes.
 
+Alongside the daily window quota there is a monthly cap (`settings.monthly_quota_gb`, 600 GB by
+default) measured over a billing cycle that rolls over on `settings.billing_cycle_day`, the 5th by
+default. Unlike the daily quota the cap counts all traffic at every hour, not just traffic inside
+the window. It is reported on the dashboard and on `/stats`, and it never sends an alert.
+
 ### Session accounting
 
 A PPPoE interface restarts its counters at zero on every reconnect, so totalling the raw counter would lose traffic on each drop. Instead each session row keeps both the last raw counter and a running total, and adds `counter - last_counter` per sample, or the whole counter when it went backwards.
@@ -72,11 +77,24 @@ Or with Docker, which is how it is meant to run in production:
 docker compose up --build
 ```
 
-Open `/settings` and set the timezone, quota, window, alert email and the WAN interface name.
+Open `/settings` and set the timezone, daily quota and window, the monthly cap and its cycle day,
+the alert email and the WAN interface name.
+
+The unit tests cover the pure logic: range resolution, billing-cycle arithmetic, chart series
+shaping and the quota window bounds. They need no database.
+
+```bash
+pnpm test          # once
+pnpm test:watch    # while editing
+```
 
 ### 3. Email (Resend)
 
 Create an API key at <https://resend.com>. For real delivery, verify a domain and set `ALERT_EMAIL_FROM` to an address on it. Without a verified domain, `onboarding@resend.dev` works but only delivers to the address that owns the Resend account. The "Send test email" button on `/settings` confirms the setup.
+
+Set `APP_URL` to this dashboard's public address to give alert emails an "Open the dashboard" button. It is optional; without it the button is left out.
+
+The alert reports the day's overage, the download and upload split, the billing cycle with its projection, the last seven days against the quota, and connection health. `GET /api/test-email` renders the same mail in the browser without sending it, which is the way to preview changes to it; add `?sample=1` to render fixture data when the database is empty.
 
 ### 4. The router script
 
@@ -125,6 +143,28 @@ New-NetFirewallRule -DisplayName "Quota monitor 3000" -Direction Inbound -Action
 
 Give the app host a static address or a DHCP reservation, otherwise its IP will change and the script will point at nothing.
 
+## Languages
+
+The interface is written in English and Arabic. The language is the first segment of every path,
+so `/en/stats` and `/ar/stats` are the same page in two languages and either can be bookmarked or
+shared. A request without one is redirected: a language chosen from the switcher is remembered in a
+`NEXT_LOCALE` cookie and wins, otherwise the browser's `Accept-Language` decides, and failing that
+English.
+
+Arabic sets `dir="rtl"` and the layout mirrors with it. Two things deliberately do not mirror.
+Chart axes that carry an order stay left to right, because reversing a time axis states something
+different about the data rather than translating it; every label, tick and tooltip on them is still
+translated. And figures keep Latin digits and their units in both languages, so a number read on
+screen is the same number found in an export or in the database.
+
+Every string lives in `lib/i18n/dictionaries/`. English is the source of truth for the shape, and
+Arabic is checked against it at build time, so a key added to one and forgotten in the other fails
+to compile rather than rendering as nothing. Counted phrases carry CLDR plural categories, which is
+why Arabic can say "جلستان" for two rather than "2 جلسات".
+
+Alert emails are the exception to all of the above: they are composed with no request behind them,
+so they follow the `language` column in `settings` rather than a URL. Set it on the settings page.
+
 ## API
 
 | Method | Path | Notes |
@@ -133,11 +173,32 @@ Give the app host a static address or a DHCP reservation, otherwise its IP will 
 | `GET` | `/api/health` | `200` when the database is reachable, `503` otherwise. Used by the container health check. |
 | `GET` | `/api/usage/today` | Today's readings, baseline, `used_since_baseline`, quota and window state. |
 | `GET` | `/api/usage/history?days=30` | Per-day min, max, reboot-aware usage and reading count. Max 365 days. |
-| `GET` | `/api/sessions?days=30&limit=200` | Link sessions with uptime, offline gap and traffic, plus totals. |
+| `GET` | `/api/sessions?range=last_30d&limit=200` | Link sessions with uptime, offline gap and traffic, plus totals. Accepts the same range parameters as `/api/stats`; `days=N` still works. |
+| `GET` | `/api/sessions/totals?ids=1,2,3` | Totals for an explicit set of sessions, summed in the database. Backs the selection bar on the sessions page. |
+| `GET` | `/api/stats?range=today` | Every statistic for one range: totals, a bucketed series, weekday and hour patterns, link reliability, quota compliance and billing-cycle figures. See the range table below. |
 | `GET` | `/api/settings` | Current settings. |
-| `PUT` | `/api/settings` | Any subset of fields. Validates quota > 0, `window_end` after `window_start`, email format and IANA timezone. |
+| `PUT` | `/api/settings` | Any subset of fields. Validates quota > 0, `window_end` after `window_start`, email format, IANA timezone and `language` (`en` or `ar`). |
 | `GET` | `/api/export?format=csv\|json&from=YYYY-MM-DD&to=YYYY-MM-DD` | Streams readings in the range, dates inclusive, in the configured timezone. |
 | `POST` | `/api/test-email` | Sends a test email to `alert_email_to`. |
+
+Any route that can reject a request takes an optional `lang` (`en` or `ar`), and answers in
+that language; without it the `NEXT_LOCALE` cookie and then `Accept-Language` decide. The
+`error` code in the body never changes, so scripts match on that rather than on the wording.
+`/api/ingest` and `/api/health` are excluded: their callers are the router script and a health
+probe, neither of which has a language.
+
+### Ranges
+
+`/api/stats` and `/api/sessions` take a `range` parameter, resolved server-side in the configured
+timezone. Passing `range=custom` also requires `from` and `to`, either `YYYY-MM-DD` (whole local
+days, both ends included) or `YYYY-MM-DDTHH:MM` for an exact instant.
+
+`last_hour`, `last_6h`, `last_24h`, `today`, `yesterday`, `this_week`, `last_7d`, `this_cycle`,
+`last_cycle`, `last_30d`, `last_90d`, `this_year`, `all_time`, `custom`.
+
+The series is grouped into minute, hour, day, week or month buckets chosen from the length of the
+range. Pass `bucket` to override it; a combination that would produce more than 2000 points is
+rejected with `400`.
 
 ## Docker
 
@@ -172,12 +233,14 @@ Then change the `url` line in the router script to the deployed address. Nothing
 
 ```
 app/
-  page.tsx               dashboard, auto-refreshing
-  sessions/page.tsx      link sessions with uptime and per-session traffic
-  settings/page.tsx      settings form
-  export/page.tsx        date range export
-  api/...                route handlers listed above
+  [lang]/page.tsx            dashboard, auto-refreshing
+  [lang]/stats/page.tsx      every statistic for a chosen range, with charts
+  [lang]/sessions/page.tsx   link sessions with uptime and per-session traffic
+  [lang]/settings/page.tsx   settings form
+  [lang]/export/page.tsx     date range export
+  api/...                    route handlers listed above; not under a language
 components/              UI pieces
+proxy.ts                 sends a request with no language in its path to one
 lib/
   db.ts                  pg-promise pool, type parsers and TLS selection
   certs.ts               bundled Supabase root CA
@@ -185,12 +248,21 @@ lib/
   readings.ts            stores a reading and applies the quota window logic
   sessions.ts            link session tracking and reporting
   usage.ts               reading queries, reboot-aware usage math, daily history
-  email.ts               Resend alerts
+  stats.ts               every aggregate behind /stats, all computed in Postgres
+  report.ts              assembles one statistics payload from those aggregates
+  range.ts               range presets resolved to absolute bounds and a bucket
+  billing.ts             billing-cycle arithmetic for the monthly cap
+  series.ts              gap filling, cycle folding and chart labels
+  email.ts               Resend delivery
+  email-report.ts        the figures an alert shows, gathered from lib/stats.ts
+  email-template.ts      the alert email, rendered to subject, text and HTML
   time.ts                timezone, window and duration helpers
+  i18n/                  locales, the two dictionaries, and date and number formatting
 router/quota-push.rsc        pushes counters to the app
 router/pppoe-reconnect.rsc   cycles the WAN session (daily scheduler, watchdog)
 router/internet-watchdog.md  netwatch setup for ISP outages
-schema.sql               tables and the settings seed
+schema.sql               tables, migrations and the settings seed
+vitest.config.mts        test runner config; specs live beside their modules
 Dockerfile               production image
 docker-compose.yml       local run, optionally with Postgres
 ```
@@ -199,6 +271,12 @@ docker-compose.yml       local run, optionally with Postgres
 
 - Timezone (`settings.timezone`, an IANA name such as `Asia/Beirut`) decides which day a reading belongs to and when the window opens. The seed value is `UTC`.
 - The window cannot cross midnight: `window_end` must be after `window_start`.
+- The billing cycle day may be any of 1-31. In a month that is too short it falls back to that
+  month's last day, so a cycle anchored on the 31st still rolls over in February.
+- Statistics are aggregated in Postgres, never in the application: a month of pushes is hundreds of
+  thousands of rows and none of them are shipped to the browser.
+- Selecting sessions on `/sessions` totals them in the database rather than in the browser, so the
+  figure is exact and matches the definition of "total" used everywhere else.
 - One alert per day. To re-arm after testing: `UPDATE daily_windows SET notified = false WHERE window_date = CURRENT_DATE;`
 - If the email send fails, the request returns 502 and `notified` stays false, so the next reading retries.
 - The dashboard refreshes every 15 seconds and the sessions page every 20, pausing while the browser tab is hidden. Click the "Live" pill to refresh immediately.

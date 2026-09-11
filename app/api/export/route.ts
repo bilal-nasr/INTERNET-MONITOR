@@ -1,4 +1,5 @@
 import { badRequest, errorResponse } from "@/lib/api";
+import { dictionaryFromRequest } from "@/lib/i18n/request";
 import { db } from "@/lib/db";
 import { getSettings } from "@/lib/settings";
 import type { Reading } from "@/lib/usage";
@@ -36,20 +37,21 @@ function toRow(r: Reading) {
 }
 
 export async function GET(request: Request) {
+  const d = dictionaryFromRequest(request);
   const params = new URL(request.url).searchParams;
   const format = (params.get("format") ?? "csv").toLowerCase();
   const from = params.get("from") ?? "";
   const to = params.get("to") ?? "";
 
-  if (format !== "csv" && format !== "json") return badRequest("format must be csv or json");
-  if (!isValidDate(from) || !isValidDate(to)) return badRequest("from and to must be YYYY-MM-DD dates");
-  if (from > to) return badRequest("from must be on or before to");
+  if (format !== "csv" && format !== "json") return badRequest(d.errors.exportFormat);
+  if (!isValidDate(from) || !isValidDate(to)) return badRequest(d.errors.exportDates);
+  if (from > to) return badRequest(d.errors.exportOrder);
 
   let timezone: string;
   try {
     timezone = (await getSettings()).timezone;
   } catch (err) {
-    return errorResponse(err);
+    return errorResponse(err, d);
   }
 
   const encoder = new TextEncoder();

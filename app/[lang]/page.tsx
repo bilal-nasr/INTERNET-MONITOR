@@ -1,14 +1,20 @@
 import { connection } from "next/server";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { HistoryChart } from "@/components/HistoryChart";
+import { CycleGauge } from "@/components/stats/CycleGauge";
 import { StatusCard } from "@/components/StatusCard";
 import { UsageProgress } from "@/components/UsageProgress";
+import { Interpolate } from "@/lib/i18n/react";
+import { getI18n } from "@/lib/i18n/server";
 import { getLatestSessionSummary } from "@/lib/sessions";
 import { getSettings, type SettingsRow } from "@/lib/settings";
+import { getCycleUsage } from "@/lib/stats";
 import { getDailyHistory, getTodayUsage } from "@/lib/usage";
 
 export default async function DashboardPage() {
   await connection();
+
+  const { d } = await getI18n();
 
   let settings: SettingsRow;
   try {
@@ -17,17 +23,18 @@ export default async function DashboardPage() {
     return <SetupError message={err instanceof Error ? err.message : String(err)} />;
   }
 
-  const [usage, history, session] = await Promise.all([
+  const [usage, history, session, cycle] = await Promise.all([
     getTodayUsage(settings),
     getDailyHistory(30, settings.timezone),
     getLatestSessionSummary(),
+    getCycleUsage(settings.monthly_quota_gb, settings.billing_cycle_day, settings.timezone),
   ]);
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">Dashboard</h1>
+          <h1 className="text-xl font-semibold tracking-tight">{d.dashboard.title}</h1>
           <p className="text-sm text-muted">{usage.date}</p>
         </div>
         <AutoRefresh seconds={15} />
@@ -43,18 +50,27 @@ export default async function DashboardPage() {
         />
       </div>
 
+      <CycleGauge cycle={cycle} timezone={settings.timezone} />
+
       <HistoryChart history={history} quotaGb={settings.quota_gb} today={usage.date} />
     </div>
   );
 }
 
-function SetupError({ message }: { message: string }) {
+async function SetupError({ message }: { message: string }) {
+  const { d } = await getI18n();
   return (
     <div className="rounded-xl border border-status-critical/40 bg-status-critical/5 p-5">
-      <h1 className="font-semibold text-status-critical">Database not ready</h1>
+      <h1 className="font-semibold text-status-critical">{d.setupError.title}</h1>
       <p className="mt-2 text-sm">
-        The dashboard could not read the <code>settings</code> table. Check <code>DATABASE_URL</code> and run{" "}
-        <code>schema.sql</code> against the database (see README).
+        <Interpolate
+          template={d.setupError.body}
+          values={{
+            table: <code>settings</code>,
+            variable: <code>DATABASE_URL</code>,
+            file: <code>schema.sql</code>,
+          }}
+        />
       </p>
       <pre className="mt-3 overflow-x-auto rounded-md bg-surface p-3 text-xs text-muted">{message}</pre>
     </div>

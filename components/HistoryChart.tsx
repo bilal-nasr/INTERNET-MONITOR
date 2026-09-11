@@ -11,7 +11,10 @@ import {
   YAxis,
   type TooltipContentProps,
 } from "recharts";
+import { useI18n } from "@/components/I18nProvider";
+import { chartMargin, valueAxisSide } from "@/components/stats/chrome";
 import { bytesToGb, formatBytes } from "@/lib/format";
+import { fill, type Dictionary } from "@/lib/i18n";
 import type { DailyUsage } from "@/lib/usage";
 
 interface Props {
@@ -47,34 +50,44 @@ function fillDays(
   return out;
 }
 
-function ChartTooltip({ active, payload }: TooltipContentProps) {
-  if (!active || !payload?.length) return null;
-  const row = payload[0].payload as DailyUsage & { label: string };
-  return (
-    <div className="rounded-md border border-border bg-surface px-3 py-2 text-xs shadow-sm">
-      <div className="font-medium">{row.day}</div>
-      <div className="mt-1 tabular-nums text-muted">
-        Used: <span className="text-foreground">{formatBytes(row.used_bytes)}</span>
+function makeTooltip(d: Dictionary) {
+  return function ChartTooltip({ active, payload }: TooltipContentProps) {
+    if (!active || !payload?.length) return null;
+    const row = payload[0].payload as DailyUsage & { label: string };
+    return (
+      <div className="rounded-md border border-border bg-surface px-3 py-2 text-xs shadow-sm">
+        <div className="font-medium">{row.day}</div>
+        <div className="mt-1 tabular-nums text-muted">
+          {d.common.used}: <span className="text-foreground">{formatBytes(row.used_bytes)}</span>
+        </div>
+        <div className="tabular-nums text-muted">
+          {d.common.readings}: {row.readings}
+        </div>
       </div>
-      <div className="tabular-nums text-muted">Readings: {row.readings}</div>
-    </div>
-  );
+    );
+  };
 }
 
 export function HistoryChart({ history, quotaGb, today, days = 30 }: Props) {
+  const { d, dir } = useI18n();
   const data = fillDays(history, days, today);
   const hasData = history.some((h) => h.used_bytes > 0);
+  const ChartTooltip = makeTooltip(d);
 
   return (
     <section className="rounded-xl border border-border bg-surface p-5">
       <div className="flex items-baseline justify-between">
-        <h2 className="text-sm font-medium text-muted">Daily usage in GB, last {days} days</h2>
-        <span className="text-xs text-muted">all traffic; dashed line = {quotaGb} GB window quota</span>
+        <h2 className="text-sm font-medium text-muted">
+          {fill(d.dashboard.historyHeading, { days })}
+        </h2>
+        <span className="text-xs text-muted">
+          {fill(d.dashboard.historyHint, { quota: quotaGb })}
+        </span>
       </div>
       <div className="mt-4 h-64 w-full">
         {hasData ? (
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }} barCategoryGap={2}>
+            <BarChart data={data} margin={chartMargin(dir)} barCategoryGap={2}>
               <CartesianGrid vertical={false} stroke="var(--border)" />
               <XAxis
                 dataKey="label"
@@ -88,6 +101,7 @@ export function HistoryChart({ history, quotaGb, today, days = 30 }: Props) {
                 tickLine={false}
                 axisLine={false}
                 width={40}
+                orientation={valueAxisSide(dir)}
                 tickFormatter={(v: number) => String(v)}
               />
               <Tooltip content={ChartTooltip} cursor={{ fill: "var(--border)", opacity: 0.4 }} />
@@ -105,7 +119,7 @@ export function HistoryChart({ history, quotaGb, today, days = 30 }: Props) {
           </ResponsiveContainer>
         ) : (
           <div className="flex h-full items-center justify-center text-sm text-muted">
-            No usage recorded yet. Data appears after a few polls.
+            {d.dashboard.historyEmpty}
           </div>
         )}
       </div>

@@ -13,6 +13,11 @@
 CREATE TABLE IF NOT EXISTS settings (
   id                  INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
   quota_gb            NUMERIC NOT NULL DEFAULT 8 CHECK (quota_gb > 0),
+  -- Cap for a whole billing cycle, independent of the daily window quota.
+  monthly_quota_gb    NUMERIC NOT NULL DEFAULT 600 CHECK (monthly_quota_gb > 0),
+  -- Day of the month the billing cycle rolls over on. Clamped to the last day
+  -- of shorter months by the application, so 31 is a valid choice.
+  billing_cycle_day   INTEGER NOT NULL DEFAULT 5 CHECK (billing_cycle_day BETWEEN 1 AND 31),
   window_start        TIME NOT NULL DEFAULT '14:00',
   window_end          TIME NOT NULL DEFAULT '23:59',
   timezone            TEXT NOT NULL DEFAULT 'UTC',
@@ -20,6 +25,10 @@ CREATE TABLE IF NOT EXISTS settings (
   -- Name of the WAN interface as the router reports it, e.g. pppoe-out1.
   wan_interface_name  TEXT NOT NULL DEFAULT 'pppoe-out1',
   polling_enabled     BOOLEAN NOT NULL DEFAULT true,
+  -- Language quota alerts are written in. The pages take their language from
+  -- the URL instead; an alert is sent with no request behind it, so its
+  -- language has to be a stored setting rather than a header.
+  language            TEXT NOT NULL DEFAULT 'en' CHECK (language IN ('en', 'ar')),
   updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -75,6 +84,34 @@ CREATE TABLE IF NOT EXISTS sessions (
 ALTER TABLE interface_readings ADD COLUMN IF NOT EXISTS session_key TEXT;
 ALTER TABLE interface_readings ADD COLUMN IF NOT EXISTS interface_name TEXT;
 
+-- Monthly cap and its cycle day. Existing rows pick up the defaults, so a
+-- database upgraded from an earlier release starts on a 600 GB cycle that
+-- rolls over on the 5th until /settings says otherwise.
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS monthly_quota_gb  NUMERIC NOT NULL DEFAULT 600;
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS billing_cycle_day INTEGER NOT NULL DEFAULT 5;
+
+-- Alert language. A database upgraded from an earlier release keeps sending
+-- English alerts until /settings says otherwise.
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS language TEXT NOT NULL DEFAULT 'en';
+
+-- CHECK constraints have no IF NOT EXISTS, so add them only when missing.
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'settings_monthly_quota_gb_check') THEN
+    ALTER TABLE settings ADD CONSTRAINT settings_monthly_quota_gb_check
+      CHECK (monthly_quota_gb > 0);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'settings_billing_cycle_day_check') THEN
+    ALTER TABLE settings ADD CONSTRAINT settings_billing_cycle_day_check
+      CHECK (billing_cycle_day BETWEEN 1 AND 31);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'settings_language_check') THEN
+    ALTER TABLE settings ADD CONSTRAINT settings_language_check
+      CHECK (language IN ('en', 'ar'));
+  END IF;
+END
+$$;
+
 -- --------------------------------------------------------------- indexes ----
 
 CREATE INDEX IF NOT EXISTS interface_readings_recorded_at_idx
@@ -83,6 +120,12 @@ CREATE INDEX IF NOT EXISTS interface_readings_recorded_at_idx
 -- Serves the export's keyset pagination, which walks (recorded_at, id).
 CREATE INDEX IF NOT EXISTS interface_readings_recorded_at_id_idx
   ON interface_readings (recorded_at, id);
+
+-- Every statistic derives its deltas from a LAG window partitioned by interface
+-- and ordered by (recorded_at, id). This index matches that order exactly, so
+-- the window runs off an index scan instead of sorting the whole range.
+CREATE INDEX IF NOT EXISTS interface_readings_interface_recorded_idx
+  ON interface_readings (interface_name, recorded_at, id);
 
 CREATE INDEX IF NOT EXISTS sessions_started_at_idx ON sessions (started_at DESC);
 
@@ -97,10 +140,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS sessions_single_open_idx
 -- alert_email_to is deliberately NULL: a placeholder address would send real
 -- alerts to a stranger on a database where /settings was never filled in.
 INSERT INTO settings (
-  id, quota_gb, window_start, window_end, timezone, alert_email_to,
-  wan_interface_name, polling_enabled
+  id, quota_gb, monthly_quota_gb, billing_cycle_day, window_start, window_end,
+  timezone, alert_email_to, wan_interface_name, polling_enabled, language
 ) VALUES (
-  1, 8, '14:00', '23:59', 'UTC', NULL, 'pppoe-out1', true
+  1, 8, 600, 5, '14:00', '23:59', 'UTC', NULL, 'pppoe-out1', true, 'en'
 )
 ON CONFLICT (id) DO NOTHING;
 

@@ -333,11 +333,21 @@ function toSummary(r: SessionQueryRow): SessionSummary {
   };
 }
 
+/** A half-open window of wall-clock time; a null start means "everything ever". */
+export interface SessionWindow {
+  from: Date | null;
+  to: Date;
+}
+
 /**
- * Sessions that were active in the last `days` days, newest first, with uptime
- * and the offline gap that preceded each one.
+ * Sessions overlapping the window, newest first, with uptime and the offline
+ * gap that preceded each one. A session counts when any part of it falls inside
+ * the window, so an outage in progress at either edge is still visible.
  */
-export async function getSessions(days: number, limit = 200): Promise<SessionSummary[]> {
+export async function getSessions(
+  { from, to }: SessionWindow,
+  limit = 200,
+): Promise<SessionSummary[]> {
   const rows = await db.any<SessionQueryRow>(
     `WITH ordered AS (
        SELECT ${COLS},
@@ -349,15 +359,16 @@ export async function getSessions(days: number, limit = 200): Promise<SessionSum
        FROM sessions
      )
      SELECT * FROM ordered
-     WHERE COALESCE(ended_at, last_seen_at) >= now() - ($1::int || ' days')::interval
+     WHERE COALESCE(ended_at, last_seen_at) >= COALESCE($1::timestamptz, '-infinity'::timestamptz)
+       AND started_at < $2::timestamptz
      ORDER BY started_at DESC, id DESC
-     LIMIT $2`,
-    [days, limit],
+     LIMIT $3`,
+    [from, to, limit],
   );
   return rows.map(toSummary);
 }
 
-export async function getSessionTotals(days: number): Promise<SessionTotals> {
+export async function getSessionTotals({ from, to }: SessionWindow): Promise<SessionTotals> {
   // The LAG window runs over every session so the first session inside the
   // range still knows how long the link was down before it.
   return db.one<SessionTotals>(
@@ -380,14 +391,15 @@ export async function getSessionTotals(days: number): Promise<SessionTotals> {
        COALESCE(SUM(
          CASE WHEN prev_finished IS NULL THEN 0
               ELSE GREATEST(EXTRACT(EPOCH FROM (
-                started_at - GREATEST(prev_finished, now() - ($1::int || ' days')::interval)
+                started_at - GREATEST(prev_finished, COALESCE($1::timestamptz, prev_finished))
               )), 0)
          END
        ), 0)::bigint AS downtime_seconds,
        COUNT(*) FILTER (WHERE ended_at IS NOT NULL)::int AS drops
      FROM ordered
-     WHERE finished_at >= now() - ($1::int || ' days')::interval`,
-    [days],
+     WHERE finished_at >= COALESCE($1::timestamptz, '-infinity'::timestamptz)
+       AND started_at < $2::timestamptz`,
+    [from, to],
   );
 }
 

@@ -58,6 +58,25 @@ export function toHHMM(value: string): string {
   return `${String(Math.floor(mins / 60)).padStart(2, "0")}:${String(mins % 60).padStart(2, "0")}`;
 }
 
+/**
+ * The daily quota window as seconds since local midnight, with an exclusive end.
+ *
+ * The stored end is inclusive to the minute, so the exclusive bound is one
+ * minute later. That arithmetic belongs here rather than in SQL because
+ * Postgres `time` wraps: `'23:59'::time + INTERVAL '1 minute'` is `00:00`, which
+ * turns the usual window into a range matching nothing. Seconds do not wrap, so
+ * a window ending at 23:59 correctly bounds at a full day.
+ *
+ * An unparseable time falls back to the whole day, so a malformed setting
+ * over-reports rather than silently reporting no usage at all.
+ */
+export function windowSeconds(start: string, end: string): { start: number; end: number } {
+  const startMinutes = timeToMinutes(start);
+  const endMinutes = timeToMinutes(end);
+  if (startMinutes === null || endMinutes === null) return { start: 0, end: 86_400 };
+  return { start: startMinutes * 60, end: (endMinutes + 1) * 60 };
+}
+
 /** Inclusive check: start <= now <= end. Windows never cross midnight (enforced by validation). */
 export function isWithinWindow(nowMinutes: number, windowStart: string, windowEnd: string): boolean {
   const start = timeToMinutes(windowStart);
@@ -142,18 +161,38 @@ export function parseRouterTimestamp(value: string | null | undefined, timeZone:
   return null;
 }
 
-/** "2d 3h 14m", "3h 14m", "14m 05s", "42s". Null-safe. */
-export function formatDuration(seconds: number | null | undefined): string {
+/** The suffixes a duration is written with, which differ by language. */
+export interface DurationUnits {
+  days: string;
+  hours: string;
+  minutes: string;
+  seconds: string;
+}
+
+const EN_UNITS: DurationUnits = { days: "d", hours: "h", minutes: "m", seconds: "s" };
+
+/**
+ * "2d 3h 14m", "3h 14m", "14m 05s", "42s". Null-safe.
+ *
+ * Only the two largest units that carry information are shown, so the figure
+ * stays the same width whatever the magnitude. Callers inside the application
+ * pass the suffixes from the active dictionary; the English default is here so
+ * a caller outside a request (a log line, a test) still reads sensibly.
+ */
+export function formatDuration(
+  seconds: number | null | undefined,
+  units: DurationUnits = EN_UNITS,
+): string {
   if (seconds === null || seconds === undefined || !Number.isFinite(seconds)) return "-";
   const s = Math.max(0, Math.round(seconds));
   const d = Math.floor(s / 86400);
   const h = Math.floor((s % 86400) / 3600);
   const m = Math.floor((s % 3600) / 60);
   const sec = s % 60;
-  if (d > 0) return `${d}d ${h}h ${m}m`;
-  if (h > 0) return `${h}h ${String(m).padStart(2, "0")}m`;
-  if (m > 0) return `${m}m ${String(sec).padStart(2, "0")}s`;
-  return `${sec}s`;
+  if (d > 0) return `${d}${units.days} ${h}${units.hours} ${m}${units.minutes}`;
+  if (h > 0) return `${h}${units.hours} ${String(m).padStart(2, "0")}${units.minutes}`;
+  if (m > 0) return `${m}${units.minutes} ${String(sec).padStart(2, "0")}${units.seconds}`;
+  return `${sec}${units.seconds}`;
 }
 
 /**

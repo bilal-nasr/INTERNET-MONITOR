@@ -2,13 +2,16 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
+import { useI18n } from "@/components/I18nProvider";
+import { fill } from "@/lib/i18n";
 
 /**
  * Re-runs the server components of the current page on an interval, so the page
  * follows the database without a manual reload. Refreshing pauses while the tab
  * is hidden and catches up as soon as it is visible again.
  */
-export function AutoRefresh({ seconds = 15, label = "Live" }: { seconds?: number; label?: string }) {
+export function AutoRefresh({ seconds = 15, label }: { seconds?: number; label?: string }) {
+  const { d } = useI18n();
   const router = useRouter();
   const [age, setAge] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -45,7 +48,7 @@ export function AutoRefresh({ seconds = 15, label = "Live" }: { seconds?: number
     <button
       type="button"
       onClick={refresh}
-      title={`Refreshes every ${seconds} seconds. Click to refresh now.`}
+      title={fill(d.common.refreshHint, { seconds })}
       className="inline-flex items-center gap-2 rounded-full border border-border px-2.5 py-1 text-xs text-muted transition-colors hover:text-foreground"
     >
       <span className="relative flex size-2">
@@ -56,8 +59,10 @@ export function AutoRefresh({ seconds = 15, label = "Live" }: { seconds?: number
         />
         <span className="relative inline-flex size-2 rounded-full bg-status-good" />
       </span>
-      {label}
-      <span className="tabular-nums">{age === 0 ? "just now" : `${age}s ago`}</span>
+      {label ?? d.common.live}
+      <span className="tabular-nums">
+        {age === 0 ? d.common.justNow : fill(d.common.secondsAgo, { seconds: age })}
+      </span>
     </button>
   );
 }
