@@ -1,0 +1,60 @@
+# Local run:
+#   docker compose up --build            # app only, using DATABASE_URL from .env.local
+#   docker compose --profile local-db up --build   # app + a Postgres container
+#
+# With the local-db profile, point .env.local at the bundled database:
+#   DATABASE_URL=postgres://quota:quota@db:5432/quota
+#   DATABASE_SSL=disable
+# schema.sql is applied automatically the first time that volume is created.
+
+services:
+  app:
+    build:
+      context: .
+    image: mikrotik-quota-monitor
+    container_name: quota-monitor
+    restart: unless-stopped
+    # Published on all interfaces so the router can POST to this machine's LAN
+    # address, e.g. http://192.168.88.254:3000/api/ingest
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env.local
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+    depends_on:
+      db:
+        condition: service_healthy
+        required: false
+
+  db:
+    profiles: ["local-db"]
+    image: postgres:17-alpine
+    container_name: quota-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: quota
+      POSTGRES_PASSWORD: quota
+      POSTGRES_DB: quota
+    volumes:
+      - quota-db-data:/var/lib/postgresql/data
+      - ./schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U quota -d quota"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # Exposed so you can inspect it with psql from the host.
+    ports:
+      - "5432:5432"
+
+volumes:
+  quota-db-data:

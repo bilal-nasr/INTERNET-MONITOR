@@ -11,9 +11,6 @@ interface FormState {
   timezone: string;
   alert_email_to: string;
   wan_interface_name: string;
-  router_host: string;
-  router_user: string;
-  router_pass: string;
   polling_enabled: boolean;
 }
 
@@ -25,9 +22,6 @@ function toForm(s: PublicSettings): FormState {
     timezone: s.timezone,
     alert_email_to: s.alert_email_to ?? "",
     wan_interface_name: s.wan_interface_name,
-    router_host: s.router_host ?? "",
-    router_user: s.router_user ?? "",
-    router_pass: "",
     polling_enabled: s.polling_enabled,
   };
 }
@@ -52,7 +46,6 @@ const hintClass = "mt-1 text-xs text-muted";
 
 export function SettingsForm() {
   const [form, setForm] = useState<FormState | null>(null);
-  const [hasPassword, setHasPassword] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -69,7 +62,6 @@ export function SettingsForm() {
       .then((s) => {
         if (cancelled) return;
         setForm(toForm(s));
-        setHasPassword(s.has_password_set);
       })
       .catch((err: Error) => !cancelled && setLoadError(err.message));
     return () => {
@@ -93,10 +85,6 @@ export function SettingsForm() {
         timezone: form.timezone,
         alert_email_to: form.alert_email_to.trim() || null,
         wan_interface_name: form.wan_interface_name,
-        router_host: form.router_host.trim() || null,
-        router_user: form.router_user.trim() || null,
-        // Empty string = keep the stored password.
-        router_pass: form.router_pass,
         polling_enabled: form.polling_enabled,
       };
       const res = await fetch("/api/settings", {
@@ -107,7 +95,6 @@ export function SettingsForm() {
       if (!res.ok) throw new Error(await readError(res));
       const saved = (await res.json()) as PublicSettings;
       setForm(toForm(saved));
-      setHasPassword(saved.has_password_set);
       setToast({ kind: "success", message: "Settings saved." });
     } catch (err) {
       setToast({ kind: "error", message: `Save failed: ${err instanceof Error ? err.message : String(err)}` });
@@ -230,58 +217,22 @@ export function SettingsForm() {
 
       <Section
         title="Router"
-        description="Pull mode: the app fetches counters from the RouterOS REST API. Leave the host empty if the router pushes readings to /api/ingest instead (needed behind CGNAT, see README). The password is stored server-side and never sent back to the browser."
+        description="The router pushes its counters to /api/ingest; the app never connects to the router. Set the interface name so readings are labelled correctly."
       >
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="sm:col-span-2">
-            <label htmlFor="router_host" className={labelClass}>Router host (pull mode only)</label>
-            <input
-              id="router_host"
-              type="url"
-              value={form.router_host}
-              onChange={(e) => update("router_host", e.target.value)}
-              className={`${inputClass} font-mono`}
-              placeholder="https://xxxxxxxx.sn.mynetname.net"
-            />
-          </div>
-          <div>
-            <label htmlFor="router_user" className={labelClass}>Username</label>
-            <input
-              id="router_user"
-              type="text"
-              autoComplete="off"
-              value={form.router_user}
-              onChange={(e) => update("router_user", e.target.value)}
-              className={inputClass}
-            />
-          </div>
-          <div>
-            <label htmlFor="router_pass" className={labelClass}>Password</label>
-            <input
-              id="router_pass"
-              type="password"
-              autoComplete="new-password"
-              value={form.router_pass}
-              onChange={(e) => update("router_pass", e.target.value)}
-              className={inputClass}
-              placeholder={hasPassword ? "(unchanged)" : "not set"}
-            />
-            <p className={hintClass}>
-              {hasPassword ? "A password is stored. Leave blank to keep it." : "No password stored yet."}
-            </p>
-          </div>
-          <div>
-            <label htmlFor="wan_interface_name" className={labelClass}>WAN interface name</label>
-            <input
-              id="wan_interface_name"
-              type="text"
-              required
-              value={form.wan_interface_name}
-              onChange={(e) => update("wan_interface_name", e.target.value)}
-              className={`${inputClass} font-mono`}
-              placeholder="ISP-ether1"
-            />
-          </div>
+        <div className="sm:max-w-sm">
+          <label htmlFor="wan_interface_name" className={labelClass}>WAN interface name</label>
+          <input
+            id="wan_interface_name"
+            type="text"
+            required
+            value={form.wan_interface_name}
+            onChange={(e) => update("wan_interface_name", e.target.value)}
+            className={`${inputClass} font-mono`}
+            placeholder="pppoe-out1"
+          />
+          <p className={hintClass}>
+            Must match the <code>iface</code> value in the router&apos;s quota-push script.
+          </p>
         </div>
       </Section>
 
@@ -305,7 +256,7 @@ export function SettingsForm() {
           <span className="text-sm">
             Polling {form.polling_enabled ? "enabled" : "paused"}
             <span className="block text-xs text-muted">
-              When paused, /api/poll exits immediately and records nothing. History is kept.
+              When paused, readings pushed by the router are discarded. History is kept.
             </span>
           </span>
         </label>

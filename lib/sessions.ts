@@ -64,6 +64,41 @@ function plausibleStart(linkUpAt: Date | null, at: Date): Date | null {
   return linkUpAt;
 }
 
+/**
+ * When the router cannot say when the link came up, fall back to the earliest
+ * reading of the current counter run. The counters have only grown since that
+ * reading, so the link has been up at least that long.
+ */
+function inferStartFromReadings(t: Tx, before: Date): Promise<Date | null> {
+  return t
+    .oneOrNone<{ started: Date | null }>(
+      `WITH r AS (
+         SELECT recorded_at, total_bytes,
+                LAG(total_bytes) OVER (ORDER BY recorded_at, id) AS prev
+         FROM interface_readings
+         WHERE recorded_at <= $1::timestamptz
+           AND recorded_at >= $1::timestamptz - INTERVAL '90 days'
+       ),
+       last_reset AS (
+         SELECT MAX(recorded_at) AS at FROM r WHERE prev IS NOT NULL AND total_bytes < prev
+       )
+       SELECT MIN(r.recorded_at) AS started
+       FROM r, last_reset
+       WHERE last_reset.at IS NULL OR r.recorded_at >= last_reset.at`,
+      [before],
+    )
+    .then((row) => row?.started ?? null);
+}
+
+/** Latest moment any session was known to be alive, used to keep the timeline monotonic. */
+function getLastActivity(t: Tx): Promise<Date | null> {
+  return t
+    .one<{ last_activity: Date | null }>(
+      "SELECT MAX(COALESCE(ended_at, last_seen_at)) AS last_activity FROM sessions",
+    )
+    .then((r) => r.last_activity);
+}
+
 function getOpenSession(t: Tx): Promise<SessionRow | null> {
   return t.oneOrNone<SessionRow>(
     `SELECT ${COLS} FROM sessions WHERE ended_at IS NULL ORDER BY started_at DESC, id DESC LIMIT 1`,
@@ -123,6 +158,10 @@ export function applySessionEvent(event: SessionEvent): Promise<SessionOutcome> 
     let session = open;
     let closed: SessionRow | null = null;
     let action: SessionAction = "sample";
+    // Counter values the next session should measure its traffic from. Zero
+    // after a real reconnect, because the interface restarts its counters.
+    let seedTx = 0;
+    let seedRx = 0;
 
     if (session) {
       const keyChanged = event.sessionKey !== "" && session.session_key !== event.sessionKey;
@@ -135,19 +174,37 @@ export function applySessionEvent(event: SessionEvent): Promise<SessionOutcome> 
         const start = plausibleStart(event.linkUpAt, event.at);
         const endedAt = start && start > session.started_at ? start : session.last_seen_at;
         closed = await closeSession(t, session.id, endedAt, "restart");
+        if (!countersReset) {
+          // The identity changed but the counters kept running, so the traffic
+          // up to here already belongs to the closed session. Start the new one
+          // from the counters it left off at instead of crediting it the lot.
+          seedTx = session.last_tx_counter;
+          seedRx = session.last_rx_counter;
+        }
         session = null;
         action = "restarted";
       }
     }
 
     if (!session) {
-      const startedAt = plausibleStart(event.linkUpAt, event.at) ?? event.at;
+      // Clamp the start between the end of the previous session and now, so a
+      // router clock that drifts can never produce overlapping sessions or a
+      // negative offline gap.
+      const lastActivity = await getLastActivity(t);
+      const candidate =
+        plausibleStart(event.linkUpAt, event.at) ??
+        (await inferStartFromReadings(t, event.at)) ??
+        event.at;
+      let startedAt = candidate > event.at ? event.at : candidate;
+      if (lastActivity && startedAt < lastActivity) startedAt = lastActivity;
+
       const key = event.sessionKey || `${event.interfaceName ?? "wan"}@${startedAt.toISOString()}`;
       session = await t.one<SessionRow>(
-        `INSERT INTO sessions (session_key, interface_name, started_at, last_seen_at)
-         VALUES ($1, $2, $3, $4)
+        `INSERT INTO sessions (session_key, interface_name, started_at, last_seen_at,
+                               last_tx_counter, last_rx_counter)
+         VALUES ($1, $2, $3, $4, $5, $6)
          RETURNING ${COLS}`,
-        [key, event.interfaceName, startedAt, event.at],
+        [key, event.interfaceName, startedAt, event.at, seedTx, seedRx],
       );
       if (action !== "restarted") action = "started";
     }
@@ -218,9 +275,9 @@ export async function getSessions(days: number, limit = 200): Promise<SessionSum
     `WITH ordered AS (
        SELECT ${COLS},
               EXTRACT(EPOCH FROM (COALESCE(ended_at, last_seen_at) - started_at))::bigint AS uptime_seconds,
-              EXTRACT(EPOCH FROM (
+              GREATEST(EXTRACT(EPOCH FROM (
                 started_at - LAG(COALESCE(ended_at, last_seen_at)) OVER (ORDER BY started_at, id)
-              ))::bigint AS downtime_before_seconds
+              )), 0)::bigint AS downtime_before_seconds
        FROM sessions
      )
      SELECT * FROM ordered
@@ -233,21 +290,28 @@ export async function getSessions(days: number, limit = 200): Promise<SessionSum
 }
 
 export async function getSessionTotals(days: number): Promise<SessionTotals> {
-  const row = await db.one<SessionTotals>(
-    `SELECT
+  // The LAG window runs over every session so the first session inside the
+  // range still knows how long the link was down before it.
+  return db.one<SessionTotals>(
+    `WITH ordered AS (
+       SELECT started_at, ended_at, tx_bytes, rx_bytes, total_bytes,
+              COALESCE(ended_at, last_seen_at) AS finished_at,
+              LAG(COALESCE(ended_at, last_seen_at)) OVER (ORDER BY started_at, id) AS prev_finished
+       FROM sessions
+     )
+     SELECT
        COUNT(*)::int AS sessions,
        COALESCE(SUM(tx_bytes), 0)::bigint AS tx_bytes,
        COALESCE(SUM(rx_bytes), 0)::bigint AS rx_bytes,
        COALESCE(SUM(total_bytes), 0)::bigint AS total_bytes,
-       COALESCE(SUM(EXTRACT(EPOCH FROM (COALESCE(ended_at, last_seen_at) - started_at))), 0)::bigint
-         AS uptime_seconds,
-       0::bigint AS downtime_seconds,
+       COALESCE(SUM(EXTRACT(EPOCH FROM (finished_at - started_at))), 0)::bigint AS uptime_seconds,
+       COALESCE(SUM(GREATEST(EXTRACT(EPOCH FROM (started_at - prev_finished)), 0)), 0)::bigint
+         AS downtime_seconds,
        COUNT(*) FILTER (WHERE ended_at IS NOT NULL)::int AS drops
-     FROM sessions
-     WHERE COALESCE(ended_at, last_seen_at) >= now() - ($1::int || ' days')::interval`,
+     FROM ordered
+     WHERE finished_at >= now() - ($1::int || ' days')::interval`,
     [days],
   );
-  return row;
 }
 
 export function getOpenSessionSummary(): Promise<SessionSummary | null> {

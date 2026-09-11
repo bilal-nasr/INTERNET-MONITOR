@@ -8,8 +8,6 @@ const hhmm = z
   .string()
   .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "must be HH:MM (24-hour)");
 
-const optionalText = z.string().trim().max(500).nullable();
-
 const patchSchema = z
   .object({
     quota_gb: z.coerce.number().positive("quota_gb must be greater than 0").max(100_000),
@@ -18,14 +16,6 @@ const patchSchema = z
     timezone: z.string().trim().min(1).refine(isValidTimeZone, "unknown IANA timezone"),
     alert_email_to: z.email("invalid email address").trim().nullable(),
     wan_interface_name: z.string().trim().min(1, "interface name is required").max(100),
-    router_host: z
-      .url("router_host must be a URL like https://host.sn.mynetname.net")
-      .trim()
-      .refine((u) => /^https?:$/.test(new URL(u).protocol), "router_host must use http or https")
-      .nullable(),
-    router_user: optionalText,
-    // Empty string means "leave the stored password unchanged".
-    router_pass: z.string().max(500),
     polling_enabled: z.boolean(),
   })
   .partial()
@@ -55,9 +45,6 @@ export async function PUT(request: Request) {
   }
 
   const patch: SettingsPatch = { ...parsed.data };
-  if (patch.router_pass !== undefined && patch.router_pass === "") {
-    delete patch.router_pass;
-  }
 
   try {
     // Cross-field rule: window_end must be after window_start, using the

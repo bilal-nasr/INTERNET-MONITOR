@@ -20,21 +20,35 @@ export interface DailyWindow {
 }
 
 /**
- * Sum the traffic represented by an ordered series of counter readings.
+ * Traffic carried since `since`, summed in the database.
  *
  * Counters only ever grow, so usage is normally last - first. When a reading is
- * lower than its predecessor the router rebooted (counters reset to 0), so that
- * reading's full value is counted as usage since the reboot instead of a
- * negative delta. With no reboot this equals `last.total - first.total`.
+ * lower than its predecessor the interface reset its counters, so that reading's
+ * full value counts as usage since the reset instead of a negative delta.
+ *
+ * Done as an aggregate rather than in JavaScript because the router can push
+ * every few seconds, which would otherwise mean transferring thousands of rows
+ * on every single push.
  */
-export function sumUsage(readings: { total_bytes: number }[]): number {
-  let used = 0;
-  for (let i = 1; i < readings.length; i++) {
-    const prev = readings[i - 1].total_bytes;
-    const cur = readings[i].total_bytes;
-    used += cur >= prev ? cur - prev : cur;
-  }
-  return used;
+export async function sumUsageSince(since: Date): Promise<number> {
+  const row = await db.one<{ used: number }>(
+    `WITH r AS (
+       SELECT total_bytes,
+              LAG(total_bytes) OVER (ORDER BY recorded_at, id) AS prev
+       FROM interface_readings
+       WHERE recorded_at >= $1
+     )
+     SELECT COALESCE(SUM(
+       CASE
+         WHEN prev IS NULL THEN 0
+         WHEN total_bytes >= prev THEN total_bytes - prev
+         ELSE total_bytes
+       END
+     ), 0)::bigint AS used
+     FROM r`,
+    [since],
+  );
+  return row.used;
 }
 
 export async function getLatestReading(): Promise<Reading | null> {
@@ -43,22 +57,16 @@ export async function getLatestReading(): Promise<Reading | null> {
   );
 }
 
-export async function getReadingsSince(since: Date): Promise<Reading[]> {
-  return db.any<Reading>(
-    "SELECT * FROM interface_readings WHERE recorded_at >= $1 ORDER BY recorded_at ASC, id ASC",
-    [since],
-  );
-}
-
-/** All readings whose local date (in `timezone`) equals `date`. */
-export async function getReadingsForLocalDate(date: string, timezone: string): Promise<Reading[]> {
-  return db.any<Reading>(
-    `SELECT * FROM interface_readings
+/** How many readings landed on the given local date. */
+export async function countReadingsForLocalDate(date: string, timezone: string): Promise<number> {
+  const row = await db.one<{ readings: number }>(
+    `SELECT COUNT(*)::int AS readings
+     FROM interface_readings
      WHERE recorded_at >= ($1::date::timestamp AT TIME ZONE $2)
-       AND recorded_at <  (($1::date + 1)::timestamp AT TIME ZONE $2)
-     ORDER BY recorded_at ASC, id ASC`,
+       AND recorded_at <  (($1::date + 1)::timestamp AT TIME ZONE $2)`,
     [date, timezone],
   );
+  return row.readings;
 }
 
 export async function getDailyWindow(date: string): Promise<DailyWindow | null> {
@@ -84,22 +92,19 @@ export interface TodayUsage {
     rx_bytes: number;
     total_bytes: number;
   } | null;
-  readings: { recorded_at: string; tx_bytes: number; rx_bytes: number; total_bytes: number }[];
+  /** Readings stored today. The rows themselves are available from /api/export. */
+  readings_count: number;
 }
 
 export async function getTodayUsage(settings: SettingsRow, now = new Date()): Promise<TodayUsage> {
   const parts = localParts(now, settings.timezone);
-  const [window, readings, latest] = await Promise.all([
+  const [window, readingsCount, latest] = await Promise.all([
     getDailyWindow(parts.date),
-    getReadingsForLocalDate(parts.date, settings.timezone),
+    countReadingsForLocalDate(parts.date, settings.timezone),
     getLatestReading(),
   ]);
 
-  let used = 0;
-  if (window) {
-    const sinceBaseline = readings.filter((r) => r.recorded_at >= window.baseline_recorded_at);
-    used = sumUsage(sinceBaseline);
-  }
+  const used = window ? await sumUsageSince(window.baseline_recorded_at) : 0;
   const quota = quotaBytes(settings.quota_gb);
 
   return {
@@ -128,12 +133,7 @@ export async function getTodayUsage(settings: SettingsRow, now = new Date()): Pr
           total_bytes: latest.total_bytes,
         }
       : null,
-    readings: readings.map((r) => ({
-      recorded_at: r.recorded_at.toISOString(),
-      tx_bytes: r.tx_bytes,
-      rx_bytes: r.rx_bytes,
-      total_bytes: r.total_bytes,
-    })),
+    readings_count: readingsCount,
   };
 }
 

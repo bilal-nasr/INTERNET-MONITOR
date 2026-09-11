@@ -1,55 +1,24 @@
 import { formatBytes } from "@/lib/format";
+import type { SessionSummary } from "@/lib/sessions";
+import { formatDuration } from "@/lib/time";
 import type { TodayUsage } from "@/lib/usage";
 import { formatTime } from "@/components/UsageProgress";
 
-export type RouterStatus =
-  | { state: "running"; name: string }
-  | { state: "down"; name: string }
-  | { state: "disabled"; name: string }
-  | { state: "unreachable"; message: string }
-  | { state: "not_configured"; message: string }
-  | { state: "push" }
-  | { state: "paused" };
-
-const labels: Record<RouterStatus["state"], { text: string; className: string }> = {
-  running: { text: "Running", className: "text-green-700 dark:text-status-good" },
-  down: { text: "Link down", className: "text-status-critical" },
-  disabled: { text: "Disabled", className: "text-status-critical" },
-  unreachable: { text: "Unreachable", className: "text-status-critical" },
-  not_configured: { text: "Not configured", className: "text-muted" },
-  push: { text: "Push mode", className: "text-foreground" },
-  paused: { text: "Polling paused", className: "text-amber-700 dark:text-status-warning" },
-};
-
-/** Readings older than this are flagged; schedulers run every 5-15 minutes. */
+/** Readings older than this are flagged; the router script posts every 1-5 minutes. */
 const STALE_AFTER_MINUTES = 30;
-
-function detailFor(router: RouterStatus): string {
-  switch (router.state) {
-    case "unreachable":
-    case "not_configured":
-      return router.message;
-    case "paused":
-      return "Enable polling in Settings to resume";
-    case "push":
-      return "Router sends readings to /api/ingest";
-    default:
-      return `interface ${router.name}`;
-  }
-}
 
 export function StatusCard({
   usage,
-  router,
   pollingEnabled,
+  interfaceName,
+  session = null,
 }: {
   usage: TodayUsage;
-  router: RouterStatus;
   pollingEnabled: boolean;
+  interfaceName: string;
+  /** The currently open link session, when one is being tracked. */
+  session?: SessionSummary | null;
 }) {
-  const label = labels[router.state];
-  const detail = detailFor(router);
-
   // Age is measured against the snapshot time so the component stays pure.
   const ageMinutes = usage.last_reading
     ? Math.round(
@@ -63,11 +32,9 @@ export function StatusCard({
       <h2 className="text-sm font-medium text-muted">Router</h2>
       <dl className="mt-3 space-y-3 text-sm">
         <div>
-          <dt className="text-xs text-muted">{router.state === "push" ? "Connection" : "Interface status (live)"}</dt>
-          <dd className={`font-medium ${label.className}`}>{label.text}</dd>
-          <dd className="truncate text-xs text-muted" title={detail}>
-            {detail}
-          </dd>
+          <dt className="text-xs text-muted">Interface</dt>
+          <dd className="font-medium">{interfaceName}</dd>
+          <dd className="text-xs text-muted">Router posts readings to /api/ingest</dd>
         </div>
         <div>
           <dt className="text-xs text-muted">Last reading</dt>
@@ -86,16 +53,27 @@ export function StatusCard({
           )}
           {stale && (
             <dd className="mt-1 text-xs text-status-critical">
-              &#9888; No reading for over {STALE_AFTER_MINUTES} minutes. Check the scheduler or the router script.
+              &#9888; No reading for over {STALE_AFTER_MINUTES} minutes. Check the router&apos;s scheduler and its log.
             </dd>
           )}
           {pollingEnabled && !usage.last_reading && (
             <dd className="mt-1 text-xs text-muted">Waiting for the first reading.</dd>
           )}
         </div>
+        {session && (
+          <div>
+            <dt className="text-xs text-muted">Current session</dt>
+            <dd className="font-medium tabular-nums">up {formatDuration(session.uptime_seconds)}</dd>
+            <dd className="text-xs tabular-nums text-muted">
+              {formatBytes(session.total_bytes)} since {formatTime(session.started_at, usage.timezone)}
+            </dd>
+          </div>
+        )}
         <div>
-          <dt className="text-xs text-muted">Polling</dt>
-          <dd className="font-medium">{pollingEnabled ? "enabled" : "paused"}</dd>
+          <dt className="text-xs text-muted">Monitoring</dt>
+          <dd className={`font-medium ${pollingEnabled ? "" : "text-amber-700 dark:text-status-warning"}`}>
+            {pollingEnabled ? "enabled" : "paused, incoming readings are discarded"}
+          </dd>
         </div>
       </dl>
     </section>

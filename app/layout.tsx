@@ -28,7 +28,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Nav />
         <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6">{children}</main>
         <footer className="mx-auto w-full max-w-5xl px-4 pb-6 text-xs text-zinc-500 sm:px-6">
-          Readings are collected by an external scheduler calling <code>/api/poll</code>.
+          Readings are pushed by the router&apos;s quota-push script to <code>/api/ingest</code>.
         </footer>
       </body>
     </html>

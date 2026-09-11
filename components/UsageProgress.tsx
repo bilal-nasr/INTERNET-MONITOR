@@ -49,7 +49,7 @@ export function UsageProgress({ usage }: { usage: TodayUsage }) {
         </div>
         <div>
           <dt>Readings today</dt>
-          <dd className="text-foreground tabular-nums">{usage.readings.length}</dd>
+          <dd className="text-foreground tabular-nums">{usage.readings_count}</dd>
         </div>
         <div>
           <dt>Quota</dt>

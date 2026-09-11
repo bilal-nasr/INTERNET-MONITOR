@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { badRequest, errorResponse, isCronAuthorized } from "@/lib/api";
-import { recordReading } from "@/lib/poll";
+import { recordReading } from "@/lib/readings";
+import { applySessionEvent } from "@/lib/sessions";
 import { getSettings } from "@/lib/settings";
+import { parseRouterTimestamp } from "@/lib/time";
 
 export const maxDuration = 60;
 
@@ -11,13 +13,23 @@ const boolish = z.union([
   z.enum(["true", "false", "yes", "no"]).transform((v) => v === "true" || v === "yes"),
 ]);
 
-const bodySchema = z.object({
-  tx_bytes: z.coerce.number().int().nonnegative(),
-  rx_bytes: z.coerce.number().int().nonnegative(),
-  interface: z.string().trim().max(100).optional(),
-  running: boolish.optional(),
-  disabled: boolish.optional(),
-});
+const bodySchema = z
+  .object({
+    tx_bytes: z.coerce.number().int().nonnegative(),
+    rx_bytes: z.coerce.number().int().nonnegative(),
+    /** The router script sends "iface"; "interface" is accepted too. */
+    iface: z.string().trim().max(100).optional(),
+    interface: z.string().trim().max(100).optional(),
+    /** Informational: the server decides what actually happened. */
+    event: z.string().trim().max(40).optional(),
+    /** Router's session identifier, normally `last-link-up-time`. May be empty. */
+    session_id: z.string().trim().max(100).optional(),
+    link_up: z.string().trim().max(100).optional(),
+    router_time: z.string().trim().max(100).optional(),
+    running: boolish.optional(),
+    disabled: boolish.optional(),
+  })
+  .passthrough();
 
 /** Accept JSON, or form-encoded bodies (what RouterOS sends when no Content-Type is set). */
 function parseBody(text: string): unknown {
@@ -27,9 +39,10 @@ function parseBody(text: string): unknown {
 }
 
 /**
- * Push mode: the router (or anything on its LAN) sends the WAN counters here,
- * for setups where the router cannot be reached from the internet (CGNAT).
- * Same secret as /api/poll: Authorization: Bearer <CRON_SECRET>.
+ * The only way readings enter the system: the router's script posts its WAN
+ * counters here. Besides storing the reading and applying the quota logic, this
+ * tracks link sessions so uptime and per-session traffic can be reported.
+ * Requires `Authorization: Bearer $CRON_SECRET`.
  */
 export async function POST(request: Request) {
   if (!isCronAuthorized(request)) {
@@ -53,18 +66,63 @@ export async function POST(request: Request) {
     if (!settings.polling_enabled) {
       return NextResponse.json({ status: "paused", message: "polling_enabled is false; reading discarded" });
     }
+
+    const now = new Date();
+    const interfaceName = body.iface ?? body.interface ?? settings.wan_interface_name;
+    const running = body.running ?? true;
+
+    // Every stored timestamp uses server time. The one value only the router
+    // knows is when the link came up; since link_up and router_time are read
+    // from the same clock, subtracting the measured skew converts link_up to
+    // server time even when the router's clock is wrong.
+    const routerNow = parseRouterTimestamp(body.router_time, settings.timezone);
+    const skewMs = routerNow ? routerNow.getTime() - now.getTime() : 0;
+    const reportedLinkUp = parseRouterTimestamp(body.link_up, settings.timezone);
+    const linkUpAt = reportedLinkUp ? new Date(reportedLinkUp.getTime() - skewMs) : null;
+    const clockSkewSeconds = routerNow ? Math.round(skewMs / 1000) : null;
+
+    const session = await applySessionEvent({
+      sessionKey: body.session_id ?? "",
+      interfaceName,
+      linkUpAt,
+      running,
+      txCounter: body.tx_bytes,
+      rxCounter: body.rx_bytes,
+      at: now,
+    });
+
     const result = await recordReading(
       settings,
       {
-        name: body.interface ?? settings.wan_interface_name,
+        name: interfaceName,
         txBytes: body.tx_bytes,
         rxBytes: body.rx_bytes,
-        running: body.running ?? true,
+        running,
         disabled: body.disabled ?? false,
       },
-      "push",
+      now,
+      session.session?.session_key ?? null,
     );
-    return NextResponse.json(result);
+
+    return NextResponse.json({
+      ...result,
+      reported_event: body.event ?? null,
+      router_clock_skew_seconds: clockSkewSeconds,
+      session: session.session
+        ? {
+            id: session.session.id,
+            action: session.action,
+            key: session.session.session_key,
+            started_at: session.session.started_at.toISOString(),
+            ended_at: session.session.ended_at ? session.session.ended_at.toISOString() : null,
+            tx_bytes: session.session.tx_bytes,
+            rx_bytes: session.session.rx_bytes,
+            total_bytes: session.session.total_bytes,
+            samples: session.session.samples,
+          }
+        : { action: session.action },
+      closed_session_id: session.closed?.id ?? null,
+    });
   } catch (err) {
     return errorResponse(err);
   }

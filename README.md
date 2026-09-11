@@ -1,208 +1,193 @@
 # mikrotik-quota-monitor
 
-Tracks home internet usage by polling a MikroTik RouterOS REST API, stores counter history in Postgres, and emails you when usage inside a daily time window exceeds a quota. Runtime configuration (quota, window, router credentials, alert email, pause switch) lives in the database and is edited from the `/settings` page, so nothing needs a redeploy.
+Tracks home internet usage from a MikroTik router, stores the history in Postgres, and emails you when usage inside a daily time window exceeds a quota. It also records every WAN link session, so you can see how long each connection lasted and how much it carried.
 
-Stack: Next.js 16 (App Router, TypeScript), Postgres via `pg-promise`, Resend for email, Recharts, Tailwind. Package manager is pnpm. Deploys to Vercel.
+The router pushes its counters to the app. The app never connects to the router, which is what makes this work behind carrier-grade NAT where the router has no reachable public address.
+
+Stack: Next.js 16 (App Router, TypeScript), Postgres via `pg-promise`, Resend for email, Recharts, Tailwind. Package manager is pnpm. Ships as a Docker image.
 
 ## Security warning: read this first
 
-- **No authentication.** `/`, `/settings`, `/export` and every `/api/*` route except `/api/poll` are open to anyone who reaches the deployed URL. `/settings` lets a visitor change the router credentials and alert email. `/export` lets them download your traffic history. Before sharing the URL, using a memorable custom domain, or leaving it up for long, add a gate. Options:
-  - A `proxy.ts` (Next.js 16's name for middleware) that checks a cookie set by a small login page.
-  - Vercel Deployment Protection with a password (Pro plan) or Vercel Authentication (team members only).
-- **The router password is stored in plaintext** in the `settings.router_pass` column. It is only read server-side and never returned to the browser (`GET /api/settings` returns `has_password_set` instead), but anyone with database access can read it. Use a read-only RouterOS user (instructions below) so a leak cannot reconfigure the router. Encrypting the column at rest with a key held in an env var is a sensible future improvement.
+There is **no authentication**. Everyone who can reach the app can read your traffic history, download it from `/export`, and change the quota and alert address on `/settings`. That is fine on a home LAN. Before exposing it to the internet, put something in front of it: a reverse proxy with basic auth, your host's built-in password protection, or a login page plus a `proxy.ts` cookie check.
+
+The one secret that matters is `CRON_SECRET`. It is the bearer token the router sends, and it is the only thing stopping anyone from injecting fake readings.
 
 ## How it works
 
-Every 5-15 minutes an external scheduler calls `POST /api/poll` with `Authorization: Bearer $CRON_SECRET`. The poll:
+Every minute the router runs a small script (`router/quota-push.rsc`) that reads the WAN interface counters and POSTs them to `/api/ingest` with `Authorization: Bearer $CRON_SECRET`. For each reading the app:
 
-1. Reads the single row of the `settings` table. If `polling_enabled` is false it exits without touching the router or the database.
-2. Fetches `GET {router_host}/rest/interface` with Basic Auth, finds the interface named `wan_interface_name`, and inserts its `tx-byte` / `rx-byte` counters into `interface_readings`.
-3. Detects a router reboot (new total lower than the previous reading). Counters simply restart from the new reading; no negative delta is ever produced.
-4. If the current local time (in `settings.timezone`) is inside `window_start`-`window_end`:
+1. Reads the single row of the `settings` table. If `polling_enabled` is false the reading is discarded.
+2. Stores the counters in `interface_readings`.
+3. Updates the current session in `sessions`, or starts a new one if the link reconnected.
+4. If the local time (in `settings.timezone`) is inside `window_start`-`window_end`:
    - creates today's `daily_windows` row on the first reading, using the current total as the baseline;
-   - computes usage since the baseline by summing the deltas between consecutive readings. Without a reboot this equals `current_total - baseline_bytes`; after a reboot it counts only the traffic accumulated on the fresh counters;
+   - computes usage since the baseline by summing the deltas between consecutive readings;
    - if usage exceeds `quota_gb * 1e9` bytes and today's row is not yet `notified`, emails `alert_email_to` and marks the row.
 5. Outside the window it only records the reading.
 
 Quota is decimal gigabytes: 8 GB = 8,000,000,000 bytes.
 
-**Two ways to get readings in.** Pull mode is the flow above: the app calls the router. Push mode inverts it: a small script on the router posts its own counters to `POST /api/ingest` every 5 minutes, and the app runs the same storage and quota logic. Use push mode when the router has no public IP (carrier-grade NAT, see "Router behind CGNAT" below). In push mode you need no external scheduler at all and can leave the router host empty in `/settings`.
+### Session accounting
+
+A PPPoE interface restarts its counters at zero on every reconnect, so totalling the raw counter would lose traffic on each drop. Instead each session row keeps both the last raw counter and a running total, and adds `counter - last_counter` per sample, or the whole counter when it went backwards.
+
+A new session starts when the router reports a different session id, or when the counters go backwards, which catches a reconnect the router never got to report.
+
+Timestamps come from the server clock, except the moment the link came up, which only the router knows. Since `link_up` and `router_time` are read from the same clock, the difference between `router_time` and the server clock is subtracted from `link_up`, so the timeline stays correct even if the router's clock is wrong. Start times are clamped so sessions can never overlap or show a negative offline gap. When the router reports no link-up time at all, the start is inferred from the earliest reading of the current counter run.
+
+The known limit: traffic between the last sample and an unexpected drop cannot be recovered, so a session can under-report by up to one polling interval.
 
 ## Setup
 
-### 1. Create the Postgres database (Neon)
+### 1. Database
 
-1. Sign up at <https://neon.tech>, create a project, and copy the connection string (it looks like `postgres://user:pass@ep-xxx.region.aws.neon.tech/neondb?sslmode=require`).
-2. Run the schema. Either paste `schema.sql` into the Neon SQL Editor, or from a terminal:
+Any Postgres works. Run `schema.sql` once; it is idempotent and seeds the settings row.
 
-   ```bash
-   psql "postgres://user:pass@ep-xxx.region.aws.neon.tech/neondb?sslmode=require" -f schema.sql
-   ```
+```bash
+psql "$DATABASE_URL" -f schema.sql
+```
 
-   The script is idempotent and seeds the `settings` row with placeholder values. Real values are entered later on `/settings`.
-
-Any other Postgres works the same way. For a local database without TLS use `postgres://user:pass@localhost:5432/db`.
-
-#### Using Supabase instead
-
-Supabase works too, with one extra step: its connection pooler presents a certificate signed by Supabase's own root CA, which Node does not trust by default. That root certificate is bundled in `lib/certs.ts` (valid until April 2031, SHA-256 fingerprint `80:70:25:AD:...:E6:CA:FA`), so set:
+**Supabase**: its pooler presents a certificate signed by Supabase's private CA, which Node does not trust. That root certificate is bundled in `lib/certs.ts`, so set `DATABASE_SSL_CA=supabase` and use the transaction pooler:
 
 ```
 DATABASE_URL=postgresql://postgres.<project-ref>:<password>@aws-1-<region>.pooler.supabase.com:6543/postgres
 DATABASE_SSL_CA=supabase
 ```
 
-The transaction-mode pooler (port 6543) is the right choice for serverless: the app never uses prepared statements or session state, so it is compatible. The session-mode pooler (5432) and the direct connection also work. `DATABASE_SSL_CA` also accepts any other PEM certificate inline, and `DATABASE_SSL=no-verify` works as a last resort but skips server verification.
+The app uses no prepared statements or session state, so transaction pooling is safe. `DATABASE_SSL_CA` also accepts any other PEM inline, `DATABASE_SSL=no-verify` skips verification, and `DATABASE_SSL=disable` turns TLS off for a local database.
 
-### 2. Prepare the router (RouterOS 7.x)
+**Neon** and other public-CA hosts need neither variable.
 
-Enable the REST API and a hostname you can reach from the internet:
-
-```routeros
-# Cloud DDNS: gives you https://<serial>.sn.mynetname.net
-/ip cloud set ddns-enabled=yes
-
-# Let's Encrypt certificate for that hostname (RouterOS 7.6+; port 80 must be reachable)
-/certificate enable-ssl-certificate dns-name=<serial>.sn.mynetname.net
-
-# HTTPS service. The REST API is served by www-ssl at /rest.
-/ip service set www-ssl disabled=no certificate=<the issued certificate name>
-# Optional: restrict who may connect
-/ip service set www-ssl address=0.0.0.0/0
-```
-
-If you skip the Let's Encrypt step the router uses a self-signed certificate. Set `ROUTER_TLS_INSECURE=true` in the environment to accept it (the app still verifies nothing about the certificate in that mode, so prefer a real certificate).
-
-Create a read-only API user:
-
-```routeros
-/user group add name=api-readonly policy=read,rest-api,!local,!telnet,!ssh,!ftp,!reboot,!write,!policy,!test,!winbox,!password,!web,!sniff,!sensitive,!api,!romon
-/user add name=api-readonly group=api-readonly password=<strong password> comment="quota monitor"
-```
-
-The `rest-api` policy is required for `/rest`; `read` lets it list interfaces. Confirm it works from your machine:
+### 2. Run the app
 
 ```bash
-curl -u api-readonly:<password> https://<serial>.sn.mynetname.net/rest/interface
-```
-
-Note the exact `name` of your WAN interface in the response (default in this app: `ISP-ether1`).
-
-Make sure the router's firewall allows the HTTPS port (443 by default) from the internet, or at least from Vercel's egress ranges. A less exposed alternative is a VPN, but then the poll must run from inside that network.
-
-#### Router behind CGNAT: push mode
-
-If **IP > Cloud** shows a DNS name that resolves to an address in `100.64.0.0/10` (for example `100.107.x.x`), or `curl` from outside your network cannot reach the router at all, your ISP uses carrier-grade NAT and no port forwarding or certificate will make the router reachable. Let the router push instead:
-
-1. Deploy the app first so you know its URL, and note the `CRON_SECRET` value.
-2. In WinBox open **System > Scripts**, click **+**, name it `quota-push`, paste the contents of [`router/quota-push.rsc`](router/quota-push.rsc) into **Source** (everything below the dashed line), and edit the three values at the top: your WAN interface name, `https://<your-app>.vercel.app/api/ingest`, and the secret. Keep the default policies ticked and click OK.
-3. Open **System > Scheduler**, click **+**: name `quota-push`, start time `startup`, interval `00:05:00`, on event `/system script run quota-push`. Click OK.
-4. Select the script and click **Run Script** once. **Log** should show `quota-push: sent tx=... rx=...` and the dashboard shows a new reading within seconds.
-
-In push mode leave **Router host** empty in `/settings`; the dashboard then shows "Push mode" and flags when no reading has arrived for over 30 minutes. `vercel.json` and the GitHub Actions workflow are not needed. The REST API and www-ssl service can stay disabled, and no firewall rule is required, because the router only makes outbound HTTPS requests. The script needs working DNS and a correct clock on the router (**System > Clock**, or enable NTP under **System > NTP Client**).
-
-### 3. Configure email (Resend)
-
-1. Create an API key at <https://resend.com>.
-2. For real delivery, verify a domain and set `ALERT_EMAIL_FROM` to an address on it, e.g. `Quota Monitor <alerts@yourdomain.com>`. Without a verified domain, `onboarding@resend.dev` works but can only deliver to the address that owns the Resend account.
-
-### 4. Run locally
-
-```bash
-cp .env.local.example .env.local   # then edit DATABASE_URL, RESEND_API_KEY, CRON_SECRET, ALERT_EMAIL_FROM
+cp .env.local.example .env.local   # fill in DATABASE_URL, RESEND_API_KEY, CRON_SECRET
 pnpm install
 pnpm dev
 ```
 
-Open <http://localhost:3000/settings>, enter the router host/user/password, WAN interface name, timezone, quota, window and alert email, and save. Use "Send test email" to confirm Resend works. Then trigger a poll by hand:
+Or with Docker, which is how it is meant to run in production:
 
 ```bash
-curl -X POST http://localhost:3000/api/poll -H "Authorization: Bearer $CRON_SECRET"
+docker compose up --build
 ```
 
-The response JSON shows the stored reading, whether the window is active, and the quota state.
+Open `/settings` and set the timezone, quota, window, alert email and the WAN interface name.
 
-### 5. Deploy to Vercel
+### 3. Email (Resend)
 
-1. Push the repository to GitHub.
-2. In Vercel, "Add New Project", import the repo. Framework is detected as Next.js.
-3. Add the environment variables under Settings, Environment Variables:
+Create an API key at <https://resend.com>. For real delivery, verify a domain and set `ALERT_EMAIL_FROM` to an address on it. Without a verified domain, `onboarding@resend.dev` works but only delivers to the address that owns the Resend account. The "Send test email" button on `/settings` confirms the setup.
 
-   | Variable | Value |
-   | --- | --- |
-   | `DATABASE_URL` | Neon or Supabase connection string |
-   | `DATABASE_SSL_CA` | `supabase` when using Supabase; omit for Neon |
-   | `RESEND_API_KEY` | Resend key |
-   | `CRON_SECRET` | a long random string, e.g. `openssl rand -hex 32` |
-   | `ALERT_EMAIL_FROM` | verified sender |
-   | `ROUTER_TLS_INSECURE` | `false` unless the router has a self-signed certificate |
+### 4. The router script
 
-   `ROUTER_HOST`, `ROUTER_USER`, `ROUTER_PASS`, `ALERT_EMAIL_TO`, `QUOTA_*` are not read by the app at runtime; they only document the seed defaults in `schema.sql`.
+In WinBox:
 
-4. Deploy, then open `https://<your-app>.vercel.app/settings` and fill in the router details.
+1. **System > Scripts**, click **+**. Name it `quota-push`, paste everything below the dashed line in [`router/quota-push.rsc`](router/quota-push.rsc) into **Source**, keep the default policies, click OK.
+2. Edit the three values at the top:
+   - `iface` - your WAN interface name. Check **Interfaces**; with PPPoE it is usually `pppoe-out1`, not the physical port, because that is where the session counters live.
+   - `url` - `http://<app-host>:3000/api/ingest`
+   - `secret` - the same string as `CRON_SECRET`
+3. **System > Scheduler**, click **+**: name `quota-push`, start time `startup`, interval `00:01:00`, on event `/system script run quota-push`.
+4. Select the script and click **Run Script**. **Log** should show `quota-push: sent tx=... rx=...` and a reading should appear on the dashboard within seconds.
 
-Alternatively, with the Vercel CLI (`pnpm add -g vercel`): `vercel link`, `vercel env add <NAME>` for each variable, then `vercel --prod`.
+Set the same interface name on `/settings` so the dashboard labels it correctly.
 
-### 6. Schedule the poll
+The script reports `session_start`, `session_end` and `session_restart` alongside each sample, which is what fills the `/sessions` page. A failed POST is retried on the next run rather than lost.
 
-Pull mode only. In push mode the router's own scheduler drives everything and this section can be skipped.
+#### When the router says the POST failed
 
-Next.js has no built-in scheduler, so something external must call `/api/poll`.
+The router's own log tells you which problem you have:
 
-**Option A: Vercel Cron** (`vercel.json` is included, every 15 minutes). Vercel invokes the path with a GET request carrying `Authorization: Bearer $CRON_SECRET` automatically when `CRON_SECRET` is set in the project. **Limitation:** the Hobby (free) plan only allows cron jobs that run once per day, so the `*/15 * * * *` schedule will be rejected or ignored there. It works on Pro and above.
-
-**Option B: GitHub Actions** (`.github/workflows/poll.yml`, every 10 minutes). This is the workaround for the Hobby plan. Set two repository secrets under GitHub, Settings, Secrets and variables, Actions, "New repository secret":
-
-| Secret | Value |
+| Log message | Meaning |
 | --- | --- |
-| `POLL_URL` | `https://<your-app>.vercel.app/api/poll` |
-| `CRON_SECRET` | the same value you set on Vercel |
+| `Host is unreachable` | Wrong or stale address. Check the app host's current IP; DHCP may have changed it. |
+| `timeout connecting` | The address is routable but nothing answers. Usually a firewall on the app host, or no route back. |
+| `POST ... failed` with no fetch error | The app answered with an error status. Check the app's log. |
 
-Then run the workflow once from the Actions tab ("Run workflow") to confirm it returns HTTP 200. GitHub schedules are best-effort; delays of a few minutes are normal, and scheduled workflows on public repos are disabled after 60 days without commits.
+Run `/ping <app-host>` and `/tool fetch url="http://<app-host>:3000/api/health" output=user` from the router's terminal to separate a network problem from an app problem.
 
-If you use Option B on Hobby, delete or edit `vercel.json` so the deploy does not complain about the cron schedule.
+On Windows, the host firewall blocks inbound connections to the dev server by default. Allow the port once, from an elevated PowerShell:
+
+```powershell
+New-NetFirewallRule -DisplayName "Quota monitor 3000" -Direction Inbound -Action Allow -Protocol TCP -LocalPort 3000 -Profile Private
+```
+
+Give the app host a static address or a DHCP reservation, otherwise its IP will change and the script will point at nothing.
 
 ## API
 
-All routes return JSON except the CSV export.
-
 | Method | Path | Notes |
 | --- | --- | --- |
-| `POST`/`GET` | `/api/poll` | Requires `Authorization: Bearer $CRON_SECRET`. Runs one polling cycle (pull mode). |
-| `POST` | `/api/ingest` | Requires the same bearer token. Body `{ "tx_bytes", "rx_bytes", "interface"?, "running"? }` as JSON or form-encoded. Stores the reading and applies the quota logic (push mode). |
+| `POST` | `/api/ingest` | Requires `Authorization: Bearer $CRON_SECRET`. Body `{ "tx_bytes", "rx_bytes", "iface"?, "running"?, "session_id"?, "link_up"?, "router_time"? }` as JSON or form-encoded. |
+| `GET` | `/api/health` | `200` when the database is reachable, `503` otherwise. Used by the container health check. |
 | `GET` | `/api/usage/today` | Today's readings, baseline, `used_since_baseline`, quota and window state. |
-| `GET` | `/api/usage/history?days=30` | Per-day `min_bytes`, `max_bytes`, reboot-aware `used_bytes`, reading count. Max 365 days. |
-| `GET` | `/api/settings` | Current settings. The password is replaced by `has_password_set`. |
-| `PUT` | `/api/settings` | Any subset of fields. Validates quota > 0, `window_end` after `window_start`, email and URL formats, IANA timezone. Empty `router_pass` keeps the stored one. |
-| `GET` | `/api/export?format=csv\|json&from=YYYY-MM-DD&to=YYYY-MM-DD` | Streams readings in the range (dates inclusive, in the configured timezone). |
+| `GET` | `/api/usage/history?days=30` | Per-day min, max, reboot-aware usage and reading count. Max 365 days. |
+| `GET` | `/api/sessions?days=30&limit=200` | Link sessions with uptime, offline gap and traffic, plus totals. |
+| `GET` | `/api/settings` | Current settings. |
+| `PUT` | `/api/settings` | Any subset of fields. Validates quota > 0, `window_end` after `window_start`, email format and IANA timezone. |
+| `GET` | `/api/export?format=csv\|json&from=YYYY-MM-DD&to=YYYY-MM-DD` | Streams readings in the range, dates inclusive, in the configured timezone. |
 | `POST` | `/api/test-email` | Sends a test email to `alert_email_to`. |
+
+## Docker
+
+The image is a multi-stage build producing the Next.js standalone server, running as a non-root user, with no secrets baked in.
+
+```bash
+docker build -t mikrotik-quota-monitor .
+docker run --rm -p 3000:3000 --env-file .env.local mikrotik-quota-monitor
+```
+
+Or with compose, which also offers a bundled Postgres:
+
+```bash
+docker compose up --build                      # app only, using DATABASE_URL from .env.local
+docker compose --profile local-db up --build   # app plus a Postgres container
+```
+
+With the `local-db` profile, point `.env.local` at the bundled database and `schema.sql` is applied automatically on first start:
+
+```
+DATABASE_URL=postgres://quota:quota@db:5432/quota
+DATABASE_SSL=disable
+```
+
+### Deploying to a host such as Sevalla
+
+Point the platform at this repository with the Dockerfile as the build source. Set `DATABASE_URL`, `RESEND_API_KEY`, `CRON_SECRET`, `ALERT_EMAIL_FROM` and, for Supabase, `DATABASE_SSL_CA=supabase` as environment variables. The server binds `0.0.0.0` and honours the `PORT` variable the platform injects. Use `/api/health` as the health check path.
+
+Then change the `url` line in the router script to the deployed address. Nothing else moves, because all other configuration lives in the database.
 
 ## Project layout
 
 ```
 app/
-  page.tsx               dashboard (server component, live DB + router status)
-  settings/page.tsx      settings form (client, GET/PUT /api/settings)
+  page.tsx               dashboard, auto-refreshing
+  sessions/page.tsx      link sessions with uptime and per-session traffic
+  settings/page.tsx      settings form
   export/page.tsx        date range export
   api/...                route handlers listed above
-components/              UI pieces (progress bar, Recharts history, forms, toast)
+components/              UI pieces
 lib/
-  db.ts                  pg-promise pool and type parsers
-  settings.ts            settings read/upsert
-  router.ts              RouterOS REST client (node:https, optional insecure TLS)
+  db.ts                  pg-promise pool, type parsers and TLS selection
+  certs.ts               bundled Supabase root CA
+  settings.ts            settings read and upsert
+  readings.ts            stores a reading and applies the quota window logic
+  sessions.ts            link session tracking and reporting
   usage.ts               reading queries, reboot-aware usage math, daily history
-  poll.ts                the polling cycle
   email.ts               Resend alerts
-  time.ts                timezone and window helpers
-schema.sql               tables + settings seed
-vercel.json              Vercel Cron definition
-.github/workflows/poll.yml  GitHub Actions scheduler
+  time.ts                timezone, window and duration helpers
+router/quota-push.rsc    the RouterOS script
+schema.sql               tables and the settings seed
+Dockerfile               production image
+docker-compose.yml       local run, optionally with Postgres
 ```
 
 ## Notes and limits
 
-- Timezone: `settings.timezone` (IANA name such as `Asia/Beirut`) decides which day a reading belongs to and when the window opens. The seed value is `UTC`; change it on `/settings` before relying on the window.
-- The window cannot cross midnight (`window_end` must be after `window_start`).
-- One alert per day. To re-arm after testing, `UPDATE daily_windows SET notified = false WHERE window_date = CURRENT_DATE;`.
-- If the email send fails, the poll returns HTTP 502 and `notified` stays false, so the next poll retries.
-- The dashboard makes a live call to the router with a 5 second timeout on every load to show interface status.
+- Timezone (`settings.timezone`, an IANA name such as `Asia/Beirut`) decides which day a reading belongs to and when the window opens. The seed value is `UTC`.
+- The window cannot cross midnight: `window_end` must be after `window_start`.
+- One alert per day. To re-arm after testing: `UPDATE daily_windows SET notified = false WHERE window_date = CURRENT_DATE;`
+- If the email send fails, the request returns 502 and `notified` stays false, so the next reading retries.
+- The dashboard refreshes every 15 seconds and the sessions page every 20, pausing while the browser tab is hidden. Click the "Live" pill to refresh immediately.
+- Today's usage and the session totals measure different things. Today's usage is bounded by the quota window; session totals cover whole connections, so the two numbers are not meant to match.
+- While the app is down the router keeps counting, so the traffic is not lost. It arrives in one large delta on the next successful push and is attributed to the day that push landed.

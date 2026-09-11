@@ -1,0 +1,22 @@
+# Build inputs only: everything below is either regenerated, secret, or noise.
+node_modules
+.next
+.git
+.github
+.vscode
+.idea
+
+# Secrets never belong in an image layer; pass them at runtime instead.
+.env
+.env.*
+!.env.local.example
+
+# Local tooling and docs that do not affect the build
+*.log
+*.md
+!README.md
+.playwright-mcp
+tsconfig.tsbuildinfo
+Dockerfile
+.dockerignore
+docker-compose.yml

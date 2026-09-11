@@ -1,16 +1,20 @@
 import { db } from "@/lib/db";
 import { sendQuotaAlert } from "@/lib/email";
 import { quotaBytes } from "@/lib/format";
-import { fetchWanCounters, RouterError, type WanCounters } from "@/lib/router";
-import { getSettings, type SettingsRow } from "@/lib/settings";
+import type { SettingsRow } from "@/lib/settings";
 import { isWithinWindow, localParts, toHHMM } from "@/lib/time";
-import { getDailyWindow, getLatestReading, getReadingsSince, sumUsage, type Reading } from "@/lib/usage";
+import { getDailyWindow, getLatestReading, sumUsageSince, type Reading } from "@/lib/usage";
 
-export type ReadingSource = "pull" | "push";
+export interface WanCounters {
+  name: string;
+  txBytes: number;
+  rxBytes: number;
+  running: boolean;
+  disabled: boolean;
+}
 
 export interface RecordedResult {
   status: "ok";
-  source: ReadingSource;
   reading: { id: number; recorded_at: string; tx_bytes: number; rx_bytes: number; total_bytes: number };
   interface: { name: string; running: boolean; disabled: boolean };
   rebooted: boolean;
@@ -27,58 +31,28 @@ export interface RecordedResult {
   };
 }
 
-export type PollResult = { status: "paused"; message: string } | RecordedResult;
-
 /**
- * Pull mode: read config from the settings table, sample the router's REST
- * API, then store the reading and apply the quota logic.
- */
-export async function runPoll(now = new Date()): Promise<PollResult> {
-  const settings = await getSettings();
-
-  // Pause switch: no reading, no DB write.
-  if (!settings.polling_enabled) {
-    return { status: "paused", message: "polling_enabled is false; nothing was recorded" };
-  }
-
-  if (!settings.router_host || !settings.router_user || !settings.router_pass) {
-    throw new RouterError(
-      "Router host, user and password must all be set in /settings for pull mode " +
-        "(or let the router push readings to /api/ingest instead)",
-    );
-  }
-
-  const counters = await fetchWanCounters({
-    host: settings.router_host,
-    user: settings.router_user,
-    pass: settings.router_pass,
-    wanInterfaceName: settings.wan_interface_name,
-  });
-
-  return recordReading(settings, counters, "pull", now);
-}
-
-/**
- * Shared by pull mode (runPoll) and push mode (/api/ingest): store one counter
- * sample and apply the daily quota window logic.
+ * Store one counter sample from the router and apply the daily quota window
+ * logic. Readings only ever arrive by push, from the router's own script
+ * posting to /api/ingest.
  */
 export async function recordReading(
   settings: SettingsRow,
   counters: WanCounters,
-  source: ReadingSource,
   now = new Date(),
+  sessionKey: string | null = null,
 ): Promise<RecordedResult> {
   // Store the reading. Compare against the previous one to detect a reboot.
   const previous = await getLatestReading();
   const reading = await db.one<Reading>(
-    `INSERT INTO interface_readings (recorded_at, tx_bytes, rx_bytes)
-     VALUES ($1, $2, $3) RETURNING *`,
-    [now, counters.txBytes, counters.rxBytes],
+    `INSERT INTO interface_readings (recorded_at, tx_bytes, rx_bytes, session_key)
+     VALUES ($1, $2, $3, $4) RETURNING *`,
+    [now, counters.txBytes, counters.rxBytes, sessionKey],
   );
 
   // Router reboot: counters reset, so the new total is lower than before.
-  // Nothing to "fix" here; sumUsage() never computes a negative delta and the
-  // post-reboot reading simply becomes the new reference point.
+  // Nothing to "fix" here; sumUsageSince() never computes a negative delta and
+  // the post-reboot reading simply becomes the new reference point.
   const rebooted = previous !== null && reading.total_bytes < previous.total_bytes;
 
   const local = localParts(reading.recorded_at, settings.timezone);
@@ -86,7 +60,6 @@ export async function recordReading(
 
   const base = {
     status: "ok" as const,
-    source,
     reading: {
       id: reading.id,
       recorded_at: reading.recorded_at.toISOString(),
@@ -126,8 +99,7 @@ export async function recordReading(
   // Usage since baseline. Summing consecutive deltas equals
   // current_total - baseline_bytes when no reboot happened, and falls back to
   // the post-reboot accumulated readings when one did.
-  const sinceBaseline = await getReadingsSince(window!.baseline_recorded_at);
-  const used = sumUsage(sinceBaseline);
+  const used = await sumUsageSince(window!.baseline_recorded_at);
   const quota = quotaBytes(settings.quota_gb);
   const exceeded = used > quota;
 

@@ -8,14 +8,11 @@ export interface SettingsRow {
   timezone: string;
   alert_email_to: string | null;
   wan_interface_name: string;
-  router_host: string | null;
-  router_user: string | null;
-  router_pass: string | null;
   polling_enabled: boolean;
   updated_at: Date;
 }
 
-/** Shape returned to the browser: never includes the router password. */
+/** Shape returned to the browser. */
 export interface PublicSettings {
   quota_gb: number;
   window_start: string; // "HH:MM"
@@ -23,9 +20,6 @@ export interface PublicSettings {
   timezone: string;
   alert_email_to: string | null;
   wan_interface_name: string;
-  router_host: string | null;
-  router_user: string | null;
-  has_password_set: boolean;
   polling_enabled: boolean;
   updated_at: string;
 }
@@ -39,9 +33,6 @@ export type SettingsPatch = Partial<
     | "timezone"
     | "alert_email_to"
     | "wan_interface_name"
-    | "router_host"
-    | "router_user"
-    | "router_pass"
     | "polling_enabled"
   >
 >;
@@ -54,7 +45,11 @@ export class SettingsNotSeededError extends Error {
 }
 
 export async function getSettings(): Promise<SettingsRow> {
-  const row = await db.oneOrNone<SettingsRow>("SELECT * FROM settings WHERE id = 1");
+  const row = await db.oneOrNone<SettingsRow>(
+    `SELECT id, quota_gb, window_start, window_end, timezone, alert_email_to,
+            wan_interface_name, polling_enabled, updated_at
+     FROM settings WHERE id = 1`,
+  );
   if (!row) throw new SettingsNotSeededError();
   return row;
 }
@@ -67,9 +62,6 @@ export function toPublicSettings(row: SettingsRow): PublicSettings {
     timezone: row.timezone,
     alert_email_to: row.alert_email_to,
     wan_interface_name: row.wan_interface_name,
-    router_host: row.router_host,
-    router_user: row.router_user,
-    has_password_set: Boolean(row.router_pass),
     polling_enabled: row.polling_enabled,
     updated_at: row.updated_at.toISOString(),
   };
