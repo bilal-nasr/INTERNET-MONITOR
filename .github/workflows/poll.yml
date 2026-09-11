@@ -1,0 +1,41 @@
+name: Poll router
+
+# Workaround for Vercel Hobby's once-per-day cron limit: GitHub Actions calls
+# the deployed /api/poll endpoint every 10 minutes.
+#
+# Required repository secrets (Settings -> Secrets and variables -> Actions):
+#   POLL_URL     e.g. https://your-app.vercel.app/api/poll
+#   CRON_SECRET  the same value as the CRON_SECRET env var on Vercel
+#
+# Note: GitHub schedules are best-effort and can be delayed by several minutes
+# during peak load. Scheduled workflows are also disabled automatically after
+# 60 days of no repository activity on public repos.
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Call /api/poll
+        env:
+          POLL_URL: ${{ secrets.POLL_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          if [ -z "${POLL_URL}" ] || [ -z "${CRON_SECRET}" ]; then
+            echo "POLL_URL and CRON_SECRET secrets must be set" >&2
+            exit 1
+          fi
+          http_code=$(curl -sS -o /tmp/poll.json -w "%{http_code}" \
+            -X POST "${POLL_URL}" \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            --max-time 60)
+          echo "HTTP ${http_code}"
+          cat /tmp/poll.json || true
+          echo
+          [ "${http_code}" -ge 200 ] && [ "${http_code}" -lt 300 ]
