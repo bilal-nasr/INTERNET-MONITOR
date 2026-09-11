@@ -4,8 +4,31 @@ import { formatDuration } from "@/lib/time";
 import type { TodayUsage } from "@/lib/usage";
 import { formatTime } from "@/components/UsageProgress";
 
-/** Readings older than this are flagged; the router script posts every 1-5 minutes. */
-const STALE_AFTER_MINUTES = 30;
+/**
+ * Ten missed pushes at the default 30-second interval. Past this the router is
+ * not talking to us, and whatever it last said about the link is no longer
+ * something we can vouch for.
+ */
+const SILENT_AFTER_SECONDS = 300;
+
+type LinkState =
+  | { kind: "up"; session: SessionSummary }
+  | { kind: "down"; session: SessionSummary }
+  | { kind: "silent"; session: SessionSummary }
+  | { kind: "unknown" };
+
+function linkState(session: SessionSummary | null): LinkState {
+  if (!session) return { kind: "unknown" };
+  // An open session we have not heard about in minutes means the router itself
+  // went away: it never got to tell us the link dropped, so "Live" would be a
+  // claim we cannot support.
+  if (session.open) {
+    return session.seconds_since_seen > SILENT_AFTER_SECONDS
+      ? { kind: "silent", session }
+      : { kind: "up", session };
+  }
+  return { kind: "down", session };
+}
 
 export function StatusCard({
   usage,
@@ -16,32 +39,65 @@ export function StatusCard({
   usage: TodayUsage;
   pollingEnabled: boolean;
   interfaceName: string;
-  /** The currently open link session, when one is being tracked. */
+  /** The newest session, open or closed. */
   session?: SessionSummary | null;
 }) {
-  // Age is measured against the snapshot time so the component stays pure.
+  const state = linkState(session);
   const ageMinutes = usage.last_reading
     ? Math.round(
         (new Date(usage.generated_at).getTime() - new Date(usage.last_reading.recorded_at).getTime()) / 60_000,
       )
     : null;
-  const stale = pollingEnabled && ageMinutes !== null && ageMinutes > STALE_AFTER_MINUTES;
 
   return (
     <section className="rounded-xl border border-border bg-surface p-5">
       <h2 className="text-sm font-medium text-muted">Router</h2>
       <dl className="mt-3 space-y-3 text-sm">
         <div>
-          <dt className="text-xs text-muted">Interface</dt>
-          <dd className="font-medium">{interfaceName}</dd>
-          <dd className="text-xs text-muted">Router posts readings to /api/ingest</dd>
+          <dt className="text-xs text-muted">Link</dt>
+          {state.kind === "up" && (
+            <>
+              <dd className="font-medium text-green-700 dark:text-status-good">
+                Up for {formatDuration(state.session.uptime_seconds)}
+              </dd>
+              <dd className="text-xs tabular-nums text-muted">
+                {formatBytes(state.session.total_bytes)} since{" "}
+                {formatTime(state.session.started_at, usage.timezone)}
+              </dd>
+            </>
+          )}
+          {state.kind === "down" && (
+            <>
+              <dd className="font-medium text-status-critical">
+                &#9888; Down since {formatTime(state.session.ended_at!, usage.timezone)}
+              </dd>
+              <dd className="text-xs text-muted">
+                Offline for {formatDuration(state.session.seconds_since_seen)}. The router reported the
+                drop and will report again when the link returns.
+              </dd>
+            </>
+          )}
+          {state.kind === "silent" && (
+            <>
+              <dd className="font-medium text-status-critical">&#9888; No contact with the router</dd>
+              <dd className="text-xs text-muted">
+                Nothing heard for {formatDuration(state.session.seconds_since_seen)}. The router is off,
+                unreachable, or its script has stopped. The last session is shown as it was left.
+              </dd>
+            </>
+          )}
+          {state.kind === "unknown" && (
+            <dd className="font-medium text-muted">No session recorded yet</dd>
+          )}
+          <dd className="mt-1 truncate text-xs text-muted">interface {interfaceName}</dd>
         </div>
+
         <div>
           <dt className="text-xs text-muted">Last reading</dt>
           <dd className="font-medium">
             {usage.last_reading ? formatTime(usage.last_reading.recorded_at, usage.timezone) : "never"}
             {ageMinutes !== null && (
-              <span className={`ml-2 text-xs font-normal ${stale ? "text-status-critical" : "text-muted"}`}>
+              <span className="ml-2 text-xs font-normal text-muted">
                 {ageMinutes < 1 ? "just now" : `${ageMinutes} min ago`}
               </span>
             )}
@@ -51,24 +107,11 @@ export function StatusCard({
               tx {formatBytes(usage.last_reading.tx_bytes)} / rx {formatBytes(usage.last_reading.rx_bytes)}
             </dd>
           )}
-          {stale && (
-            <dd className="mt-1 text-xs text-status-critical">
-              &#9888; No reading for over {STALE_AFTER_MINUTES} minutes. Check the router&apos;s scheduler and its log.
-            </dd>
-          )}
           {pollingEnabled && !usage.last_reading && (
             <dd className="mt-1 text-xs text-muted">Waiting for the first reading.</dd>
           )}
         </div>
-        {session && (
-          <div>
-            <dt className="text-xs text-muted">Current session</dt>
-            <dd className="font-medium tabular-nums">up {formatDuration(session.uptime_seconds)}</dd>
-            <dd className="text-xs tabular-nums text-muted">
-              {formatBytes(session.total_bytes)} since {formatTime(session.started_at, usage.timezone)}
-            </dd>
-          </div>
-        )}
+
         <div>
           <dt className="text-xs text-muted">Monitoring</dt>
           <dd className={`font-medium ${pollingEnabled ? "" : "text-amber-700 dark:text-status-warning"}`}>

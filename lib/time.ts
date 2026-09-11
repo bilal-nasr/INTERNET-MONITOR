@@ -155,3 +155,36 @@ export function formatDuration(seconds: number | null | undefined): string {
   if (m > 0) return `${m}m ${String(sec).padStart(2, "0")}s`;
   return `${sec}s`;
 }
+
+/**
+ * The absolute instant a wall-clock time falls on, for a given local date.
+ * `minuteOffset` shifts by whole minutes, which is how the inclusive end of a
+ * window ("<= 23:59") becomes the exclusive bound 00:00 the next day.
+ */
+export function localTimeInstant(
+  date: string,
+  time: string,
+  timeZone: string,
+  minuteOffset = 0,
+): Date | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+  const mins = timeToMinutes(time);
+  if (!m || mins === null) return null;
+
+  const total = mins + minuteOffset;
+  const dayShift = Math.floor(total / 1440);
+  const inDay = ((total % 1440) + 1440) % 1440;
+
+  // Shift the calendar day first, so a bound past midnight lands on the next date.
+  const base = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]) + dayShift);
+  const d = new Date(base);
+  return zonedTimeToUtc(
+    d.getUTCFullYear(),
+    d.getUTCMonth() + 1,
+    d.getUTCDate(),
+    Math.floor(inDay / 60),
+    inDay % 60,
+    0,
+    timeZone,
+  );
+}

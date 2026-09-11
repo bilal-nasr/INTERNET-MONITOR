@@ -3,7 +3,7 @@ import { AutoRefresh } from "@/components/AutoRefresh";
 import { HistoryChart } from "@/components/HistoryChart";
 import { StatusCard } from "@/components/StatusCard";
 import { UsageProgress } from "@/components/UsageProgress";
-import { getOpenSessionSummary } from "@/lib/sessions";
+import { getLatestSessionSummary } from "@/lib/sessions";
 import { getSettings, type SettingsRow } from "@/lib/settings";
 import { getDailyHistory, getTodayUsage } from "@/lib/usage";
 
@@ -20,7 +20,7 @@ export default async function DashboardPage() {
   const [usage, history, session] = await Promise.all([
     getTodayUsage(settings),
     getDailyHistory(30, settings.timezone),
-    getOpenSessionSummary(),
+    getLatestSessionSummary(),
   ]);
 
   return (
@@ -43,7 +43,7 @@ export default async function DashboardPage() {
         />
       </div>
 
-      <HistoryChart history={history} quotaGb={settings.quota_gb} />
+      <HistoryChart history={history} quotaGb={settings.quota_gb} today={usage.date} />
     </div>
   );
 }

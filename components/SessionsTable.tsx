@@ -2,6 +2,9 @@ import { formatBytes } from "@/lib/format";
 import type { SessionSummary, SessionTotals } from "@/lib/sessions";
 import { formatDuration } from "@/lib/time";
 
+/** Ten missed pushes at the default interval. */
+const SILENT_AFTER_SECONDS = 300;
+
 function dateTime(iso: string, timeZone: string): { day: string; time: string } {
   const d = new Date(iso);
   return {
@@ -85,12 +88,21 @@ export function SessionsTable({
           {sessions.map((s) => (
             <tr key={s.id} className="border-b border-border/60 last:border-0">
               <td className="px-4 py-3">
-                {s.open ? (
+                {s.open && s.seconds_since_seen <= SILENT_AFTER_SECONDS && (
                   <span className="inline-flex items-center gap-1.5 rounded-full bg-status-good/15 px-2 py-0.5 text-xs font-medium text-green-700 dark:text-status-good">
                     <span className="size-1.5 rounded-full bg-status-good" />
                     Live
                   </span>
-                ) : (
+                )}
+                {s.open && s.seconds_since_seen > SILENT_AFTER_SECONDS && (
+                  <span
+                    className="inline-flex items-center gap-1.5 rounded-full bg-status-critical/15 px-2 py-0.5 text-xs font-medium text-status-critical"
+                    title={`Nothing heard for ${formatDuration(s.seconds_since_seen)}`}
+                  >
+                    &#9888; No contact
+                  </span>
+                )}
+                {!s.open && (
                   <span className="text-xs text-muted">
                     {s.end_reason === "restart" ? "Dropped" : "Closed"}
                   </span>

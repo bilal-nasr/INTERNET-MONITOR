@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { badRequest, errorResponse, isCronAuthorized } from "@/lib/api";
-import { recordReading } from "@/lib/readings";
+import { db } from "@/lib/db";
+import { recordReading, storeReading } from "@/lib/readings";
 import { applySessionEvent } from "@/lib/sessions";
 import { getSettings } from "@/lib/settings";
 import { parseRouterTimestamp } from "@/lib/time";
@@ -15,8 +16,10 @@ const boolish = z.union([
 
 const bodySchema = z
   .object({
-    tx_bytes: z.coerce.number().int().nonnegative(),
-    rx_bytes: z.coerce.number().int().nonnegative(),
+    // Capped at the safe-integer limit: beyond it the value neither survives a
+    // round trip through JS nor fits a BIGINT column.
+    tx_bytes: z.coerce.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+    rx_bytes: z.coerce.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
     /** The router script sends "iface"; "interface" is accepted too. */
     iface: z.string().trim().max(100).optional(),
     interface: z.string().trim().max(100).optional(),
@@ -81,6 +84,20 @@ export async function POST(request: Request) {
     const linkUpAt = reportedLinkUp ? new Date(reportedLinkUp.getTime() - skewMs) : null;
     const clockSkewSeconds = routerNow ? Math.round(skewMs / 1000) : null;
 
+    const wanCounters = {
+      name: interfaceName,
+      txBytes: body.tx_bytes,
+      rxBytes: body.rx_bytes,
+      running,
+      disabled: body.disabled ?? false,
+    };
+
+    // Order matters. The reading goes in first because it is the only fact that
+    // cannot be rebuilt: session totals and quota usage are both derived from
+    // the counters, so if a later step fails they simply catch up on the next
+    // push, while a lost reading is lost for good.
+    const stored = await storeReading(settings, wanCounters, now, null);
+
     const session = await applySessionEvent({
       sessionKey: body.session_id ?? "",
       interfaceName,
@@ -91,18 +108,14 @@ export async function POST(request: Request) {
       at: now,
     });
 
-    const result = await recordReading(
-      settings,
-      {
-        name: interfaceName,
-        txBytes: body.tx_bytes,
-        rxBytes: body.rx_bytes,
-        running,
-        disabled: body.disabled ?? false,
-      },
-      now,
-      session.session?.session_key ?? null,
-    );
+    if (session.session) {
+      await db.none("UPDATE interface_readings SET session_key = $2 WHERE id = $1", [
+        stored.reading.id,
+        session.session.session_key,
+      ]);
+    }
+
+    const result = await recordReading(settings, wanCounters, now, null, stored);
 
     return NextResponse.json({
       ...result,

@@ -17,8 +17,8 @@ async function fetchPage(from: string, to: string, timezone: string, afterId: nu
   return db.any<Reading>(
     `SELECT id, recorded_at, tx_bytes, rx_bytes, total_bytes
      FROM interface_readings
-     WHERE recorded_at >= ($1::date::timestamp AT TIME ZONE $3)
-       AND recorded_at <  (($2::date + 1)::timestamp AT TIME ZONE $3)
+     WHERE recorded_at >= ($1::date::timestamp AT TIME ZONE $3::text)
+       AND recorded_at <  (($2::date + 1)::timestamp AT TIME ZONE $3::text)
        AND id > $4
      ORDER BY id ASC
      LIMIT $5`,

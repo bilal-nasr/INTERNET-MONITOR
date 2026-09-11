@@ -94,6 +94,17 @@ Set the same interface name on `/settings` so the dashboard labels it correctly.
 
 The script reports `session_start`, `session_end` and `session_restart` alongside each sample, which is what fills the `/sessions` page. A failed POST is retried on the next run rather than lost.
 
+### Starting a fresh session on purpose
+
+A session ends and a new one begins whenever the WAN link drops, with no configuration needed. Two optional scripts add the other cases:
+
+- [`router/pppoe-reconnect.rsc`](router/pppoe-reconnect.rsc) cycles the PPPoE client. Run it from a scheduler at `00:00:00` with `interval=1d` for one fresh session per day.
+- [`router/internet-watchdog.md`](router/internet-watchdog.md) covers the case the link state misses: PPPoE still "running" while the ISP has an outage behind it. It uses RouterOS netwatch to probe a public address once a minute and call `pppoe-reconnect` when three consecutive pings are lost. Do not try this with `/ping` inside a scheduled script: on RouterOS 7.24 `/ping` returns nothing usable from a script, so such a check never fires.
+
+Both install the same way as `quota-push`: paste into **System > Scripts**, then add a scheduler that runs the script. Add `pppoe-reconnect` first, since the watchdog calls it.
+
+Cycling the PPPoE client does not reset the interface counters on every RouterOS build, so the app decides where a new session starts by comparing counters with the previous session rather than assuming zero. Either behaviour produces the right per-session total.
+
 #### When the router says the POST failed
 
 The router's own log tells you which problem you have:
@@ -176,7 +187,9 @@ lib/
   usage.ts               reading queries, reboot-aware usage math, daily history
   email.ts               Resend alerts
   time.ts                timezone, window and duration helpers
-router/quota-push.rsc    the RouterOS script
+router/quota-push.rsc        pushes counters to the app
+router/pppoe-reconnect.rsc   cycles the WAN session (daily scheduler, watchdog)
+router/internet-watchdog.md  netwatch setup for ISP outages
 schema.sql               tables and the settings seed
 Dockerfile               production image
 docker-compose.yml       local run, optionally with Postgres
@@ -190,4 +203,5 @@ docker-compose.yml       local run, optionally with Postgres
 - If the email send fails, the request returns 502 and `notified` stays false, so the next reading retries.
 - The dashboard refreshes every 15 seconds and the sessions page every 20, pausing while the browser tab is hidden. Click the "Live" pill to refresh immediately.
 - Today's usage and the session totals measure different things. Today's usage is bounded by the quota window; session totals cover whole connections, so the two numbers are not meant to match.
+- The quota and the sessions are independent. The quota is keyed to the local date and resets when the window next opens, so cycling the WAN session does not reset it. To align them, set the window to 00:00-23:59.
 - While the app is down the router keeps counting, so the traffic is not lost. It arrives in one large delta on the next successful push and is attributed to the day that push landed.

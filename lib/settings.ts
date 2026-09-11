@@ -71,8 +71,22 @@ export function toPublicSettings(row: SettingsRow): PublicSettings {
  * Upsert the single settings row. Only the keys present in `patch` are written;
  * any missing key keeps its current value (or the schema default on insert).
  */
+/** Column names are interpolated into SQL, so they are checked at runtime, not just by types. */
+const WRITABLE = new Set<string>([
+  "quota_gb",
+  "window_start",
+  "window_end",
+  "timezone",
+  "alert_email_to",
+  "wan_interface_name",
+  "polling_enabled",
+]);
+
 export async function updateSettings(patch: SettingsPatch): Promise<SettingsRow> {
   const columns = Object.keys(patch) as (keyof SettingsPatch)[];
+  for (const c of columns) {
+    if (!WRITABLE.has(c)) throw new Error(`refusing to write unknown settings column: ${String(c)}`);
+  }
   if (columns.length === 0) return getSettings();
 
   const insertCols = ["id", ...columns].map((c) => `"${c}"`).join(", ");

@@ -9,13 +9,14 @@
 #      Policies needed: read, write, test.
 #   2. Edit the three values at the top (interface name, app URL, secret).
 #   3. System > Scheduler > "+" : Name = quota-push, Start Time = startup,
-#      Interval = 00:01:00, On Event = /system script run quota-push, OK.
-#      A shorter interval narrows the traffic lost when the link drops.
+#      Interval = 00:00:30, On Event = /system script run quota-push, OK.
+#      A shorter interval narrows the traffic lost when the link drops, at
+#      the cost of more stored rows. 30s is the balance the README argues for.
 #   4. Test once: select the script and click "Run Script", then check
 #      Log for a "quota-push:" line and the dashboard for a new reading.
 #
 # Terminal equivalent for the scheduler:
-#   /system scheduler add name=quota-push start-time=startup interval=1m \
+#   /system scheduler add name=quota-push start-time=startup interval=30s \
 #       on-event="/system script run quota-push" policy=read,write,test
 #
 # The script keeps a little state in global variables so it can tell the app
@@ -24,7 +25,7 @@
 #
 # ----------------------------------------------------------------------------
 :local iface  "pppoe-out1"
-:local url    "http://192.168.88.254:3000/api/ingest"
+:local url    "http://APP-HOST:3000/api/ingest"
 :local secret "PASTE-YOUR-CRON_SECRET-HERE"
 
 # state carried between runs (cleared on reboot, which is handled below)

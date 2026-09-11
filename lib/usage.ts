@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 import { quotaBytes } from "@/lib/format";
 import type { SettingsRow } from "@/lib/settings";
-import { isWithinWindow, localParts, toHHMM } from "@/lib/time";
+import { isWithinWindow, localParts, localTimeInstant, toHHMM } from "@/lib/time";
 
 export interface Reading {
   id: number;
@@ -26,17 +26,26 @@ export interface DailyWindow {
  * lower than its predecessor the interface reset its counters, so that reading's
  * full value counts as usage since the reset instead of a negative delta.
  *
+ * Deltas are taken within one interface only: two interfaces have unrelated
+ * counter streams, and chaining them would read as one enormous transfer.
+ *
+ * `until` bounds the sum, so usage stays fixed once the quota window closes
+ * instead of continuing to climb on traffic the quota does not govern.
+ *
  * Done as an aggregate rather than in JavaScript because the router can push
  * every few seconds, which would otherwise mean transferring thousands of rows
  * on every single push.
  */
-export async function sumUsageSince(since: Date): Promise<number> {
+export async function sumUsageSince(since: Date, until: Date | null = null): Promise<number> {
   const row = await db.one<{ used: number }>(
     `WITH r AS (
        SELECT total_bytes,
-              LAG(total_bytes) OVER (ORDER BY recorded_at, id) AS prev
+              LAG(total_bytes) OVER (
+                PARTITION BY interface_name ORDER BY recorded_at, id
+              ) AS prev
        FROM interface_readings
        WHERE recorded_at >= $1
+         AND ($2::timestamptz IS NULL OR recorded_at < $2::timestamptz)
      )
      SELECT COALESCE(SUM(
        CASE
@@ -46,7 +55,7 @@ export async function sumUsageSince(since: Date): Promise<number> {
        END
      ), 0)::bigint AS used
      FROM r`,
-    [since],
+    [since, until],
   );
   return row.used;
 }
@@ -104,7 +113,10 @@ export async function getTodayUsage(settings: SettingsRow, now = new Date()): Pr
     getLatestReading(),
   ]);
 
-  const used = window ? await sumUsageSince(window.baseline_recorded_at) : 0;
+  // The window end is inclusive to the minute, so the exclusive bound is the
+  // start of the following minute.
+  const windowEnd = localTimeInstant(parts.date, settings.window_end, settings.timezone, 1);
+  const used = window ? await sumUsageSince(window.baseline_recorded_at, windowEnd) : 0;
   const quota = quotaBytes(settings.quota_gb);
 
   return {
@@ -154,18 +166,20 @@ export interface DailyUsage {
 export async function getDailyHistory(days: number, timezone: string): Promise<DailyUsage[]> {
   return db.any<DailyUsage>(
     `WITH bounds AS (
-       SELECT ((now() AT TIME ZONE $2)::date - ($1::int - 1)) AS start_day
+       SELECT ((now() AT TIME ZONE $2::text)::date - ($1::int - 1)) AS start_day
      ),
      r AS (
        SELECT recorded_at, total_bytes,
-              LAG(total_bytes) OVER (ORDER BY recorded_at, id) AS prev_bytes
+              LAG(total_bytes) OVER (
+                PARTITION BY interface_name ORDER BY recorded_at, id
+              ) AS prev_bytes
        FROM interface_readings, bounds
        -- include a little history before the range so the first delta of the
        -- first day is not lost
-       WHERE recorded_at >= (bounds.start_day::timestamp AT TIME ZONE $2) - INTERVAL '1 hour'
+       WHERE recorded_at >= (bounds.start_day::timestamp AT TIME ZONE $2::text) - INTERVAL '1 hour'
      ),
      d AS (
-       SELECT (recorded_at AT TIME ZONE $2)::date AS day,
+       SELECT (recorded_at AT TIME ZONE $2::text)::date AS day,
               total_bytes,
               CASE
                 WHEN prev_bytes IS NULL THEN 0

@@ -4,7 +4,6 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
-  Cell,
   ReferenceLine,
   ResponsiveContainer,
   Tooltip,
@@ -18,12 +17,25 @@ import type { DailyUsage } from "@/lib/usage";
 interface Props {
   history: DailyUsage[];
   quotaGb: number;
+  /** Today's date in the configured timezone, as YYYY-MM-DD. */
+  today: string;
+  days?: number;
 }
 
-/** Fill the requested range so days without readings still show as gaps. */
-function fillDays(history: DailyUsage[], days: number): (DailyUsage & { label: string; gb: number })[] {
+/**
+ * Fill the requested range so days without readings still show as gaps.
+ *
+ * The axis is anchored on today, not on the last day that happens to have
+ * data. Anchoring on the data would silently shift every bar when the router
+ * stops pushing, making stale data look current.
+ */
+function fillDays(
+  history: DailyUsage[],
+  days: number,
+  today: string,
+): (DailyUsage & { label: string; gb: number })[] {
   const byDay = new Map(history.map((h) => [h.day, h]));
-  const last = history.length ? new Date(`${history[history.length - 1].day}T00:00:00Z`) : new Date();
+  const last = new Date(`${today}T00:00:00Z`);
   const out = [];
   for (let i = days - 1; i >= 0; i--) {
     const d = new Date(last);
@@ -49,15 +61,15 @@ function ChartTooltip({ active, payload }: TooltipContentProps) {
   );
 }
 
-export function HistoryChart({ history, quotaGb }: Props) {
-  const data = fillDays(history, 30);
+export function HistoryChart({ history, quotaGb, today, days = 30 }: Props) {
+  const data = fillDays(history, days, today);
   const hasData = history.some((h) => h.used_bytes > 0);
 
   return (
     <section className="rounded-xl border border-border bg-surface p-5">
       <div className="flex items-baseline justify-between">
-        <h2 className="text-sm font-medium text-muted">Daily usage in GB, last 30 days</h2>
-        <span className="text-xs text-muted">dashed line = {quotaGb} GB quota</span>
+        <h2 className="text-sm font-medium text-muted">Daily usage in GB, last {days} days</h2>
+        <span className="text-xs text-muted">all traffic; dashed line = {quotaGb} GB window quota</span>
       </div>
       <div className="mt-4 h-64 w-full">
         {hasData ? (
@@ -80,14 +92,15 @@ export function HistoryChart({ history, quotaGb }: Props) {
               />
               <Tooltip content={ChartTooltip} cursor={{ fill: "var(--border)", opacity: 0.4 }} />
               <ReferenceLine y={quotaGb} stroke="var(--status-critical)" strokeDasharray="4 4" />
-              <Bar dataKey="gb" radius={[4, 4, 0, 0]} maxBarSize={28} isAnimationActive={false}>
-                {data.map((d) => (
-                  <Cell
-                    key={d.day}
-                    fill={d.gb > quotaGb ? "var(--status-critical)" : "var(--series-1)"}
-                  />
-                ))}
-              </Bar>
+              {/* One colour: these bars are the whole day, while the quota only
+                  governs the window, so colouring by the quota would mislead. */}
+              <Bar
+                dataKey="gb"
+                radius={[4, 4, 0, 0]}
+                maxBarSize={28}
+                isAnimationActive={false}
+                fill="var(--series-1)"
+              />
             </BarChart>
           </ResponsiveContainer>
         ) : (
