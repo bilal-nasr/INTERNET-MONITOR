@@ -27,12 +27,22 @@ describe("plural", () => {
   });
 
   test("Arabic distinguishes zero, one, two, few, many and the rest", () => {
+    // A period is phrased grammatically, so it uses the full set of categories.
+    const forms = ar.common.lastNDays;
+    expect(plural("ar", forms, 1)).toBe("آخر يوم");
+    expect(plural("ar", forms, 2)).toBe("آخر يومين");
+    expect(plural("ar", forms, 5)).toBe("آخر 5 أيام");
+    expect(plural("ar", forms, 30)).toBe("آخر 30 يوماً");
+  });
+
+  test("a reported count names what is counted and puts the number last", () => {
+    // Chosen over grammatical agreement for the figures the pages report: the
+    // label stays put while the number ticks, rather than the sentence around
+    // it rewriting itself between one refresh and the next.
     const forms = ar.sessions.sessionsCount;
-    expect(plural("ar", forms, 0)).toBe("لا جلسات");
-    expect(plural("ar", forms, 1)).toBe("جلسة واحدة");
-    expect(plural("ar", forms, 2)).toBe("جلستان");
-    expect(plural("ar", forms, 5)).toBe("5 جلسات");
-    expect(plural("ar", forms, 30)).toBe("30 جلسة");
+    for (const count of [0, 1, 2, 5, 30]) {
+      expect(plural("ar", forms, count)).toBe(`عدد الجلسات: ${count}`);
+    }
   });
 
   test("falls back to `other` when a language leaves a category out", () => {
@@ -60,11 +70,28 @@ describe("dictionaries", () => {
   const english = leaves(en);
   const arabic = leaves(ar);
 
+  /**
+   * A plural category other than `other` is optional in any language: CLDR
+   * decides which ones a language uses, and a language may also choose an
+   * invariant phrasing that needs only `other`.
+   */
+  const optional = /\.(zero|one|two|few|many)$/;
+
   test("every English entry has an Arabic one", () => {
-    // Plural entries are the exception: Arabic carries categories English does
-    // not, so it may have more paths, never fewer of the shared ones.
-    const missing = [...english.keys()].filter((key) => !arabic.has(key));
+    const missing = [...english.keys()].filter((key) => !arabic.has(key) && !optional.test(key));
     expect(missing).toEqual([]);
+  });
+
+  test("a counted phrase always has the form that covers every other number", () => {
+    const plurals = new Set(
+      [...english.keys(), ...arabic.keys()]
+        .filter((key) => optional.test(key) || key.endsWith(".other"))
+        .map((key) => key.replace(/\.\w+$/, "")),
+    );
+    for (const base of plurals) {
+      expect(arabic.has(`${base}.other`)).toBe(true);
+      expect(english.has(`${base}.other`)).toBe(true);
+    }
   });
 
   test("no entry is left in English", () => {

@@ -159,8 +159,12 @@ screen is the same number found in an export or in the database.
 
 Every string lives in `lib/i18n/dictionaries/`. English is the source of truth for the shape, and
 Arabic is checked against it at build time, so a key added to one and forgotten in the other fails
-to compile rather than rendering as nothing. Counted phrases carry CLDR plural categories, which is
-why Arabic can say "جلستان" for two rather than "2 جلسات".
+to compile rather than rendering as nothing.
+
+Counted phrases carry CLDR plural categories, so a period reads grammatically: "آخر يومين" for two
+days rather than "آخر 2 أيام". Figures the pages report take the opposite approach and name what is
+counted before the number, as in "عدد الجلسات: 6". The label then stays put while the figure ticks,
+instead of the sentence around it rewriting itself between one refresh and the next.
 
 Alert emails are the exception to all of the above: they are composed with no request behind them,
 so they follow the `language` column in `settings` rather than a URL. Set it on the settings page.

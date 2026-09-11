@@ -287,7 +287,7 @@ export function SettingsForm() {
               value={form.alert_email_to}
               onChange={(e) => update("alert_email_to", e.target.value)}
               className={inputClass}
-              placeholder="me@example.com"
+              placeholder="bilal.nasr2711@gmail.com"
             />
           </div>
           <button
