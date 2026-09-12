@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { connection } from "next/server";
 import { AnomalyList } from "@/components/AnomalyList";
 import { RangePicker } from "@/components/RangePicker";
+import { Tabs } from "@/components/Tabs";
 import { Card, StatTiles, type Tile } from "@/components/stats/chrome";
 import { ComplianceChart } from "@/components/stats/ComplianceChart";
 import { CycleGauge } from "@/components/stats/CycleGauge";
@@ -36,6 +37,12 @@ type Search = Record<string, string | string[] | undefined>;
 
 function one(value: string | string[] | undefined): string | null {
   return Array.isArray(value) ? (value[0] ?? null) : (value ?? null);
+}
+
+const STATS_VIEWS = ["overview", "patterns", "reliability", "quota"] as const;
+
+function isStatsView(value: unknown): value is (typeof STATS_VIEWS)[number] {
+  return typeof value === "string" && (STATS_VIEWS as readonly string[]).includes(value);
 }
 
 /** What the tile builders below need: the numbers, plus how to write them. */
@@ -101,86 +108,113 @@ export default async function StatsPage({ searchParams }: { searchParams: Promis
         </p>
       )}
 
-      <StatTiles tiles={volumeTiles(report, w)} />
-
-      <div className="grid gap-6 lg:grid-cols-[3fr_2fr]">
-        <Card
-          title={fill(d.stats.trafficOverTime, {
-            bucket: d.buckets[report.range.bucket as BucketUnit],
-          })}
-          hint={fill(d.common.readingsCount, { count: f.count(report.summary.readings) })}
-        >
-          <UsageTimeline
-            series={report.series}
-            bucket={report.range.bucket as BucketUnit}
-            totals={report.summary}
-          />
-        </Card>
-        <Card title={d.stats.downloadAndUpload} hint={d.stats.shareOfTotal}>
-          <TrafficSplitDonut rxBytes={report.summary.rx_bytes} txBytes={report.summary.tx_bytes} />
-        </Card>
-      </div>
-
-      <CycleGauge cycle={report.cycle} timezone={report.timezone} />
-
-      <Card
-        title={d.stats.consumptionPerCycle}
-        hint={fill(d.stats.cycleStartsOnDay, { day: report.quota.cycle_day })}
-      >
-        <CycleHistoryChart cycles={report.cycle_history} capGb={report.quota.monthly_gb} />
-      </Card>
-
-      <h2 className="pt-2 text-sm font-semibold tracking-tight">{d.stats.whenTrafficHappens}</h2>
-      <StatTiles tiles={patternTiles(report, w)} columns={3} />
-
-      <Card title={d.stats.trafficByWeekdayAndHour} hint={d.stats.localTime}>
-        <UsageHeatmap cells={report.heatmap} />
-      </Card>
-
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card title={d.stats.trafficByHour}>
-          <HourProfileChart hours={report.hours} />
-        </Card>
-        <Card title={d.stats.trafficByWeekday}>
-          <WeekdayProfileChart weekdays={report.weekdays} />
-        </Card>
-      </div>
-
-      <h2 className="pt-2 text-sm font-semibold tracking-tight">{d.stats.linkReliability}</h2>
-      <StatTiles tiles={reliabilityTiles(report, w)} />
-
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card title={d.stats.timeOnline} hint={d.stats.timeOnlineHint}>
-          <AvailabilityDonut
-            uptimeSeconds={report.sessions.uptime_seconds}
-            downtimeSeconds={report.sessions.downtime_seconds}
-            availability={report.sessions.availability}
-          />
-        </Card>
-        <Card title={d.stats.sessionLengths}>
-          <DurationChart durations={report.durations} />
-        </Card>
-      </div>
-
-      <Card title={d.stats.heaviestSessions} hint={d.stats.topTenByTraffic}>
-        <TopSessionsTable sessions={report.top_sessions} timezone={report.timezone} />
-      </Card>
-
-      <h2 className="pt-2 text-sm font-semibold tracking-tight">{d.stats.dailyCompliance}</h2>
-      <StatTiles tiles={complianceTiles(report, w)} />
-
-      <Card
-        title={d.stats.dailyUsageInWindow}
-        hint={fill(d.stats.dailyUsageInWindowHint, {
-          start: report.quota.window_start,
-          end: report.quota.window_end,
-          quota: report.quota.daily_gb,
-        })}
-      >
-        <ComplianceChart compliance={report.compliance} />
-      </Card>
-
-      <AnomalyList flags={anomalies} />
+      {/* Four views over the same range, so the picker above stays put while
+          the page below it is one screenful at a time instead of all twenty
+          charts in a row. */}
+      <Tabs
+        param="view"
+        label={d.stats.tabs.label}
+        initial={isStatsView(params.view) ? params.view : "overview"}
+        tabs={[
+          {
+            id: "overview",
+            label: d.stats.tabs.overview,
+            content: (
+              <>
+                <StatTiles tiles={volumeTiles(report, w)} />
+                <div className="grid gap-6 lg:grid-cols-[3fr_2fr]">
+                  <Card
+                    title={fill(d.stats.trafficOverTime, {
+                      bucket: d.buckets[report.range.bucket as BucketUnit],
+                    })}
+                    hint={fill(d.common.readingsCount, { count: f.count(report.summary.readings) })}
+                  >
+                    <UsageTimeline
+                      series={report.series}
+                      bucket={report.range.bucket as BucketUnit}
+                      totals={report.summary}
+                    />
+                  </Card>
+                  <Card title={d.stats.downloadAndUpload} hint={d.stats.shareOfTotal}>
+                    <TrafficSplitDonut rxBytes={report.summary.rx_bytes} txBytes={report.summary.tx_bytes} />
+                  </Card>
+                </div>
+              </>
+            ),
+          },
+          {
+            id: "patterns",
+            label: d.stats.tabs.patterns,
+            content: (
+              <>
+                <StatTiles tiles={patternTiles(report, w)} columns={3} />
+                <Card title={d.stats.trafficByWeekdayAndHour} hint={d.stats.localTime}>
+                  <UsageHeatmap cells={report.heatmap} />
+                </Card>
+                <div className="grid gap-6 lg:grid-cols-2">
+                  <Card title={d.stats.trafficByHour}>
+                    <HourProfileChart hours={report.hours} />
+                  </Card>
+                  <Card title={d.stats.trafficByWeekday}>
+                    <WeekdayProfileChart weekdays={report.weekdays} />
+                  </Card>
+                </div>
+              </>
+            ),
+          },
+          {
+            id: "reliability",
+            label: d.stats.tabs.reliability,
+            content: (
+              <>
+                <StatTiles tiles={reliabilityTiles(report, w)} />
+                <div className="grid gap-6 lg:grid-cols-2">
+                  <Card title={d.stats.timeOnline} hint={d.stats.timeOnlineHint}>
+                    <AvailabilityDonut
+                      uptimeSeconds={report.sessions.uptime_seconds}
+                      downtimeSeconds={report.sessions.downtime_seconds}
+                      availability={report.sessions.availability}
+                    />
+                  </Card>
+                  <Card title={d.stats.sessionLengths}>
+                    <DurationChart durations={report.durations} />
+                  </Card>
+                </div>
+                <Card title={d.stats.heaviestSessions} hint={d.stats.topTenByTraffic}>
+                  <TopSessionsTable sessions={report.top_sessions} timezone={report.timezone} />
+                </Card>
+              </>
+            ),
+          },
+          {
+            id: "quota",
+            label: d.stats.tabs.quota,
+            content: (
+              <>
+                <StatTiles tiles={complianceTiles(report, w)} />
+                <Card
+                  title={d.stats.dailyUsageInWindow}
+                  hint={fill(d.stats.dailyUsageInWindowHint, {
+                    start: report.quota.window_start,
+                    end: report.quota.window_end,
+                    quota: report.quota.daily_gb,
+                  })}
+                >
+                  <ComplianceChart compliance={report.compliance} />
+                </Card>
+                <AnomalyList flags={anomalies} />
+                <CycleGauge cycle={report.cycle} timezone={report.timezone} />
+                <Card
+                  title={d.stats.consumptionPerCycle}
+                  hint={fill(d.stats.cycleStartsOnDay, { day: report.quota.cycle_day })}
+                >
+                  <CycleHistoryChart cycles={report.cycle_history} capGb={report.quota.monthly_gb} />
+                </Card>
+              </>
+            ),
+          },
+        ]}
+      />
 
       <p className="text-xs text-muted">{d.stats.methodology}</p>
     </div>

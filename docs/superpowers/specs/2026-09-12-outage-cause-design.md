@@ -132,6 +132,8 @@ the labels mean.
 - Clamps every derived instant into `[silenceFrom, silenceTo]`. An instant that
   cannot be placed makes its segment `unknown`.
 - Does no I/O, so every rule is unit-testable.
+- Has no zod import either, because client components import it. The push
+  body's zod fields live in `lib/outage-evidence.ts`.
 
 ### `app/api/ingest/route.ts`
 

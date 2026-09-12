@@ -9,6 +9,7 @@ import { ThroughputCard } from "@/components/ThroughputCard";
 import { UsageProgress } from "@/components/UsageProgress";
 import { latestAlert } from "@/lib/alerts/log";
 import { flagAnomalies } from "@/lib/anomaly";
+import { fill } from "@/lib/i18n";
 import { Interpolate } from "@/lib/i18n/react";
 import { getI18n } from "@/lib/i18n/server";
 import { getLatestSessionSummary } from "@/lib/sessions";
@@ -24,7 +25,7 @@ const THROUGHPUT_MINUTES = 30;
 export default async function DashboardPage() {
   await connection();
 
-  const { d } = await getI18n();
+  const { d, f } = await getI18n();
 
   let settings: SettingsRow;
   try {
@@ -43,6 +44,13 @@ export default async function DashboardPage() {
     getRecentReadings(THROUGHPUT_MINUTES),
   ]);
   const rates = ratesFromReadings(recent);
+  // "Sat, 12 Sep" reads at a glance where "2026-09-12" has to be parsed.
+  // Noon UTC keeps the calendar date whatever the offset of the zone.
+  const noon = new Date(`${usage.date}T12:00:00Z`);
+  const dateLine = fill(d.dashboard.dateLine, {
+    weekday: d.weekdays[(noon.getUTCDay() + 6) % 7],
+    date: f.dayMonth(noon.toISOString(), "UTC"),
+  });
   const anomalies = flagAnomalies(history);
 
   // The first-run checklist replaces the whole dashboard, so it has to mean
@@ -60,7 +68,7 @@ export default async function DashboardPage() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-xl font-semibold tracking-tight">{d.dashboard.title}</h1>
-            <p className="text-sm text-muted">{usage.date}</p>
+            <p className="text-sm text-muted">{dateLine}</p>
           </div>
           <AutoRefresh seconds={15} />
         </div>
@@ -74,7 +82,7 @@ export default async function DashboardPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">{d.dashboard.title}</h1>
-          <p className="text-sm text-muted">{usage.date}</p>
+          <p className="text-sm text-muted">{dateLine}</p>
         </div>
         <AutoRefresh seconds={15} />
       </div>

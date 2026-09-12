@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { PublicAlert } from "@/app/api/alerts/route";
+import { fill } from "@/lib/i18n";
 import { getI18n } from "@/lib/i18n/server";
 
 const STATUS_CLASS: Record<PublicAlert["status"], string> = {
@@ -17,6 +18,21 @@ export async function AlertsTable({ alerts, timezone }: { alerts: PublicAlert[];
       <p className="rounded-xl border border-border bg-surface p-5 text-sm text-muted">{d.alerts.empty}</p>
     );
   }
+
+  /**
+   * What the alert was about, in words. The stored scope key is the dedupe key
+   * the sender used: a local date for a daily alert, the cycle's first day for
+   * a monthly one, `digest:<date>` for a digest and `link` for the router link.
+   * Anything unrecognised is shown as stored rather than dropped.
+   */
+  const about = (a: PublicAlert): string => {
+    const date = /(\d{4}-\d{2}-\d{2})$/.exec(a.scope_key)?.[1];
+    const day = date ? f.dayMonth(`${date}T12:00:00Z`, "UTC") : null;
+    if (a.kind === "link_stale" || a.kind === "link_recovered") return d.alerts.scopes.link;
+    if (!day) return a.scope_key;
+    if (a.kind === "cycle_threshold" || a.kind === "cycle_pace") return fill(d.alerts.scopes.cycle, { date: day });
+    return day;
+  };
 
   /** The status word and, for a skip or a failure, the reason under it. */
   const status = (a: PublicAlert) => (
@@ -53,14 +69,7 @@ export async function AlertsTable({ alerts, timezone }: { alerts: PublicAlert[];
             </div>
             <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
               <Pair label={c.level} value={a.level === null ? d.common.empty : `${a.level}%`} />
-              <Pair
-                label={c.scope}
-                value={
-                  <span className="break-all font-mono" dir="ltr">
-                    {a.scope_key}
-                  </span>
-                }
-              />
+              <Pair label={c.scope} value={about(a)} />
               <Pair
                 className="col-span-2"
                 label={c.recipient}
@@ -93,7 +102,9 @@ export async function AlertsTable({ alerts, timezone }: { alerts: PublicAlert[];
                 <td className="whitespace-nowrap px-4 py-2 tabular-nums">{f.stamp(a.created_at, timezone)}</td>
                 <td className="px-4 py-2">{d.alerts.kinds[a.kind]}</td>
                 <td className="px-4 py-2 tabular-nums">{a.level === null ? d.common.empty : `${a.level}%`}</td>
-                <td className="px-4 py-2 font-mono text-xs" dir="ltr">{a.scope_key}</td>
+                <td className="whitespace-nowrap px-4 py-2 tabular-nums" title={a.scope_key}>
+                  {about(a)}
+                </td>
                 <td className="px-4 py-2 text-xs" dir="ltr">{a.recipient ?? d.common.empty}</td>
                 <td className={`px-4 py-2 ${STATUS_CLASS[a.status]}`} title={a.error ?? undefined}>
                   {status(a)}

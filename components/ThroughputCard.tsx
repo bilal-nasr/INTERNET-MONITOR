@@ -120,9 +120,18 @@ export function ThroughputCard({
             <span className="text-2xl font-semibold tabular-nums tracking-tight">
               {formatRate(latest.bytes_per_second)}
             </span>
-            <span className="text-xs text-muted">
-              {d.dashboard.throughputNow} · {d.common.download} {formatRate(latest.rx_per_second)} ·{" "}
-              {d.common.upload} {formatRate(latest.tx_per_second)}
+            {/* The swatches double as the chart's legend: the filled area is
+                download, the thin line upload. */}
+            <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
+              <span>{d.dashboard.throughputNow}</span>
+              <span className="inline-flex items-center gap-1.5">
+                <span aria-hidden className="size-2 rounded-sm bg-series-1" />
+                {d.common.download} <span className="tabular-nums text-foreground">{formatRate(latest.rx_per_second)}</span>
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span aria-hidden className="size-2 rounded-sm bg-series-2" />
+                {d.common.upload} <span className="tabular-nums text-foreground">{formatRate(latest.tx_per_second)}</span>
+              </span>
             </span>
           </div>
           <div className="mt-3 h-24 w-full">

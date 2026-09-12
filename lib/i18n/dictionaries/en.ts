@@ -47,7 +47,6 @@ export const en = {
     sessions: "Sessions",
     devices: "Devices",
     settings: "Settings",
-    export: "Export",
     alerts: "Alerts",
   },
 
@@ -134,6 +133,7 @@ export const en = {
   },
 
   rangePicker: {
+    more: "More ranges",
     custom: "Custom",
     bothDaysIncluded: "Both days are included in full.",
     fallback: "Showing the default range instead: {reason}",
@@ -141,6 +141,7 @@ export const en = {
 
   dashboard: {
     title: "Dashboard",
+    dateLine: "{weekday}, {date}",
     quotaWindowHeading: "Today in the quota window",
     windowActive: "(active now)",
     windowInactive: "(now {time})",
@@ -242,24 +243,28 @@ export const en = {
     subtitle: "{range} in {timezone}",
     everythingRecorded: "everything recorded",
     rangeSpan: "{start} to {end}",
+    tabs: {
+      label: "Statistics views",
+      overview: "Overview",
+      patterns: "Usage patterns",
+      reliability: "Reliability",
+      quota: "Quota & cap",
+    },
     trafficOverTime: "Traffic over time, by {bucket}",
     downloadAndUpload: "Download and upload",
     shareOfTotal: "share of total traffic",
     totalTraffic: "total traffic",
     consumptionPerCycle: "Consumption per billing cycle",
     cycleStartsOnDay: "cycle starts on day {day}",
-    whenTrafficHappens: "When the traffic happens",
     trafficByWeekdayAndHour: "Traffic by weekday and hour",
     localTime: "local time",
     trafficByHour: "Traffic by hour of day",
     trafficByWeekday: "Traffic by day of week",
-    linkReliability: "Link reliability",
     timeOnline: "Time online",
     timeOnlineHint: "uptime against recorded outages",
     sessionLengths: "How long sessions last",
     heaviestSessions: "Heaviest sessions",
     topTenByTraffic: "top 10 by traffic",
-    dailyCompliance: "Daily quota compliance",
     dailyUsageInWindow: "Daily usage inside the quota window",
     dailyUsageInWindowHint: "{start}-{end}, quota {quota} GB",
     methodology:
@@ -401,7 +406,7 @@ export const en = {
     outagesHint: "gaps between one session and the next",
     noOutages: "No outages in this range.",
     calendarHeading: "Downtime by day",
-    calendarHint: "darker means longer offline",
+    calendarHint: "stronger colour means longer offline",
     calendarCell: "{day}: offline {duration}",
     calendarCellNone: "{day}: no outages",
     calendarTooLong: "Choose a range of {max} days or fewer to see the calendar.",
@@ -582,7 +587,7 @@ export const en = {
   },
 
   export: {
-    title: "Export readings",
+    title: "Export & import",
     subtitle: "Download raw interface counter readings for a date range.",
     columnsHint:
       "Dates are inclusive and interpreted in the timezone from Settings. Columns: recorded_at (ISO 8601 UTC), tx_bytes, rx_bytes, total_bytes, interface_name.",
@@ -656,6 +661,10 @@ export const en = {
       skipped: "skipped",
     },
     skippedReason: "no address was configured",
+    scopes: {
+      link: "Router link",
+      cycle: "Cycle from {date}",
+    },
     showing: "Showing the last {count} alerts.",
   },
 

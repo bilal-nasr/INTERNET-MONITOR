@@ -28,7 +28,6 @@ export const ar = {
     sessions: "الجلسات",
     devices: "الأجهزة",
     settings: "الإعدادات",
-    export: "التصدير",
     alerts: "التنبيهات",
   },
 
@@ -118,6 +117,7 @@ export const ar = {
   },
 
   rangePicker: {
+    more: "فترات أخرى",
     custom: "مخصص",
     bothDaysIncluded: "اليومان محتسبان بالكامل.",
     fallback: "يتم عرض الفترة الافتراضية بدلاً من ذلك: {reason}",
@@ -125,6 +125,7 @@ export const ar = {
 
   dashboard: {
     title: "لوحة التحكم",
+    dateLine: "{weekday}، {date}",
     quotaWindowHeading: "اليوم داخل نافذة الحصة",
     windowActive: "(نشطة الآن)",
     windowInactive: "(الوقت الآن {time})",
@@ -225,24 +226,28 @@ export const ar = {
     subtitle: "{range} بتوقيت {timezone}",
     everythingRecorded: "كل ما تم تسجيله",
     rangeSpan: "من {start} إلى {end}",
+    tabs: {
+      label: "طرق عرض الإحصاءات",
+      overview: "نظرة عامة",
+      patterns: "أنماط الاستهلاك",
+      reliability: "الموثوقية",
+      quota: "الحصة والسقف",
+    },
     trafficOverTime: "حركة البيانات عبر الزمن، حسب {bucket}",
     downloadAndUpload: "التنزيل والرفع",
     shareOfTotal: "الحصة من إجمالي حركة البيانات",
     totalTraffic: "إجمالي حركة البيانات",
     consumptionPerCycle: "الاستهلاك في كل دورة فوترة",
     cycleStartsOnDay: "تبدأ الدورة في اليوم {day}",
-    whenTrafficHappens: "متى تحدث حركة البيانات",
     trafficByWeekdayAndHour: "حركة البيانات حسب اليوم والساعة",
     localTime: "بالتوقيت المحلي",
     trafficByHour: "حركة البيانات حسب ساعة اليوم",
     trafficByWeekday: "حركة البيانات حسب أيام الأسبوع",
-    linkReliability: "موثوقية الاتصال",
     timeOnline: "مدة الاتصال",
     timeOnlineHint: "مدة التشغيل مقابل الانقطاعات المسجّلة",
     sessionLengths: "كم تدوم الجلسات",
     heaviestSessions: "أكثر الجلسات استهلاكاً",
     topTenByTraffic: "أعلى 10 حسب حركة البيانات",
-    dailyCompliance: "الالتزام بالحصة اليومية",
     dailyUsageInWindow: "الاستهلاك اليومي داخل نافذة الحصة",
     dailyUsageInWindowHint: "{start}-{end}، الحصة {quota} GB",
     methodology:
@@ -380,7 +385,7 @@ export const ar = {
     outagesHint: "الفجوات بين جلسة والتي تليها",
     noOutages: "لا انقطاعات في هذه المدة.",
     calendarHeading: "الانقطاع حسب اليوم",
-    calendarHint: "الأغمق يعني انقطاعاً أطول",
+    calendarHint: "اللون الأقوى يعني انقطاعاً أطول",
     calendarCell: "{day}: منقطع {duration}",
     calendarCellNone: "{day}: لا انقطاعات",
     calendarTooLong: "اختر مدة {max} يوماً أو أقل لعرض التقويم.",
@@ -566,7 +571,7 @@ export const ar = {
   },
 
   export: {
-    title: "تصدير القراءات",
+    title: "التصدير والاستيراد",
     subtitle: "نزّل قراءات عدّادات الواجهة الخام لفترة محددة.",
     columnsHint:
       "التاريخان محتسبان بالكامل ويُفسَّران بالمنطقة الزمنية المحددة في الإعدادات. الأعمدة: recorded_at (بصيغة ISO 8601 وبتوقيت UTC)، tx_bytes، rx_bytes، total_bytes، interface_name.",
@@ -639,6 +644,10 @@ export const ar = {
       skipped: "تم التخطي",
     },
     skippedReason: "لم يكن هناك عنوان محدد",
+    scopes: {
+      link: "اتصال الراوتر",
+      cycle: "الدورة من {date}",
+    },
     showing: "عرض آخر {count} تنبيهاً.",
   },
 

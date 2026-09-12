@@ -14,21 +14,30 @@ import { rangeLabel, type RangePreset } from "@/lib/range";
  * already in the path, so it travels with the range for free.
  */
 
-const QUICK: RangePreset[] = [
+/** The ranges reached for most, one click each. */
+const QUICK: RangePreset[] = ["last_24h", "today", "last_7d", "this_cycle", "last_30d"];
+
+/**
+ * Everything else, behind one menu. Thirteen buttons wrapped onto two rows
+ * and had to be read through every time to find the common ones.
+ */
+const MORE: RangePreset[] = [
   "last_hour",
   "last_6h",
-  "last_24h",
-  "today",
   "yesterday",
   "this_week",
-  "last_7d",
-  "this_cycle",
   "last_cycle",
-  "last_30d",
   "last_90d",
   "this_year",
   "all_time",
 ];
+
+const pill = (active: boolean) =>
+  `rounded-md px-2.5 py-1.5 text-xs transition-colors ${
+    active
+      ? "bg-foreground text-background"
+      : "border border-border text-muted hover:bg-border/60 hover:text-foreground"
+  }`;
 
 export function RangePicker({
   preset,
@@ -48,6 +57,7 @@ export function RangePicker({
   // opened by hand from any preset.
   const [requestedOpen, setRequestedOpen] = useState(false);
   const open = requestedOpen || preset === "custom";
+  const inMore = (MORE as string[]).includes(preset);
 
   function go(next: Record<string, string | null>) {
     const query = new URLSearchParams(params.toString());
@@ -60,32 +70,43 @@ export function RangePicker({
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap gap-1.5 sm:gap-2">
+      <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
         {QUICK.map((p) => (
           <button
             key={p}
             type="button"
             aria-pressed={p === preset}
             onClick={() => go({ range: p, from: null, to: null })}
-            className={`rounded-md px-2 py-1 text-xs transition-colors sm:px-2.5 sm:py-1.5 ${
-              p === preset
-                ? "bg-foreground text-background"
-                : "border border-border text-muted hover:bg-border/60 hover:text-foreground"
-            }`}
+            className={pill(p === preset)}
           >
             {rangeLabel(d, p)}
           </button>
         ))}
+        {/* Shows the chosen range when it is one of these, and reads as a
+            highlighted pill like the buttons beside it. */}
+        <select
+          aria-label={d.rangePicker.more}
+          value={inMore ? preset : ""}
+          onChange={(e) => {
+            if (e.target.value) go({ range: e.target.value, from: null, to: null });
+          }}
+          className={`${pill(inMore)} cursor-pointer pe-7 outline-none focus-visible:ring-2 focus-visible:ring-series-1/40`}
+        >
+          <option value="" disabled>
+            {d.rangePicker.more}
+          </option>
+          {MORE.map((p) => (
+            <option key={p} value={p}>
+              {rangeLabel(d, p)}
+            </option>
+          ))}
+        </select>
         <button
           type="button"
           aria-pressed={preset === "custom"}
           aria-expanded={open}
           onClick={() => setRequestedOpen((v) => !v)}
-          className={`rounded-md px-2 py-1 text-xs transition-colors sm:px-2.5 sm:py-1.5 ${
-            preset === "custom"
-              ? "bg-foreground text-background"
-              : "border border-border text-muted hover:bg-border/60 hover:text-foreground"
-          }`}
+          className={pill(preset === "custom")}
         >
           {d.rangePicker.custom}
         </button>
