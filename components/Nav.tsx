@@ -16,12 +16,13 @@ const LINKS = [
   { path: "", label: (d: Dictionary) => d.nav.dashboard },
   { path: "/stats", label: (d: Dictionary) => d.nav.statistics },
   { path: "/sessions", label: (d: Dictionary) => d.nav.sessions },
+  { path: "/devices", label: (d: Dictionary) => d.nav.devices, needsDevices: true },
   { path: "/alerts", label: (d: Dictionary) => d.nav.alerts },
   { path: "/settings", label: (d: Dictionary) => d.nav.settings },
   { path: "/export", label: (d: Dictionary) => d.nav.export },
 ] as const;
 
-export function Nav({ username }: { username: string }) {
+export function Nav({ username, devicesEnabled }: { username: string; devicesEnabled: boolean }) {
   const { locale, d } = useI18n();
   const pathname = usePathname();
 
@@ -36,7 +37,7 @@ export function Nav({ username }: { username: string }) {
             keeps them all reachable instead of pushing some off the edge. */}
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <nav className="flex flex-wrap gap-1 text-sm">
-            {LINKS.map((link) => {
+            {LINKS.filter((link) => !("needsDevices" in link) || devicesEnabled).map((link) => {
               const href = `/${locale}${link.path}`;
               const active = pathname === href;
               return (

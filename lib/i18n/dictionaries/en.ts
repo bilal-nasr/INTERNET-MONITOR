@@ -45,6 +45,7 @@ export const en = {
     dashboard: "Dashboard",
     statistics: "Statistics",
     sessions: "Sessions",
+    devices: "Devices",
     settings: "Settings",
     export: "Export",
     alerts: "Alerts",
@@ -348,6 +349,33 @@ export const en = {
     upShort: "Up {duration}",
     downBytes: "Down {bytes}",
     upBytes: "Up {bytes}",
+  },
+
+  devices: {
+    title: "Devices",
+    subtitle: "Traffic per LAN device as the router counted it. Times in {timezone}.",
+    disabledTitle: "Per-device tracking is off",
+    disabledBody:
+      "Turn it on under Settings > Router, then run {setup} once on the router and add the {script} script with a one-minute scheduler. Both files are in the repository's router folder.",
+    empty: "No device readings in this range. They appear a minute after the devices-push script first runs.",
+    device: "Device",
+    lastSeen: "Last seen",
+    rename: "Rename",
+    saveName: "Save",
+    cancel: "Cancel",
+    namePlaceholder: "Name shown for this device",
+    renamed: "Device renamed.",
+    renameFailed: "Rename failed: {reason}",
+    devicesCount: plural({ one: "{count} device", other: "{count} devices" }),
+    topDevices: "Top {count} devices over time",
+    others: "Others",
+    chartHint: "download and upload combined, in GB",
+    tiles: {
+      total: "Total across devices",
+      devices: "Devices seen",
+      busiest: "Busiest device",
+      share: "of the total",
+    },
   },
 
   settings: {

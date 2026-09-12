@@ -26,6 +26,7 @@ export const ar = {
     dashboard: "لوحة التحكم",
     statistics: "الإحصائيات",
     sessions: "الجلسات",
+    devices: "الأجهزة",
     settings: "الإعدادات",
     export: "التصدير",
     alerts: "التنبيهات",
@@ -325,6 +326,40 @@ export const ar = {
     upShort: "متصل {duration}",
     downBytes: "وارد {bytes}",
     upBytes: "صادر {bytes}",
+  },
+
+  devices: {
+    title: "الأجهزة",
+    subtitle: "الاستهلاك لكل جهاز على الشبكة المحلية كما عدّه الراوتر. الأوقات بتوقيت {timezone}.",
+    disabledTitle: "تتبع الأجهزة متوقف",
+    disabledBody:
+      "فعّله من الإعدادات > الراوتر، ثم شغّل {setup} مرة واحدة على الراوتر وأضف سكربت {script} مع مجدول كل دقيقة. الملفان في مجلد router في المستودع.",
+    empty: "لا قراءات للأجهزة في هذه الفترة. تظهر بعد دقيقة من أول تشغيل لسكربت devices-push.",
+    device: "الجهاز",
+    lastSeen: "آخر ظهور",
+    rename: "إعادة تسمية",
+    saveName: "حفظ",
+    cancel: "إلغاء",
+    namePlaceholder: "الاسم الذي يظهر لهذا الجهاز",
+    renamed: "تمت إعادة تسمية الجهاز.",
+    renameFailed: "فشلت إعادة التسمية: {reason}",
+    devicesCount: {
+      zero: "لا أجهزة",
+      one: "جهاز واحد",
+      two: "جهازان",
+      few: "{count} أجهزة",
+      many: "{count} جهازاً",
+      other: "{count} جهاز",
+    },
+    topDevices: "أكثر {count} أجهزة استهلاكاً عبر الوقت",
+    others: "أخرى",
+    chartHint: "التنزيل والرفع معاً، بالجيجابايت",
+    tiles: {
+      total: "الإجمالي عبر الأجهزة",
+      devices: "الأجهزة المرصودة",
+      busiest: "الجهاز الأكثر استهلاكاً",
+      share: "من الإجمالي",
+    },
   },
 
   settings: {
