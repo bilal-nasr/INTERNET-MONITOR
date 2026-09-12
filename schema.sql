@@ -29,6 +29,12 @@ CREATE TABLE IF NOT EXISTS settings (
   -- the URL instead; an alert is sent with no request behind it, so its
   -- language has to be a stored setting rather than a header.
   language            TEXT NOT NULL DEFAULT 'en' CHECK (language IN ('en', 'ar')),
+  -- Enforcement. When set, /api/ingest answers the router's push with
+  -- policy.throttle = true while the corresponding limit is exceeded, and the
+  -- router script enables a simple queue. Off by default: the queue has to
+  -- exist on the router first (see router/throttle-setup.rsc).
+  throttle_on_breach  BOOLEAN NOT NULL DEFAULT false,
+  throttle_on_cap     BOOLEAN NOT NULL DEFAULT false,
   updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -153,6 +159,11 @@ ALTER TABLE settings ADD COLUMN IF NOT EXISTS billing_cycle_day INTEGER NOT NULL
 -- English alerts until /settings says otherwise.
 ALTER TABLE settings ADD COLUMN IF NOT EXISTS language TEXT NOT NULL DEFAULT 'en';
 
+-- Enforcement switches. Existing databases start with both off, so nothing
+-- changes on the router until /settings says so.
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS throttle_on_breach BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS throttle_on_cap    BOOLEAN NOT NULL DEFAULT false;
+
 -- Scheduled checks (plan 02). stale_after_minutes = 0 disables the
 -- "router has gone quiet" alert. digest picks the scheduled summary.
 ALTER TABLE settings ADD COLUMN IF NOT EXISTS stale_after_minutes INTEGER NOT NULL DEFAULT 10;
@@ -264,9 +275,11 @@ CREATE INDEX IF NOT EXISTS alerts_kind_scope_idx ON alerts (kind, scope_key);
 -- alerts to a stranger on a database where /settings was never filled in.
 INSERT INTO settings (
   id, quota_gb, monthly_quota_gb, billing_cycle_day, window_start, window_end,
-  timezone, alert_email_to, wan_interface_name, polling_enabled, language
+  timezone, alert_email_to, wan_interface_name, polling_enabled, language,
+  throttle_on_breach, throttle_on_cap
 ) VALUES (
-  1, 8, 600, 5, '14:00', '23:59', 'UTC', NULL, 'pppoe-out1', true, 'en'
+  1, 8, 600, 5, '14:00', '23:59', 'UTC', NULL, 'pppoe-out1', true, 'en',
+  false, false
 )
 ON CONFLICT (id) DO NOTHING;
 

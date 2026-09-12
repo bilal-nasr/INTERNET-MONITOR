@@ -24,6 +24,8 @@ interface FormState {
   alert_thresholds: string;
   cycle_alert_thresholds: string;
   cycle_pace_alert: boolean;
+  throttle_on_breach: boolean;
+  throttle_on_cap: boolean;
 }
 
 function toForm(s: PublicSettings): FormState {
@@ -43,6 +45,8 @@ function toForm(s: PublicSettings): FormState {
     alert_thresholds: s.alert_thresholds.join(", "),
     cycle_alert_thresholds: s.cycle_alert_thresholds.join(", "),
     cycle_pace_alert: s.cycle_pace_alert,
+    throttle_on_breach: s.throttle_on_breach,
+    throttle_on_cap: s.throttle_on_cap,
   };
 }
 
@@ -120,6 +124,8 @@ export function SettingsForm({ initial }: { initial: PublicSettings }) {
         alert_thresholds: parseMarks(form.alert_thresholds),
         cycle_alert_thresholds: parseMarks(form.cycle_alert_thresholds),
         cycle_pace_alert: form.cycle_pace_alert,
+        throttle_on_breach: form.throttle_on_breach,
+        throttle_on_cap: form.throttle_on_cap,
       };
       const res = await fetch(`/api/settings?lang=${locale}`, {
         method: "PUT",
@@ -350,18 +356,14 @@ export function SettingsForm({ initial }: { initial: PublicSettings }) {
           </div>
         </div>
 
-        <label className="mt-4 flex cursor-pointer items-center gap-3">
-          <input
-            type="checkbox"
+        <div className="mt-4">
+          <Switch
             checked={form.cycle_pace_alert}
-            onChange={(e) => update("cycle_pace_alert", e.target.checked)}
-            className="size-4 rounded border-border"
+            onChange={(v) => update("cycle_pace_alert", v)}
+            label={d.settings.cyclePaceAlert}
+            hint={d.settings.cyclePaceAlertHint}
           />
-          <span className="text-sm">
-            {d.settings.cyclePaceAlert}
-            <span className="block text-xs text-muted">{d.settings.cyclePaceAlertHint}</span>
-          </span>
-        </label>
+        </div>
       </Section>
 
       <Section title={d.settings.routerSection} description={d.settings.routerSectionHint}>
@@ -388,31 +390,30 @@ export function SettingsForm({ initial }: { initial: PublicSettings }) {
         </div>
       </Section>
 
+      <Section title={d.settings.enforcementSection} description={d.settings.enforcementSectionHint}>
+        <div className="space-y-4">
+          <Switch
+            checked={form.throttle_on_breach}
+            onChange={(v) => update("throttle_on_breach", v)}
+            label={d.settings.throttleOnBreach}
+            hint={d.settings.throttleOnBreachHint}
+          />
+          <Switch
+            checked={form.throttle_on_cap}
+            onChange={(v) => update("throttle_on_cap", v)}
+            label={d.settings.throttleOnCap}
+            hint={d.settings.throttleOnCapHint}
+          />
+        </div>
+      </Section>
+
       <Section title={d.settings.monitoringSection}>
-        <label className="flex cursor-pointer items-center gap-3">
-          <button
-            type="button"
-            role="switch"
-            aria-checked={form.polling_enabled}
-            onClick={() => update("polling_enabled", !form.polling_enabled)}
-            className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
-              form.polling_enabled ? "bg-series-1" : "bg-border"
-            }`}
-          >
-            {/* The knob travels towards the end of the line, so in Arabic it
-                slides left. Mirroring the movement is the point of the control:
-                "on" is always the far side from where the eye starts. */}
-            <span
-              className={`absolute top-0.5 start-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
-                form.polling_enabled ? "translate-x-5 rtl:-translate-x-5" : ""
-              }`}
-            />
-          </button>
-          <span className="text-sm">
-            {form.polling_enabled ? d.settings.pollingEnabled : d.settings.pollingPaused}
-            <span className="block text-xs text-muted">{d.settings.pollingHint}</span>
-          </span>
-        </label>
+        <Switch
+          checked={form.polling_enabled}
+          onChange={(v) => update("polling_enabled", v)}
+          label={form.polling_enabled ? d.settings.pollingEnabled : d.settings.pollingPaused}
+          hint={d.settings.pollingHint}
+        />
       </Section>
 
       <Section title={d.settings.scheduleSection} description={d.settings.scheduleSectionHint}>
@@ -465,6 +466,45 @@ export function SettingsForm({ initial }: { initial: PublicSettings }) {
 
       <Toast toast={toast} onDismiss={dismiss} />
     </form>
+  );
+}
+
+function Switch({
+  checked,
+  onChange,
+  label,
+  hint,
+}: {
+  checked: boolean;
+  onChange: (next: boolean) => void;
+  label: string;
+  hint: string;
+}) {
+  return (
+    <label className="flex cursor-pointer items-center gap-3">
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        onClick={() => onChange(!checked)}
+        className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
+          checked ? "bg-series-1" : "bg-border"
+        }`}
+      >
+        {/* The knob travels towards the end of the line, so in Arabic it
+            slides left. Mirroring the movement is the point of the control:
+            "on" is always the far side from where the eye starts. */}
+        <span
+          className={`absolute top-0.5 start-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+            checked ? "translate-x-5 rtl:-translate-x-5" : ""
+          }`}
+        />
+      </button>
+      <span className="text-sm">
+        {label}
+        <span className="block text-xs text-muted">{hint}</span>
+      </span>
+    </label>
   );
 }
 

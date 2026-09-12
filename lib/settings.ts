@@ -23,6 +23,10 @@ export interface SettingsRow {
   polling_enabled: boolean;
   /** Language quota alerts are written in. See `alertLocale`. */
   language: string;
+  /** Answer the push with throttle=true while the daily quota is exceeded inside the window. */
+  throttle_on_breach: boolean;
+  /** Answer the push with throttle=true while the monthly cap is exceeded. */
+  throttle_on_cap: boolean;
   /** Minutes without a push before the link_stale alert. 0 disables it. */
   stale_after_minutes: number;
   digest: DigestKind;
@@ -58,6 +62,8 @@ export interface PublicSettings {
   wan_interface_name: string;
   polling_enabled: boolean;
   language: string;
+  throttle_on_breach: boolean;
+  throttle_on_cap: boolean;
   stale_after_minutes: number;
   digest: string;
   alert_thresholds: number[];
@@ -79,6 +85,8 @@ export type SettingsPatch = Partial<
     | "wan_interface_name"
     | "polling_enabled"
     | "language"
+    | "throttle_on_breach"
+    | "throttle_on_cap"
     | "stale_after_minutes"
     | "digest"
     | "alert_thresholds"
@@ -113,7 +121,8 @@ async function loadSettings(): Promise<SettingsRow> {
     `SELECT id, quota_gb, monthly_quota_gb, billing_cycle_day, window_start,
             window_end, timezone, alert_email_to, wan_interface_name,
             polling_enabled, language, alert_thresholds, cycle_alert_thresholds,
-            cycle_pace_alert, stale_after_minutes, digest, updated_at
+            cycle_pace_alert, stale_after_minutes, digest,
+            throttle_on_breach, throttle_on_cap, updated_at
      FROM settings WHERE id = 1`,
   );
   if (!row) throw new SettingsNotSeededError();
@@ -132,6 +141,8 @@ export function toPublicSettings(row: SettingsRow): PublicSettings {
     wan_interface_name: row.wan_interface_name,
     polling_enabled: row.polling_enabled,
     language: row.language,
+    throttle_on_breach: row.throttle_on_breach,
+    throttle_on_cap: row.throttle_on_cap,
     stale_after_minutes: row.stale_after_minutes,
     digest: row.digest,
     alert_thresholds: row.alert_thresholds,
@@ -157,6 +168,8 @@ const WRITABLE = new Set<string>([
   "wan_interface_name",
   "polling_enabled",
   "language",
+  "throttle_on_breach",
+  "throttle_on_cap",
   "stale_after_minutes",
   "digest",
   "alert_thresholds",
