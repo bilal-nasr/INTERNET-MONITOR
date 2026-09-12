@@ -153,6 +153,11 @@ ALTER TABLE settings ADD COLUMN IF NOT EXISTS billing_cycle_day INTEGER NOT NULL
 -- English alerts until /settings says otherwise.
 ALTER TABLE settings ADD COLUMN IF NOT EXISTS language TEXT NOT NULL DEFAULT 'en';
 
+-- Read-only share link. NULL means sharing is off. The value is a bearer
+-- secret compared in constant time by the share page and its JSON feed; it is
+-- written only by POST/DELETE /api/share, never through PUT /api/settings.
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS share_token TEXT;
+
 -- Scheduled checks (plan 02). stale_after_minutes = 0 disables the
 -- "router has gone quiet" alert. digest picks the scheduled summary.
 ALTER TABLE settings ADD COLUMN IF NOT EXISTS stale_after_minutes INTEGER NOT NULL DEFAULT 10;
