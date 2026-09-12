@@ -230,6 +230,7 @@ so they follow the `language` column in `settings` rather than a URL. Set it on 
 | `PUT` | `/api/settings` | Any subset of fields. Validates quota > 0, `window_end` after `window_start`, email format, IANA timezone and `language` (`en` or `ar`). |
 | `GET` | `/api/export?format=csv\|json&from=YYYY-MM-DD&to=YYYY-MM-DD` | Streams readings in the range, dates inclusive, in the configured timezone. |
 | `POST` | `/api/test-email` | Sends a test email to `alert_email_to`. |
+| `GET` `POST` | `/api/cron/tick` | Requires `Authorization: Bearer $CRON_SECRET`. Runs every scheduled job in turn and answers with what each one did. See "Scheduled jobs". |
 | `POST` | `/api/auth/login` | `{ "username", "password" }`. Sets the session cookies. `401` on a wrong pair, `429` when throttled. |
 | `POST` | `/api/auth/logout` | Revokes the session and clears the cookies. |
 | `POST` | `/api/auth/refresh` | New access cookie from the refresh cookie; `401` and cleared cookies when it is dead. |
@@ -244,8 +245,9 @@ that language; without it the `NEXT_LOCALE` cookie and then `Accept-Language` de
 `/api/ingest` and `/api/health` are excluded: their callers are the router script and a health
 probe, neither of which has a language.
 
-Every route not listed under `/api/auth`, `/api/ingest` or `/api/health` answers `401`
-`unauthorized` without a live session cookie.
+Every route not listed under `/api/auth`, `/api/ingest`, `/api/health` or `/api/cron/tick`
+answers `401` `unauthorized` without a live session cookie; those four take a bearer token or
+nothing at all.
 
 ### Ranges
 
@@ -289,9 +291,15 @@ Pick a trigger:
 - **GitHub Actions**: `.github/workflows/tick.yml` runs every five minutes. Set
   the repository secret `CRON_SECRET` and the repository variable `TICK_URL`
   (`https://netmonitor.bilalnasr.com/api/cron/tick`). Free, and independent of
-  where the app is hosted.
+  where the app is hosted. GitHub disables a scheduled workflow after 60 days
+  with no activity in the repository, so if this is the trigger behind the
+  stale alert, push something (or re-enable the workflow from the Actions tab)
+  before it lapses silently.
 - **Docker**: the `tick` service in `docker-compose.yml` calls the endpoint once
-  a minute from inside the compose network.
+  a minute from inside the compose network. It sits behind its own profile, so
+  it starts only with `docker compose --profile tick up`: it reads `.env.local`,
+  which usually points at the real database and mail key, and nothing should
+  start mailing every minute just because `docker compose up` was typed.
 
 Locally:
 

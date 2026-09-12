@@ -1,6 +1,7 @@
 # Local run:
 #   docker compose up --build            # app only, using DATABASE_URL from .env.local
 #   docker compose --profile local-db up --build   # app + a Postgres container
+#   docker compose --profile tick up --build       # app + the scheduler loop
 #
 # With the local-db profile, point .env.local at the bundled database:
 #   DATABASE_URL=postgres://quota:quota@db:5432/quota
@@ -37,7 +38,14 @@ services:
 
   # Calls the scheduler endpoint once a minute. Only needed when nothing else
   # (Vercel Cron, GitHub Actions) does; harmless if both run.
+  #
+  # Behind a profile, like db: it reads .env.local, which on a development
+  # machine usually points at the production database and a live Resend key,
+  # so a plain `docker compose up` must not start something that mails a real
+  # person every minute. Start it deliberately:
+  #   docker compose --profile tick up
   tick:
+    profiles: ["tick"]
     image: curlimages/curl:8.10.1
     container_name: quota-tick
     restart: unless-stopped

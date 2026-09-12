@@ -16,7 +16,13 @@ jobs:
     timeout-minutes: 2
     steps:
       - name: Call /api/cron/tick
+        # Through the environment, not interpolated into the script: an
+        # expression is pasted into the shell command verbatim, where a secret
+        # containing a quote or a backtick would change what runs.
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          TICK_URL: ${{ vars.TICK_URL }}
         run: |
           curl -fsS --max-time 60 \
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-            "${{ vars.TICK_URL }}"
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "$TICK_URL"

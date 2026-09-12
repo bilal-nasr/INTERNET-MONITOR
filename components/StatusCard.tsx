@@ -5,9 +5,9 @@ import type { SessionSummary } from "@/lib/sessions";
 import type { TodayUsage } from "@/lib/usage";
 
 /**
- * Ten missed pushes at the default 30-second interval. Past this the router is
- * not talking to us, and whatever it last said about the link is no longer
- * something we can vouch for.
+ * Ten missed pushes at the default 30-second interval. Used only when the
+ * "router has gone quiet" alert is switched off (stale_after_minutes = 0) and
+ * the card therefore has no configured limit to follow.
  */
 const SILENT_AFTER_SECONDS = 300;
 
@@ -17,13 +17,13 @@ type LinkState =
   | { kind: "silent"; session: SessionSummary }
   | { kind: "unknown" };
 
-function linkState(session: SessionSummary | null): LinkState {
+function linkState(session: SessionSummary | null, silentAfterSeconds: number): LinkState {
   if (!session) return { kind: "unknown" };
   // An open session we have not heard about in minutes means the router itself
   // went away: it never got to tell us the link dropped, so "Live" would be a
   // claim we cannot support.
   if (session.open) {
-    return session.seconds_since_seen > SILENT_AFTER_SECONDS
+    return session.seconds_since_seen > silentAfterSeconds
       ? { kind: "silent", session }
       : { kind: "up", session };
   }
@@ -35,6 +35,7 @@ export async function StatusCard({
   pollingEnabled,
   interfaceName,
   session = null,
+  staleAfterMinutes = 0,
   staleAlertAt = null,
 }: {
   usage: TodayUsage;
@@ -42,11 +43,17 @@ export async function StatusCard({
   interfaceName: string;
   /** The newest session, open or closed. */
   session?: SessionSummary | null;
+  /**
+   * settings.stale_after_minutes, so "No contact" appears exactly when the
+   * mail would go out rather than at a threshold of its own; 0 (the alert
+   * switched off) falls back to SILENT_AFTER_SECONDS.
+   */
+  staleAfterMinutes?: number;
   /** When the newest "router has gone quiet" mail was sent, or null. */
   staleAlertAt?: string | null;
 }) {
   const { d, f } = await getI18n();
-  const state = linkState(session);
+  const state = linkState(session, staleAfterMinutes > 0 ? staleAfterMinutes * 60 : SILENT_AFTER_SECONDS);
   const ageMinutes = usage.last_reading
     ? Math.round(
         (new Date(usage.generated_at).getTime() - new Date(usage.last_reading.recorded_at).getTime()) / 60_000,

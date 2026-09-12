@@ -49,7 +49,12 @@ export default async function DashboardPage() {
           pollingEnabled={settings.polling_enabled}
           interfaceName={settings.wan_interface_name}
           session={session}
-          staleAlertAt={staleAlert?.created_at.toISOString() ?? null}
+          staleAfterMinutes={settings.stale_after_minutes}
+          // Only a mail that actually went out. latestAlert returns the newest
+          // row whatever its status, and a "failed" (mail misconfigured) or
+          // "skipped" (no recipient) row would otherwise make the card claim
+          // the user was emailed when nobody was.
+          staleAlertAt={staleAlert?.status === "sent" ? staleAlert.created_at.toISOString() : null}
         />
       </div>
 

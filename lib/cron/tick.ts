@@ -1,5 +1,5 @@
 import { JOBS, type JobResult } from "@/lib/cron/jobs";
-import { recordJobRun } from "@/lib/cron/runs";
+import { claimTick, recordJobRun } from "@/lib/cron/runs";
 import { getSettings } from "@/lib/settings";
 
 // Importing the job modules registers them. Order here is the run order.
@@ -27,8 +27,18 @@ export interface TickResponse {
  * last_run_at is the last time the job actually did work (or failed). Jobs that
  * pace themselves from job_runs (plan 06's thinning) rely on this: with a
  * five-minute tick, recording skips would push last_run_at forward forever.
+ *
+ * A tick first leases itself (claimTick). Three triggers may be configured at
+ * once and the jobs decide-then-send, so two overlapping ticks would otherwise
+ * both decide to mail and the user would get the message twice; the loser of
+ * the lease answers with an empty job list, which is an honest report of what
+ * it did.
  */
 export async function runTick(now = new Date()): Promise<TickResponse> {
+  if (!(await claimTick(now))) {
+    return { ran_at: now.toISOString(), jobs: [] };
+  }
+
   const settings = await getSettings();
   const jobs: TickJobReport[] = [];
 
