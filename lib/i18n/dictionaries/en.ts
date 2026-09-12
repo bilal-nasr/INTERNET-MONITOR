@@ -739,6 +739,9 @@ export const en = {
     daysRange: "The days must be a whole number between 1 and {max}.",
     tooManyIds: "At most {max} sessions may be selected at once.",
     notASessionId: "{value} is not a session id.",
+    notAMac: "That is not a MAC address.",
+    deviceNameTooLong: "The device name must be 100 characters or fewer.",
+    deviceNotFound: "No device with that address has been reported.",
     settingsNotSeeded:
       "The settings table has no row yet. Run schema.sql against the database to seed it.",
     emailFailed: "The alert email could not be sent.",

@@ -717,6 +717,9 @@ export const ar = {
     daysRange: "يجب أن يكون عدد الأيام عدداً صحيحاً بين 1 و{max}.",
     tooManyIds: "يمكن تحديد {max} جلسة كحد أقصى في المرة الواحدة.",
     notASessionId: "{value} ليس معرّف جلسة.",
+    notAMac: "هذا ليس عنوان MAC.",
+    deviceNameTooLong: "يجب ألا يتجاوز اسم الجهاز 100 حرف.",
+    deviceNotFound: "لم يُبلَّغ عن أي جهاز بهذا العنوان.",
     settingsNotSeeded:
       "لا يوجد أي صف في جدول الإعدادات بعد. نفّذ ملف schema.sql على قاعدة البيانات لتهيئته.",
     emailFailed: "تعذّر إرسال بريد التنبيه.",
