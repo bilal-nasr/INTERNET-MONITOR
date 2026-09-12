@@ -1,8 +1,7 @@
 import { Resend } from "resend";
-import { formatBytes } from "@/lib/format";
 import { DIRECTION, type Locale } from "@/lib/i18n/config";
 import { fill, getDictionaryFor } from "@/lib/i18n";
-import { renderAlertEmail, type AlertReport } from "@/lib/email-template";
+import { renderAlertEmail, type AlertReport, type RenderedEmail } from "@/lib/email-template";
 
 export class EmailError extends Error {
   constructor(message: string) {
@@ -48,57 +47,6 @@ function shell(locale: Locale, body: string): string {
     </div>`;
 }
 
-export interface QuotaAlertInput {
-  to: string;
-  locale: Locale;
-  date: string;
-  usedBytes: number;
-  quotaBytes: number;
-  windowStart: string;
-  windowEnd: string;
-  timezone: string;
-}
-
-export function sendQuotaAlert(input: QuotaAlertInput): Promise<string> {
-  const d = getDictionaryFor(input.locale).email;
-  const used = formatBytes(input.usedBytes);
-  const quota = formatBytes(input.quotaBytes);
-  const percent = Math.round((input.usedBytes / input.quotaBytes) * 100);
-
-  const subject = fill(d.alertSubject, { used, quota, date: input.date });
-  const window = `${input.windowStart}-${input.windowEnd} (${input.timezone})`;
-  const usedValue = fill(d.usedValue, { used, percent, quota });
-
-  const text = [
-    d.alertIntro,
-    ``,
-    `${d.date}: ${input.date}`,
-    `${d.window}: ${window}`,
-    `${d.used}: ${usedValue}`,
-    ``,
-    d.onlyAlert,
-  ].join("\n");
-
-  const pad = "padding:4px 12px";
-  const html = shell(
-    input.locale,
-    `<h2 style="margin:0 0 12px">${d.alertHeading}</h2>
-      <p style="margin:0 0 16px;color:#444">${d.alertIntro}</p>
-      <table style="border-collapse:collapse;font-size:14px">
-        <tr><td style="${pad};color:#666">${d.date}</td><td>${input.date}</td></tr>
-        <tr><td style="${pad};color:#666">${d.window}</td><td>${window}</td></tr>
-        <tr><td style="${pad};color:#666">${d.used}</td><td>${fill(d.usedValue, {
-          used: `<strong>${used}</strong>`,
-          percent,
-          quota,
-        })}</td></tr>
-      </table>
-      <p style="margin:16px 0 0;color:#888;font-size:12px">${d.onlyAlert}</p>`,
-  );
-
-  return send(input.to, subject, text, html);
-}
-
 export function sendTestEmail(to: string, locale: Locale): Promise<string> {
   const d = getDictionaryFor(locale).email;
   const now = new Date().toISOString();
@@ -112,17 +60,20 @@ export function sendTestEmail(to: string, locale: Locale): Promise<string> {
 }
 
 /**
- * Send a rendered report. The same function serves the real over-quota alert
- * and the settings page's test send; `report.kind` is what tells them apart,
- * which is why the test mail is a true preview rather than a separate template
- * that can drift out of step with the one that matters.
- *
- * NOTE: this template is English-only and does not yet go through the i18n
- * dictionaries that sendQuotaAlert below uses. The two need reconciling.
+ * Send an already-rendered message. Every alert goes through here, so the
+ * dispatcher can record exactly the subject that went out.
+ */
+export function sendRendered(to: string, email: RenderedEmail): Promise<string> {
+  return send(to, email.subject, email.text, email.html);
+}
+
+/**
+ * The real over-quota alert and the settings page's test send share this;
+ * `report.kind` tells them apart, which is why the test mail is a true preview
+ * rather than a separate template that can drift out of step.
  */
 export function sendAlertEmail(to: string, report: AlertReport): Promise<string> {
-  const { subject, text, html } = renderAlertEmail(report);
-  return send(to, subject, text, html);
+  return sendRendered(to, renderAlertEmail(report));
 }
 
 /**
