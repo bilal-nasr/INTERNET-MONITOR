@@ -1,2 +1,110 @@
-// Registered in Task 5.
-export {};
+/**
+ * "The router has gone quiet."
+ *
+ * Nothing runs when the router stops pushing, which is exactly why this check
+ * cannot live on the ingest path and has to be driven by the tick. It sends
+ * one mail when the silence passes the limit and one more when readings
+ * resume. The alerts log is the state: the newest link_* row says whether an
+ * outage is currently being reported.
+ */
+
+import { dispatchAlert } from "@/lib/alerts/dispatch";
+import { latestAlert } from "@/lib/alerts/log";
+import { JOBS, type Job, type JobContext, type JobResult } from "@/lib/cron/jobs";
+import { isStale } from "@/lib/cron/schedule";
+import { renderLinkEmail } from "@/lib/email-link-template";
+import { alertLocale } from "@/lib/settings";
+import { getLatestReading } from "@/lib/usage";
+
+const SCOPE = "link";
+
+function appUrl(): string | null {
+  const raw = process.env.APP_URL?.trim();
+  return raw ? raw.replace(/\/+$/, "") : null;
+}
+
+async function run({ now, settings }: JobContext): Promise<JobResult> {
+  if (settings.stale_after_minutes <= 0) {
+    return { status: "skipped", detail: "stale_after_minutes is 0" };
+  }
+
+  const [latest, lastStale, lastRecovered] = await Promise.all([
+    getLatestReading(),
+    latestAlert("link_stale", SCOPE),
+    latestAlert("link_recovered", SCOPE),
+  ]);
+  const lastReadingAt = latest?.recorded_at ?? null;
+
+  // An outage is "open" when the newest link row is a stale alert that was
+  // sent after the newest reading: nothing has arrived since we complained.
+  const outageOpen =
+    lastStale !== null &&
+    (lastRecovered === null || lastStale.created_at > lastRecovered.created_at) &&
+    (lastReadingAt === null || lastStale.created_at > lastReadingAt);
+
+  // True once a stale alert has gone out and no recovery mail has cleared it
+  // yet - regardless of whether a new reading has since arrived. This is what
+  // gates the recovery branch: the moment a fresh reading lands after a
+  // stale alert, outageOpen above already flips false (its third clause), but
+  // the outage is only actually over once we send the recovered mail.
+  const reportedAndNotCleared =
+    lastStale !== null && (lastRecovered === null || lastStale.created_at > lastRecovered.created_at);
+
+  const stale = isStale(lastReadingAt, now, settings.stale_after_minutes);
+  const silentSeconds = lastReadingAt ? Math.round((now.getTime() - lastReadingAt.getTime()) / 1000) : 0;
+
+  if (stale && !outageOpen) {
+    const email = renderLinkEmail({
+      kind: "stale",
+      locale: alertLocale(settings),
+      last_reading_at: lastReadingAt?.toISOString() ?? null,
+      silent_seconds: silentSeconds,
+      timezone: settings.timezone,
+      app_url: appUrl(),
+    });
+    const { status } = await dispatchAlert({
+      kind: "link_stale",
+      level: null,
+      scopeKey: SCOPE,
+      to: settings.alert_email_to,
+      email,
+      payload: { last_reading_at: lastReadingAt?.toISOString() ?? null, silent_seconds: silentSeconds },
+    });
+    return { status: status === "failed" ? "failed" : "ok", detail: `link_stale ${status}` };
+  }
+
+  if (!stale && reportedAndNotCleared && lastReadingAt) {
+    // Readings are back. The silence that ended ran from the last reading
+    // before the complaint to the first reading after it; the complaint's
+    // payload remembers the former.
+    const before =
+      typeof lastStale?.payload?.last_reading_at === "string" ? new Date(lastStale.payload.last_reading_at) : null;
+    const ended = before ? Math.round((lastReadingAt.getTime() - before.getTime()) / 1000) : 0;
+    const email = renderLinkEmail({
+      kind: "recovered",
+      locale: alertLocale(settings),
+      last_reading_at: lastReadingAt.toISOString(),
+      silent_seconds: ended,
+      timezone: settings.timezone,
+      app_url: appUrl(),
+    });
+    const { status } = await dispatchAlert({
+      kind: "link_recovered",
+      level: null,
+      scopeKey: SCOPE,
+      to: settings.alert_email_to,
+      email,
+      payload: { last_reading_at: lastReadingAt.toISOString(), silent_seconds: ended },
+    });
+    return { status: status === "failed" ? "failed" : "ok", detail: `link_recovered ${status}` };
+  }
+
+  return {
+    status: "skipped",
+    detail: stale ? "outage already reported" : `last reading ${silentSeconds}s ago`,
+  };
+}
+
+export const staleJob: Job = { name: "stale", run };
+
+JOBS.push(staleJob);
