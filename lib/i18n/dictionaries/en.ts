@@ -157,6 +157,7 @@ export const en = {
     historyHeading: "Daily usage in GB, last {days} days",
     historyHint: "all traffic; dashed line = {quota} GB window quota",
     historyEmpty: "No usage recorded yet. Data appears after a few polls.",
+    drillHint: "Click a day to see it hour by hour.",
   },
 
   router: {

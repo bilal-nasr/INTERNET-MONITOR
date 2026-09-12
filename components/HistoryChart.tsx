@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import {
   Bar,
   BarChart,
@@ -69,10 +70,20 @@ function makeTooltip(d: Dictionary) {
 }
 
 export function HistoryChart({ history, quotaGb, today, days = 30 }: Props) {
-  const { d, dir } = useI18n();
+  const { d, dir, locale } = useI18n();
+  const router = useRouter();
   const data = fillDays(history, days, today);
   const hasData = history.some((h) => h.used_bytes > 0);
   const ChartTooltip = makeTooltip(d);
+
+  /**
+   * A bare date on both ends is the whole local day (lib/range.ts pushes `to`
+   * to the next midnight), and an hourly bucket is what a single day reads
+   * best in.
+   */
+  function openDay(day: string) {
+    router.push(`/${locale}/stats?range=custom&from=${day}&to=${day}&bucket=hour`);
+  }
 
   return (
     <section className="rounded-xl border border-border bg-surface p-5">
@@ -87,7 +98,20 @@ export function HistoryChart({ history, quotaGb, today, days = 30 }: Props) {
       <div className="mt-4 h-64 w-full">
         {hasData ? (
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={data} margin={chartMargin(dir)} barCategoryGap={2}>
+            <BarChart
+              data={data}
+              margin={chartMargin(dir)}
+              barCategoryGap={2}
+              /* recharts 3 hands a click only the active index, not the row, so
+                 the day is read back out of the same filled series the bars are
+                 drawn from. A click on empty chart space has no active index. */
+              onClick={(state) => {
+                if (state.activeIndex == null) return;
+                const row = data[Number(state.activeIndex)];
+                if (row) openDay(row.day);
+              }}
+              style={{ cursor: "pointer" }}
+            >
               <CartesianGrid vertical={false} stroke="var(--border)" />
               <XAxis
                 dataKey="label"
@@ -123,6 +147,7 @@ export function HistoryChart({ history, quotaGb, today, days = 30 }: Props) {
           </div>
         )}
       </div>
+      {hasData ? <p className="mt-2 text-xs text-muted">{d.dashboard.drillHint}</p> : null}
     </section>
   );
 }
