@@ -13,6 +13,7 @@
 
 import { db } from "@/lib/db";
 import { generateToken, hashToken, looksLikeToken } from "@/lib/auth/tokens";
+import { describeUserAgent, type UserAgentDescription } from "@/lib/auth/user-agent";
 import type { PublicUser } from "@/lib/auth/users";
 
 export const ACCESS_TTL_SECONDS = 15 * 60;
@@ -163,4 +164,63 @@ export async function revokeAllSessions(userId: number, exceptSessionId?: number
      WHERE user_id = $1 AND revoked_at IS NULL AND ($2::int IS NULL OR id <> $2)`,
     [userId, exceptSessionId ?? null],
   );
+}
+
+// ------------------------------------------------------- listing ----
+
+/** One live session as the settings page lists it. */
+export interface SessionListRow {
+  id: number;
+  created_at: Date;
+  last_used_at: Date;
+  user_agent: string | null;
+  ip: string | null;
+  /** The session the request that asked for the list belongs to. */
+  current: boolean;
+}
+
+/**
+ * Every browser that can still act for the account: not revoked, refresh token
+ * not yet expired. A lapsed access token alone does not drop a row, since the
+ * browser can mint another one whenever it comes back.
+ */
+export function listSessions(userId: number, currentSessionId: number): Promise<SessionListRow[]> {
+  return db.any<SessionListRow>(
+    `SELECT id, created_at, last_used_at, user_agent, ip, (id = $2) AS current
+     FROM auth_sessions
+     WHERE user_id = $1 AND revoked_at IS NULL AND refresh_expires_at > now()
+     ORDER BY last_used_at DESC, id DESC`,
+    [userId, currentSessionId],
+  );
+}
+
+/** Sign one browser out by row id. Only the owner's rows; true when a live row was revoked. */
+export async function revokeSessionById(userId: number, id: number): Promise<boolean> {
+  const row = await db.oneOrNone<{ id: number }>(
+    `UPDATE auth_sessions SET revoked_at = now()
+     WHERE id = $2 AND user_id = $1 AND revoked_at IS NULL
+     RETURNING id`,
+    [userId, id],
+  );
+  return row !== null;
+}
+
+export interface PublicSession {
+  id: number;
+  created_at: string;
+  last_used_at: string;
+  device: UserAgentDescription;
+  ip: string | null;
+  current: boolean;
+}
+
+export function toPublicSession(row: SessionListRow): PublicSession {
+  return {
+    id: row.id,
+    created_at: row.created_at.toISOString(),
+    last_used_at: row.last_used_at.toISOString(),
+    device: describeUserAgent(row.user_agent),
+    ip: row.ip,
+    current: row.current,
+  };
 }

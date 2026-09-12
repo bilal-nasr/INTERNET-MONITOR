@@ -738,6 +738,9 @@ export const en = {
       "The settings table has no row yet. Run schema.sql against the database to seed it.",
     emailFailed: "The alert email could not be sent.",
     internal: "Something went wrong on the server.",
+    cannotRevokeCurrent: "This is the browser you are using. Use Sign out instead.",
+    sessionNotFound: "That browser is already signed out.",
+    notASessionRowId: "{value} is not a session id.",
     range: {
       unknownPreset: "{value} is not a range this application knows.",
       unknownBucket: "{value} is not a grouping this application knows.",

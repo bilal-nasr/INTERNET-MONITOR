@@ -716,6 +716,9 @@ export const ar = {
       "لا يوجد أي صف في جدول الإعدادات بعد. نفّذ ملف schema.sql على قاعدة البيانات لتهيئته.",
     emailFailed: "تعذّر إرسال بريد التنبيه.",
     internal: "حدث خطأ ما على الخادم.",
+    cannotRevokeCurrent: "هذا هو المتصفح الذي تستخدمه الآن. استخدم تسجيل الخروج بدلاً من ذلك.",
+    sessionNotFound: "تم تسجيل الخروج من ذلك المتصفح مسبقاً.",
+    notASessionRowId: "{value} ليس معرّف جلسة.",
     range: {
       unknownPreset: "{value} ليست فترة يعرفها هذا التطبيق.",
       unknownBucket: "{value} ليست طريقة تجميع يعرفها هذا التطبيق.",
