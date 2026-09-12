@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { badRequest, errorResponse } from "@/lib/api";
+import { badRequest, errorResponse, rejectUnauthenticated } from "@/lib/api";
 import { fill, getDictionaryFor, plural } from "@/lib/i18n";
 import { localeFromRequest } from "@/lib/i18n/request";
 import {
@@ -25,6 +25,8 @@ export async function GET(request: Request) {
   const params = new URL(request.url).searchParams;
   const locale = localeFromRequest(request);
   const d = getDictionaryFor(locale);
+  const denied = await rejectUnauthenticated(request, d);
+  if (denied) return denied;
   const limit = Number(params.get("limit") ?? "200");
 
   if (!Number.isInteger(limit) || limit < 1 || limit > MAX_LIMIT) {

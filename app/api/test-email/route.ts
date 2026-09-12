@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { badRequest, errorResponse } from "@/lib/api";
+import { badRequest, errorResponse, rejectUnauthenticated } from "@/lib/api";
 import { dictionaryFromRequest } from "@/lib/i18n/request";
 import { sendAlertEmail } from "@/lib/email";
 import { buildAlertReport, sampleAlertReport } from "@/lib/email-report";
@@ -26,6 +26,8 @@ async function liveTestReport(settings: SettingsRow, now = new Date()): Promise<
 
 export async function POST(request: Request) {
   const d = dictionaryFromRequest(request);
+  const denied = await rejectUnauthenticated(request, d);
+  if (denied) return denied;
   try {
     const settings = await getSettings();
     if (!settings.alert_email_to) {
@@ -45,6 +47,8 @@ export async function POST(request: Request) {
  * template. `?sample=1` uses a fixture, for a deployment with no readings yet.
  */
 export async function GET(request: Request) {
+  const denied = await rejectUnauthenticated(request);
+  if (denied) return denied;
   try {
     const wantsSample = new URL(request.url).searchParams.get("sample") === "1";
     // The preview follows the saved alert language, not the language of the

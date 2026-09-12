@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
+import { AccountForm } from "@/components/AccountForm";
 import { SettingsForm } from "@/components/SettingsForm";
+import { requireAuth } from "@/lib/auth/server";
 import { getI18n } from "@/lib/i18n/server";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -8,7 +10,7 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function SettingsPage() {
-  const { d } = await getI18n();
+  const [{ d }, auth] = await Promise.all([getI18n(), requireAuth()]);
   return (
     <div className="space-y-6">
       <div>
@@ -16,6 +18,7 @@ export default async function SettingsPage() {
         <p className="text-sm text-muted">{d.settings.subtitle}</p>
       </div>
       <SettingsForm />
+      <AccountForm user={auth.user} />
     </div>
   );
 }

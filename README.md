@@ -6,11 +6,25 @@ The router pushes its counters to the app. The app never connects to the router,
 
 Stack: Next.js 16 (App Router, TypeScript), Postgres via `pg-promise`, Resend for email, Recharts, Tailwind. Package manager is pnpm. Ships as a Docker image.
 
-## Security warning: read this first
+## Signing in
 
-There is **no authentication**. Everyone who can reach the app can read your traffic history, download it from `/export`, and change the quota and alert address on `/settings`. That is fine on a home LAN. Before exposing it to the internet, put something in front of it: a reverse proxy with basic auth, your host's built-in password protection, or a login page plus a `proxy.ts` cookie check.
+Every page and every API route except the router's push, the health probe and the sign-in endpoints requires a signed-in user. `schema.sql` seeds one account:
 
-The one secret that matters is `CRON_SECRET`. It is the bearer token the router sends, and it is the only thing stopping anyone from injecting fake readings.
+| Username | Password |
+| --- | --- |
+| `bilalnasr` | `admin123` |
+
+**Change that password on `/settings` before the app is reachable by anyone but you.** The Account section there also takes an email address, which is where a "forgot password" link is sent; while it is empty the link goes to the alert email instead.
+
+How a session works:
+
+- Signing in creates a row in `auth_sessions` and sets two HttpOnly cookies: `qm_access` (15 minutes) and `qm_refresh` (30 days, sliding). Only SHA-256 hashes of the tokens are stored.
+- Every request presents the access cookie. When it has lapsed, `proxy.ts` mints a new access token from the refresh cookie on the spot, so a returning browser is never sent to the login page while its refresh token is alive. `POST /api/auth/refresh` does the same explicitly.
+- Signing out revokes the row, which kills both tokens at once. Changing the password signs every other browser out; a password reset signs all of them out.
+- Wrong passwords are throttled to five per fifteen minutes per address and username, in memory.
+- The `Secure` cookie flag follows the request: HTTPS gets it, a plain-HTTP LAN address does not, so login works on both. Behind a reverse proxy, forward `X-Forwarded-Proto` and `X-Forwarded-Host` so cookies and reset links are built for the public address (or set `APP_URL`).
+
+The one other secret is `CRON_SECRET`, the bearer token the router sends to `/api/ingest`. It is the only thing stopping anyone from injecting fake readings.
 
 ## How it works
 
@@ -46,7 +60,7 @@ The known limit: traffic between the last sample and an unexpected drop cannot b
 
 ### 1. Database
 
-Any Postgres works. Run `schema.sql` once; it is idempotent and seeds the settings row.
+Any Postgres works. Run `schema.sql` once; it is idempotent and seeds the settings row and the first account (see [Signing in](#signing-in)).
 
 ```bash
 psql "$DATABASE_URL" -f schema.sql
@@ -184,12 +198,22 @@ so they follow the `language` column in `settings` rather than a URL. Set it on 
 | `PUT` | `/api/settings` | Any subset of fields. Validates quota > 0, `window_end` after `window_start`, email format, IANA timezone and `language` (`en` or `ar`). |
 | `GET` | `/api/export?format=csv\|json&from=YYYY-MM-DD&to=YYYY-MM-DD` | Streams readings in the range, dates inclusive, in the configured timezone. |
 | `POST` | `/api/test-email` | Sends a test email to `alert_email_to`. |
+| `POST` | `/api/auth/login` | `{ "username", "password" }`. Sets the session cookies. `401` on a wrong pair, `429` when throttled. |
+| `POST` | `/api/auth/logout` | Revokes the session and clears the cookies. |
+| `POST` | `/api/auth/refresh` | New access cookie from the refresh cookie; `401` and cleared cookies when it is dead. |
+| `GET` `PUT` | `/api/auth/account` | The signed-in account; `PUT { "email": string \| null }` sets the reset address. |
+| `POST` | `/api/auth/password` | `{ "current_password", "new_password", "confirm_password" }`. Signs other browsers out. |
+| `POST` | `/api/auth/forgot` | `{ "username" }`. Emails a one-hour reset link. Always `200`, so accounts cannot be enumerated. |
+| `POST` | `/api/auth/reset` | `{ "token", "password", "confirm_password" }` from the emailed link. |
 
 Any route that can reject a request takes an optional `lang` (`en` or `ar`), and answers in
 that language; without it the `NEXT_LOCALE` cookie and then `Accept-Language` decide. The
 `error` code in the body never changes, so scripts match on that rather than on the wording.
 `/api/ingest` and `/api/health` are excluded: their callers are the router script and a health
 probe, neither of which has a language.
+
+Every route not listed under `/api/auth`, `/api/ingest` or `/api/health` answers `401`
+`unauthorized` without a live session cookie.
 
 ### Ranges
 
@@ -237,15 +261,20 @@ Then change the `url` line in the router script to the deployed address. Nothing
 
 ```
 app/
-  [lang]/page.tsx            dashboard, auto-refreshing
-  [lang]/stats/page.tsx      every statistic for a chosen range, with charts
-  [lang]/sessions/page.tsx   link sessions with uptime and per-session traffic
-  [lang]/settings/page.tsx   settings form
-  [lang]/export/page.tsx     date range export
-  api/...                    route handlers listed above; not under a language
-components/              UI pieces
-proxy.ts                 sends a request with no language in its path to one
+  [lang]/layout.tsx                 document: language, direction, fonts
+  [lang]/(app)/layout.tsx           navigation and the session check every data page sits behind
+  [lang]/(app)/page.tsx             dashboard, auto-refreshing
+  [lang]/(app)/stats/page.tsx       every statistic for a chosen range, with charts
+  [lang]/(app)/sessions/page.tsx    link sessions with uptime and per-session traffic
+  [lang]/(app)/settings/page.tsx    settings form and the account section
+  [lang]/(app)/export/page.tsx      date range export
+  [lang]/(auth)/login/              sign in, forgot password, reset password
+  api/auth/...                      login, logout, refresh, account, password, forgot, reset
+  api/...                           route handlers listed above; not under a language
+components/              UI pieces; components/auth/ holds the sign-in forms
+proxy.ts                 language redirect, then the session gate with transparent refresh
 lib/
+  auth/                  password hashing, tokens, auth_sessions rows, cookies, resets, throttle
   db.ts                  pg-promise pool, type parsers and TLS selection
   certs.ts               bundled Supabase root CA
   settings.ts            settings read and upsert

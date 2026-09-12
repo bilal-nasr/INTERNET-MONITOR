@@ -420,6 +420,62 @@ export const en = {
     downloadJson: "Download JSON",
   },
 
+  auth: {
+    login: {
+      title: "Sign in",
+      subtitle: "Sign in to see the dashboard.",
+      username: "Username",
+      password: "Password",
+      submit: "Sign in",
+      submitting: "Signing in...",
+      forgot: "Forgot your password?",
+    },
+    logout: "Sign out",
+    signedInAs: "Signed in as {username}",
+    forgot: {
+      title: "Reset your password",
+      subtitle: "Enter your username. A reset link goes to the email address on the account.",
+      submit: "Send reset link",
+      submitting: "Sending...",
+      sent: "If that account has an email address, a reset link is on its way. It is valid for one hour.",
+      backToLogin: "Back to sign in",
+    },
+    reset: {
+      title: "Choose a new password",
+      subtitle: "Every signed-in browser will be signed out.",
+      newPassword: "New password",
+      confirmPassword: "Confirm new password",
+      submit: "Set password",
+      submitting: "Saving...",
+      done: "Password changed. Sign in with it now.",
+      missingToken: "This link is missing its token. Ask for a new one.",
+    },
+    account: {
+      section: "Account",
+      sectionHint:
+        "Password reset links are sent to the account email. When it is empty, the alert email above is used instead.",
+      username: "Username",
+      email: "Account email",
+      saveEmail: "Save email",
+      emailSaved: "Email saved.",
+      changePassword: "Change password",
+      currentPassword: "Current password",
+      newPassword: "New password",
+      confirmPassword: "Confirm new password",
+      passwordHint: "At least 8 characters. Other signed-in browsers are signed out.",
+      updatePassword: "Update password",
+      updating: "Updating...",
+      passwordChanged: "Password changed.",
+    },
+    email: {
+      resetSubject: "Reset your MikroTik Quota Monitor password",
+      resetIntro:
+        "Someone asked to reset the password for {username}. If that was you, open the link below within the hour.",
+      resetButton: "Choose a new password",
+      resetIgnore: "If you did not ask for this, ignore this email. Your password stays as it is.",
+    },
+  },
+
   email: {
     alertSubject: "Internet quota exceeded: {used} of {quota} used ({date})",
     alertHeading: "Internet quota exceeded",
@@ -535,6 +591,15 @@ export const en = {
   },
 
   errors: {
+    unauthorized: "You are not signed in.",
+    invalidCredentials: "Wrong username or password.",
+    tooManyAttempts: "Too many failed attempts. Try again in {seconds} seconds.",
+    usernameRequired: "The username is required.",
+    passwordRequired: "The password is required.",
+    passwordTooShort: "The password must be at least 8 characters.",
+    passwordMismatch: "The two passwords do not match.",
+    wrongPassword: "The current password is wrong.",
+    resetInvalid: "This reset link is invalid or has expired. Ask for a new one.",
     badJson: "The request body must be JSON.",
     validationFailed: "Validation failed.",
     quotaPositive: "The daily quota must be greater than 0.",

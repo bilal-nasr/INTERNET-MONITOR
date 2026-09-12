@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { badRequest, errorResponse } from "@/lib/api";
+import { badRequest, errorResponse, rejectUnauthenticated } from "@/lib/api";
 import { fill } from "@/lib/i18n";
 import { dictionaryFromRequest } from "@/lib/i18n/request";
 import { getSelectedSessionTotals } from "@/lib/stats";
@@ -16,6 +16,8 @@ const MAX_IDS = 1000;
  */
 export async function GET(request: Request) {
   const d = dictionaryFromRequest(request);
+  const denied = await rejectUnauthenticated(request, d);
+  if (denied) return denied;
   const raw = new URL(request.url).searchParams.get("ids")?.trim() ?? "";
   if (raw === "") return NextResponse.json(await getSelectedSessionTotals([]));
 

@@ -9,7 +9,7 @@
 
 -- Single-row config table. All runtime configuration lives here and is edited
 -- through the /settings UI. Only DATABASE_URL, RESEND_API_KEY and CRON_SECRET
--- stay in environment variables.
+-- stay in environment variables. Accounts live in `users` further down.
 CREATE TABLE IF NOT EXISTS settings (
   id                  INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
   quota_gb            NUMERIC NOT NULL DEFAULT 8 CHECK (quota_gb > 0),
@@ -78,6 +78,55 @@ CREATE TABLE IF NOT EXISTS sessions (
   created_at       TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- ------------------------------------------------------------- accounts ----
+
+-- Who may sign in. The seed below creates one account; there is no sign-up.
+CREATE TABLE IF NOT EXISTS users (
+  id             SERIAL PRIMARY KEY,
+  username       TEXT NOT NULL,
+  -- Where a password-reset link is sent. Optional: when NULL the reset falls
+  -- back to settings.alert_email_to, which on a single-owner install is the
+  -- same person.
+  email          TEXT,
+  -- scrypt, formatted as scrypt$N$r$p$salt$hash. See lib/auth/password.ts.
+  password_hash  TEXT NOT NULL,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT users_username_key UNIQUE (username)
+);
+
+-- One signed-in browser. Both tokens are stored hashed (SHA-256), so a copy of
+-- this table cannot be replayed. The access token is short-lived and is what
+-- every request presents; the refresh token is long-lived and only ever mints
+-- a new access token. Logging out sets revoked_at, which kills both at once.
+-- Named auth_sessions because `sessions` already holds WAN link sessions.
+CREATE TABLE IF NOT EXISTS auth_sessions (
+  id                  SERIAL PRIMARY KEY,
+  user_id             INTEGER NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  access_token_hash   TEXT NOT NULL,
+  refresh_token_hash  TEXT NOT NULL,
+  access_expires_at   TIMESTAMPTZ NOT NULL,
+  refresh_expires_at  TIMESTAMPTZ NOT NULL,
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+  last_used_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+  revoked_at          TIMESTAMPTZ,
+  user_agent          TEXT,
+  ip                  TEXT,
+  CONSTRAINT auth_sessions_access_token_hash_key  UNIQUE (access_token_hash),
+  CONSTRAINT auth_sessions_refresh_token_hash_key UNIQUE (refresh_token_hash)
+);
+
+-- A "forgot password" link. Single use, one hour.
+CREATE TABLE IF NOT EXISTS password_resets (
+  id          SERIAL PRIMARY KEY,
+  user_id     INTEGER NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  token_hash  TEXT NOT NULL,
+  expires_at  TIMESTAMPTZ NOT NULL,
+  used_at     TIMESTAMPTZ,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT password_resets_token_hash_key UNIQUE (token_hash)
+);
+
 -- ------------------------------------------------------------ migrations ----
 -- For databases created by an earlier release. No-ops on a fresh one.
 
@@ -133,6 +182,9 @@ CREATE INDEX IF NOT EXISTS sessions_started_at_idx ON sessions (started_at DESC)
 CREATE UNIQUE INDEX IF NOT EXISTS sessions_single_open_idx
   ON sessions ((ended_at IS NULL)) WHERE ended_at IS NULL;
 
+CREATE INDEX IF NOT EXISTS auth_sessions_user_id_idx ON auth_sessions (user_id);
+CREATE INDEX IF NOT EXISTS password_resets_user_id_idx ON password_resets (user_id);
+
 -- ------------------------------------------------------------------ seed ----
 
 -- Seed the single settings row. This INSERT is a no-op once the row exists, so
@@ -146,6 +198,15 @@ INSERT INTO settings (
   1, 8, 600, 5, '14:00', '23:59', 'UTC', NULL, 'pppoe-out1', true, 'en'
 )
 ON CONFLICT (id) DO NOTHING;
+
+-- Seed the first account: username bilalnasr, password admin123 (stored as an
+-- scrypt hash with a fixed salt, so re-running this file yields the same row).
+-- Change the password from /settings as soon as the app is reachable by anyone
+-- but you. A no-op once any user exists, so a changed password is never undone.
+INSERT INTO users (username, email, password_hash)
+SELECT 'bilalnasr', NULL,
+       'scrypt$16384$8$1$cXVvdGEtbW9uaXRvci1zZWVk$yMXSIcsj4xKiN0h6biQqvOmyM3jipC20hCWReHtRCkaqQWIg/ymzm9AEU38c5UzIWxR2G0+Mqlw2TZQqb9pwtw=='
+WHERE NOT EXISTS (SELECT 1 FROM users);
 
 -- Backfill the interface name on readings stored before that column existed.
 -- Runs after the seed so the settings row is guaranteed to be there.

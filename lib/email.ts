@@ -124,3 +124,28 @@ export function sendAlertEmail(to: string, report: AlertReport): Promise<string>
   const { subject, text, html } = renderAlertEmail(report);
   return send(to, subject, text, html);
 }
+
+/**
+ * The "forgot password" link. The language is the one the request was made
+ * in: unlike an alert there is a person on the other end of this request, and
+ * the page they are reading is the best guess at how they want to be written to.
+ */
+export function sendPasswordResetEmail(to: string, locale: Locale, username: string, link: string): Promise<string> {
+  const d = getDictionaryFor(locale).auth.email;
+  const intro = fill(d.resetIntro, { username });
+  const text = [intro, ``, link, ``, d.resetIgnore].join("\n");
+  const html = shell(
+    locale,
+    `<p style="margin:0 0 16px">${fill(d.resetIntro, { username: `<strong>${escapeHtml(username)}</strong>` })}</p>
+      <p style="margin:0 0 16px">
+        <a href="${link}" style="display:inline-block;background:#171717;color:#fff;text-decoration:none;padding:10px 16px;border-radius:6px">${d.resetButton}</a>
+      </p>
+      <p style="margin:0 0 16px;font-size:12px;color:#666;word-break:break-all">${link}</p>
+      <p style="margin:0;color:#888;font-size:12px">${d.resetIgnore}</p>`,
+  );
+  return send(to, d.resetSubject, text, html);
+}
+
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] ?? c);
+}

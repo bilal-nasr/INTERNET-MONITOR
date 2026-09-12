@@ -5,7 +5,8 @@ import { usePathname } from "next/navigation";
 import { Suspense } from "react";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { useI18n } from "@/components/I18nProvider";
-import type { Dictionary } from "@/lib/i18n";
+import { LogoutButton } from "@/components/auth/LogoutButton";
+import { fill, type Dictionary } from "@/lib/i18n";
 
 /**
  * Paths are stored without a language and prefixed at render time, so a link
@@ -19,7 +20,7 @@ const LINKS = [
   { path: "/export", label: (d: Dictionary) => d.nav.export },
 ] as const;
 
-export function Nav() {
+export function Nav({ username }: { username: string }) {
   const { locale, d } = useI18n();
   const pathname = usePathname();
 
@@ -60,6 +61,12 @@ export function Nav() {
           <Suspense fallback={null}>
             <LanguageSwitcher />
           </Suspense>
+          <div className="flex items-center gap-2">
+            <span className="hidden text-xs text-muted sm:inline" title={fill(d.auth.signedInAs, { username })}>
+              {username}
+            </span>
+            <LogoutButton />
+          </div>
         </div>
       </div>
     </header>

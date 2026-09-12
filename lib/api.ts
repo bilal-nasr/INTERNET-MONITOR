@@ -1,5 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
+import { requireApiAuth, UnauthorizedError } from "@/lib/auth/server";
 import { EmailError } from "@/lib/email";
 import type { Dictionary } from "@/lib/i18n";
 import { SettingsNotSeededError } from "@/lib/settings";
@@ -21,7 +22,11 @@ export function errorResponse(err: unknown, d?: Dictionary): NextResponse {
   let code = "internal_error";
   let message = detail;
 
-  if (err instanceof EmailError) {
+  if (err instanceof UnauthorizedError) {
+    status = 401;
+    code = "unauthorized";
+    if (d) message = d.errors.unauthorized;
+  } else if (err instanceof EmailError) {
     status = 502;
     code = "email_error";
     if (d) message = `${d.errors.emailFailed} ${detail}`;
@@ -33,7 +38,8 @@ export function errorResponse(err: unknown, d?: Dictionary): NextResponse {
     message = d.errors.internal;
   }
 
-  console.error(`[api] ${code}: ${detail}`);
+  // A missing session is routine, not a fault worth a stack of log lines.
+  if (status !== 401) console.error(`[api] ${code}: ${detail}`);
   return NextResponse.json({ error: code, message }, { status });
 }
 
@@ -50,4 +56,18 @@ export function isCronAuthorized(request: Request): boolean {
   const a = Buffer.from(header);
   const b = Buffer.from(expected);
   return a.length === b.length && timingSafeEqual(a, b);
+}
+
+/**
+ * The 401 a route answers with when no live session is presented, or null when
+ * one is. The proxy already turns such requests away; this is the check that
+ * does not depend on the proxy's matcher being right.
+ */
+export async function rejectUnauthenticated(request: Request, d?: Dictionary): Promise<NextResponse | null> {
+  try {
+    await requireApiAuth(request);
+    return null;
+  } catch (err) {
+    return errorResponse(err, d);
+  }
 }

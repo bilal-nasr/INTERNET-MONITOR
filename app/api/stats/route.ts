@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { badRequest, errorResponse } from "@/lib/api";
+import { badRequest, errorResponse, rejectUnauthenticated } from "@/lib/api";
 import { dictionaryFromRequest } from "@/lib/i18n/request";
 import { InvalidRangeError, rangeErrorMessage, resolveRange } from "@/lib/range";
 import { buildStatsReport } from "@/lib/report";
@@ -14,6 +14,8 @@ import { getSettings } from "@/lib/settings";
 export async function GET(request: Request) {
   const params = new URL(request.url).searchParams;
   const d = dictionaryFromRequest(request);
+  const denied = await rejectUnauthenticated(request, d);
+  if (denied) return denied;
 
   try {
     const settings = await getSettings();

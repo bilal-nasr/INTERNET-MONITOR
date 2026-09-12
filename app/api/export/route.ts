@@ -1,4 +1,4 @@
-import { badRequest, errorResponse } from "@/lib/api";
+import { badRequest, errorResponse, rejectUnauthenticated } from "@/lib/api";
 import { dictionaryFromRequest } from "@/lib/i18n/request";
 import { db } from "@/lib/db";
 import { getSettings } from "@/lib/settings";
@@ -38,6 +38,8 @@ function toRow(r: Reading) {
 
 export async function GET(request: Request) {
   const d = dictionaryFromRequest(request);
+  const denied = await rejectUnauthenticated(request, d);
+  if (denied) return denied;
   const params = new URL(request.url).searchParams;
   const format = (params.get("format") ?? "csv").toLowerCase();
   const from = params.get("from") ?? "";

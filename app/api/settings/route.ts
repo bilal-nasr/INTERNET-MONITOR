@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { badRequest, errorResponse } from "@/lib/api";
+import { badRequest, errorResponse, rejectUnauthenticated } from "@/lib/api";
 import type { Dictionary } from "@/lib/i18n";
 import { LOCALES } from "@/lib/i18n/config";
 import { dictionaryFromRequest } from "@/lib/i18n/request";
@@ -40,6 +40,8 @@ function patchSchema(d: Dictionary) {
 
 export async function GET(request: Request) {
   const d = dictionaryFromRequest(request);
+  const denied = await rejectUnauthenticated(request, d);
+  if (denied) return denied;
   try {
     const settings = await getSettings();
     return NextResponse.json(toPublicSettings(settings));
@@ -50,6 +52,8 @@ export async function GET(request: Request) {
 
 export async function PUT(request: Request) {
   const d = dictionaryFromRequest(request);
+  const denied = await rejectUnauthenticated(request, d);
+  if (denied) return denied;
 
   let body: unknown;
   try {
