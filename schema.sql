@@ -29,6 +29,10 @@ CREATE TABLE IF NOT EXISTS settings (
   -- the URL instead; an alert is sent with no request behind it, so its
   -- language has to be a stored setting rather than a header.
   language            TEXT NOT NULL DEFAULT 'en' CHECK (language IN ('en', 'ar')),
+  -- Readings older than this many days are thinned to one per hour by the
+  -- scheduler's thinReadings job. Traffic totals are unaffected; only sub-hour
+  -- detail for old ranges is dropped. See README "Retention".
+  retention_days      INTEGER NOT NULL DEFAULT 90 CHECK (retention_days BETWEEN 7 AND 3650),
   updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -153,6 +157,10 @@ ALTER TABLE settings ADD COLUMN IF NOT EXISTS billing_cycle_day INTEGER NOT NULL
 -- English alerts until /settings says otherwise.
 ALTER TABLE settings ADD COLUMN IF NOT EXISTS language TEXT NOT NULL DEFAULT 'en';
 
+-- Retention. A database upgraded from an earlier release keeps ninety days of
+-- full detail, which is what a fresh one gets too.
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS retention_days INTEGER NOT NULL DEFAULT 90;
+
 -- Scheduled checks (plan 02). stale_after_minutes = 0 disables the
 -- "router has gone quiet" alert. digest picks the scheduled summary.
 ALTER TABLE settings ADD COLUMN IF NOT EXISTS stale_after_minutes INTEGER NOT NULL DEFAULT 10;
@@ -225,6 +233,10 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'settings_digest_check') THEN
     ALTER TABLE settings ADD CONSTRAINT settings_digest_check
       CHECK (digest IN ('off', 'weekly', 'cycle'));
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'settings_retention_days_check') THEN
+    ALTER TABLE settings ADD CONSTRAINT settings_retention_days_check
+      CHECK (retention_days BETWEEN 7 AND 3650);
   END IF;
 END
 $$;

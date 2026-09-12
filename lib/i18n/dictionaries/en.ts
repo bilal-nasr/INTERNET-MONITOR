@@ -402,6 +402,9 @@ export const en = {
     pollingEnabled: "Polling enabled",
     pollingPaused: "Polling paused",
     pollingHint: "When paused, readings pushed by the router are discarded. History is kept.",
+    retentionDays: "Keep full detail for (days)",
+    retentionDaysHint:
+      "Older readings are thinned to one per hour. Totals and charts stay correct; only minute-level detail for old dates is dropped.",
     scheduleSection: "Scheduled checks",
     scheduleSectionHint:
       "Run by the scheduler that calls /api/cron/tick (see README, \"Scheduled jobs\"). Without a scheduler these two settings do nothing.",
@@ -424,6 +427,7 @@ export const en = {
       wan_interface_name: "WAN interface name",
       polling_enabled: "Polling",
       language: "Alert language",
+      retention_days: "Keep full detail for (days)",
       stale_after_minutes: "Silence before alerting",
       digest: "Scheduled summary",
       alert_thresholds: "Daily alert marks",
@@ -725,6 +729,8 @@ export const en = {
     staleMinutesRange: "The silence limit must be between 0 and 1440 minutes.",
     unknownDigest: "That summary schedule is not supported.",
     windowOrder: "The end of the window must be after its start.",
+    retentionWhole: "The retention must be a whole number of days.",
+    retentionRange: "The retention must be between 7 and 3650 days.",
     thresholdsInvalid: "Alert marks must be whole numbers from 1 to 100, ascending, at most 8 of them.",
     alertEmailMissing: "No alert email is saved. Save an alert email first.",
     exportFormat: "The format must be csv or json.",

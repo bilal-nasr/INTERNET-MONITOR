@@ -379,6 +379,9 @@ export const ar = {
     pollingEnabled: "المراقبة مفعّلة",
     pollingPaused: "المراقبة موقوفة",
     pollingHint: "عند الإيقاف، تُهمل القراءات الواردة من الراوتر. ويُحتفظ بالسجل السابق.",
+    retentionDays: "الاحتفاظ بالتفاصيل الكاملة لمدة (أيام)",
+    retentionDaysHint:
+      "تُختصر القراءات الأقدم إلى قراءة واحدة في الساعة. تبقى المجاميع والرسوم صحيحة؛ يُحذف فقط التفصيل الدقيق للتواريخ القديمة.",
     scheduleSection: "الفحوصات المجدولة",
     scheduleSectionHint:
       "تُنفَّذ بواسطة المجدول الذي يستدعي /api/cron/tick (راجع README، قسم Scheduled jobs). من دون مجدول لا يؤثر هذان الإعدادان.",
@@ -400,6 +403,7 @@ export const ar = {
       wan_interface_name: "اسم واجهة WAN",
       polling_enabled: "المراقبة",
       language: "لغة التنبيهات",
+      retention_days: "الاحتفاظ بالتفاصيل الكاملة لمدة (أيام)",
       stale_after_minutes: "مدة الصمت قبل التنبيه",
       digest: "الملخص المجدول",
       alert_thresholds: "علامات التنبيه اليومي",
@@ -703,6 +707,8 @@ export const ar = {
     staleMinutesRange: "يجب أن تكون مدة الصمت بين 0 و1440 دقيقة.",
     unknownDigest: "جدول الملخص هذا غير مدعوم.",
     windowOrder: "يجب أن تكون نهاية النافذة بعد بدايتها.",
+    retentionWhole: "يجب أن تكون مدة الاحتفاظ عدداً صحيحاً من الأيام.",
+    retentionRange: "يجب أن تكون مدة الاحتفاظ بين 7 و3650 يوماً.",
     thresholdsInvalid: "يجب أن تكون علامات التنبيه أعداداً صحيحة من 1 إلى 100، بترتيب تصاعدي، و8 علامات كحد أقصى.",
     alertEmailMissing: "لا يوجد بريد تنبيهات محفوظ. احفظ بريداً للتنبيهات أولاً.",
     exportFormat: "يجب أن تكون الصيغة csv أو json.",
