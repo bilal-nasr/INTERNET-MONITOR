@@ -19,6 +19,8 @@ interface FormState {
   wan_interface_name: string;
   polling_enabled: boolean;
   language: string;
+  stale_after_minutes: string;
+  digest: string;
   alert_thresholds: string;
   cycle_alert_thresholds: string;
   cycle_pace_alert: boolean;
@@ -36,6 +38,8 @@ function toForm(s: PublicSettings): FormState {
     wan_interface_name: s.wan_interface_name,
     polling_enabled: s.polling_enabled,
     language: s.language,
+    stale_after_minutes: String(s.stale_after_minutes),
+    digest: s.digest,
     alert_thresholds: s.alert_thresholds.join(", "),
     cycle_alert_thresholds: s.cycle_alert_thresholds.join(", "),
     cycle_pace_alert: s.cycle_pace_alert,
@@ -111,6 +115,8 @@ export function SettingsForm({ initial }: { initial: PublicSettings }) {
         wan_interface_name: form.wan_interface_name,
         polling_enabled: form.polling_enabled,
         language: form.language,
+        stale_after_minutes: Number(form.stale_after_minutes),
+        digest: form.digest,
         alert_thresholds: parseMarks(form.alert_thresholds),
         cycle_alert_thresholds: parseMarks(form.cycle_alert_thresholds),
         cycle_pace_alert: form.cycle_pace_alert,
@@ -409,6 +415,44 @@ export function SettingsForm({ initial }: { initial: PublicSettings }) {
             <span className="block text-xs text-muted">{d.settings.pollingHint}</span>
           </span>
         </label>
+      </Section>
+
+      <Section title={d.settings.scheduleSection} description={d.settings.scheduleSectionHint}>
+        <div className="grid gap-4 sm:grid-cols-2 sm:max-w-lg">
+          <div>
+            <label htmlFor="stale_after_minutes" className={labelClass}>
+              {d.settings.staleAfterMinutes}
+            </label>
+            <input
+              id="stale_after_minutes"
+              type="number"
+              min="0"
+              max="1440"
+              step="1"
+              required
+              value={form.stale_after_minutes}
+              onChange={(e) => update("stale_after_minutes", e.target.value)}
+              className={inputClass}
+            />
+            <p className={hintClass}>{d.settings.staleAfterMinutesHint}</p>
+          </div>
+          <div>
+            <label htmlFor="digest" className={labelClass}>
+              {d.settings.digest}
+            </label>
+            <select
+              id="digest"
+              value={form.digest}
+              onChange={(e) => update("digest", e.target.value)}
+              className={inputClass}
+            >
+              <option value="off">{d.settings.digestOff}</option>
+              <option value="weekly">{d.settings.digestWeekly}</option>
+              <option value="cycle">{d.settings.digestCycle}</option>
+            </select>
+            <p className={hintClass}>{d.settings.digestHint}</p>
+          </div>
+        </div>
       </Section>
 
       <div className="flex items-center gap-3">

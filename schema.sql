@@ -127,6 +127,16 @@ CREATE TABLE IF NOT EXISTS password_resets (
   CONSTRAINT password_resets_token_hash_key UNIQUE (token_hash)
 );
 
+-- One row per scheduled job, written by /api/cron/tick after every run. The
+-- tick may be called every minute; each job reads its own state (this row,
+-- the alerts log) to decide whether there is anything to do.
+CREATE TABLE IF NOT EXISTS job_runs (
+  job          TEXT PRIMARY KEY,
+  last_run_at  TIMESTAMPTZ NOT NULL,
+  last_status  TEXT NOT NULL,
+  last_detail  TEXT
+);
+
 -- ------------------------------------------------------------ migrations ----
 -- For databases created by an earlier release. No-ops on a fresh one.
 
@@ -142,6 +152,11 @@ ALTER TABLE settings ADD COLUMN IF NOT EXISTS billing_cycle_day INTEGER NOT NULL
 -- Alert language. A database upgraded from an earlier release keeps sending
 -- English alerts until /settings says otherwise.
 ALTER TABLE settings ADD COLUMN IF NOT EXISTS language TEXT NOT NULL DEFAULT 'en';
+
+-- Scheduled checks (plan 02). stale_after_minutes = 0 disables the
+-- "router has gone quiet" alert. digest picks the scheduled summary.
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS stale_after_minutes INTEGER NOT NULL DEFAULT 10;
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS digest TEXT NOT NULL DEFAULT 'weekly';
 
 -- Alert marks. Percent of the daily quota (and of the monthly cap) at which a
 -- mail goes out. 100 is the "exceeded" alert that has always existed; the
@@ -202,6 +217,14 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'settings_cycle_alert_thresholds_check') THEN
     ALTER TABLE settings ADD CONSTRAINT settings_cycle_alert_thresholds_check
       CHECK (cardinality(cycle_alert_thresholds) BETWEEN 0 AND 8);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'settings_stale_after_minutes_check') THEN
+    ALTER TABLE settings ADD CONSTRAINT settings_stale_after_minutes_check
+      CHECK (stale_after_minutes BETWEEN 0 AND 1440);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'settings_digest_check') THEN
+    ALTER TABLE settings ADD CONSTRAINT settings_digest_check
+      CHECK (digest IN ('off', 'weekly', 'cycle'));
   END IF;
 END
 $$;

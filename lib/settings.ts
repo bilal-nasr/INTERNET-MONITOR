@@ -2,6 +2,14 @@ import { db } from "@/lib/db";
 import { memoized } from "@/lib/memo";
 import { DEFAULT_LOCALE, isLocale, type Locale } from "@/lib/i18n/config";
 
+/** Which scheduled summary is sent. See lib/cron/digest.ts. */
+export type DigestKind = "off" | "weekly" | "cycle";
+export const DIGEST_KINDS: readonly DigestKind[] = ["off", "weekly", "cycle"];
+
+export function isDigestKind(value: string): value is DigestKind {
+  return (DIGEST_KINDS as readonly string[]).includes(value);
+}
+
 export interface SettingsRow {
   id: number;
   quota_gb: number;
@@ -15,6 +23,9 @@ export interface SettingsRow {
   polling_enabled: boolean;
   /** Language quota alerts are written in. See `alertLocale`. */
   language: string;
+  /** Minutes without a push before the link_stale alert. 0 disables it. */
+  stale_after_minutes: number;
+  digest: DigestKind;
   /** Percent marks of the daily quota that trigger a mail. Ascending, 1..100. */
   alert_thresholds: number[];
   /** Percent marks of the monthly cap that trigger a mail. */
@@ -47,6 +58,8 @@ export interface PublicSettings {
   wan_interface_name: string;
   polling_enabled: boolean;
   language: string;
+  stale_after_minutes: number;
+  digest: string;
   alert_thresholds: number[];
   cycle_alert_thresholds: number[];
   cycle_pace_alert: boolean;
@@ -66,6 +79,8 @@ export type SettingsPatch = Partial<
     | "wan_interface_name"
     | "polling_enabled"
     | "language"
+    | "stale_after_minutes"
+    | "digest"
     | "alert_thresholds"
     | "cycle_alert_thresholds"
     | "cycle_pace_alert"
@@ -98,7 +113,7 @@ async function loadSettings(): Promise<SettingsRow> {
     `SELECT id, quota_gb, monthly_quota_gb, billing_cycle_day, window_start,
             window_end, timezone, alert_email_to, wan_interface_name,
             polling_enabled, language, alert_thresholds, cycle_alert_thresholds,
-            cycle_pace_alert, updated_at
+            cycle_pace_alert, stale_after_minutes, digest, updated_at
      FROM settings WHERE id = 1`,
   );
   if (!row) throw new SettingsNotSeededError();
@@ -117,6 +132,8 @@ export function toPublicSettings(row: SettingsRow): PublicSettings {
     wan_interface_name: row.wan_interface_name,
     polling_enabled: row.polling_enabled,
     language: row.language,
+    stale_after_minutes: row.stale_after_minutes,
+    digest: row.digest,
     alert_thresholds: row.alert_thresholds,
     cycle_alert_thresholds: row.cycle_alert_thresholds,
     cycle_pace_alert: row.cycle_pace_alert,
@@ -140,6 +157,8 @@ const WRITABLE = new Set<string>([
   "wan_interface_name",
   "polling_enabled",
   "language",
+  "stale_after_minutes",
+  "digest",
   "alert_thresholds",
   "cycle_alert_thresholds",
   "cycle_pace_alert",

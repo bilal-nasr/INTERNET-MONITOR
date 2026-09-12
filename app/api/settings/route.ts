@@ -5,7 +5,14 @@ import { badRequest, errorResponse, rejectUnauthenticated } from "@/lib/api";
 import type { Dictionary } from "@/lib/i18n";
 import { LOCALES } from "@/lib/i18n/config";
 import { dictionaryFromRequest } from "@/lib/i18n/request";
-import { getSettings, toPublicSettings, updateSettings, type SettingsPatch } from "@/lib/settings";
+import {
+  DIGEST_KINDS,
+  getSettings,
+  toPublicSettings,
+  updateSettings,
+  type DigestKind,
+  type SettingsPatch,
+} from "@/lib/settings";
 import { isValidTimeZone, timeToMinutes } from "@/lib/time";
 
 /**
@@ -34,6 +41,12 @@ function patchSchema(d: Dictionary) {
       wan_interface_name: z.string().trim().min(1, e.interfaceRequired).max(100),
       polling_enabled: z.boolean(),
       language: z.enum(LOCALES, e.unknownLanguage),
+      stale_after_minutes: z.coerce
+        .number()
+        .int(e.staleMinutesWhole)
+        .min(0, e.staleMinutesRange)
+        .max(1440, e.staleMinutesRange),
+      digest: z.enum(DIGEST_KINDS as [DigestKind, ...DigestKind[]], e.unknownDigest),
       alert_thresholds: z
         .array(z.coerce.number())
         .max(MAX_THRESHOLDS, e.thresholdsInvalid)
