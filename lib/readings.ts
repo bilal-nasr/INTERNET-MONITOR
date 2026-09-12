@@ -185,9 +185,15 @@ export async function recordReading(
         payload: { used_bytes: used, quota_bytes: quota, percent: Math.round(percent * 10) / 10 },
       });
       if (result.status === "failed") {
+        // Only undo this call's own claim. A concurrent push may already
+        // have claimed and sent a higher mark since this claim failed;
+        // writing back the old value unconditionally would clobber that
+        // claim and let the same mark be mailed again later. Keep `notified`
+        // in step with `notified_level` whatever value this writes.
         await db.none(
-          `UPDATE daily_windows SET notified_level = $2, notified = ($2 >= 100) WHERE id = $1`,
-          [window!.id, notifiedLevel],
+          `UPDATE daily_windows SET notified_level = $3, notified = ($3 >= 100)
+           WHERE id = $1 AND notified_level = $2`,
+          [window!.id, level, notifiedLevel],
         );
       } else {
         notifiedLevel = level;

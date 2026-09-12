@@ -94,7 +94,14 @@ export async function checkCycleAlerts(settings: SettingsRow, now = new Date()):
           payload: { used_bytes: cycle.used_bytes, cap_bytes: cycle.cap_bytes, percent: cycle.percent_of_cap },
         });
         if (result.status === "failed") {
-          await db.none("UPDATE cycle_alerts SET notified_level = $2 WHERE cycle_start = $1", [cycleStart, state.notified_level]);
+          // Only undo this call's own claim. A concurrent instance may already
+          // have claimed and sent a higher mark since this claim failed;
+          // writing back the old value unconditionally would clobber that
+          // claim and let the same mark be mailed again later.
+          await db.none(
+            `UPDATE cycle_alerts SET notified_level = $3 WHERE cycle_start = $1 AND notified_level = $2`,
+            [cycleStart, level, state.notified_level],
+          );
         } else if (result.status === "sent") {
           sent.push("cycle_threshold");
         }
@@ -117,7 +124,12 @@ export async function checkCycleAlerts(settings: SettingsRow, now = new Date()):
           payload: { projected_bytes: cycle.projected_bytes, cap_bytes: cycle.cap_bytes, days_elapsed: cycle.days_elapsed },
         });
         if (result.status === "failed") {
-          await db.none("UPDATE cycle_alerts SET pace_notified = false WHERE cycle_start = $1", [cycleStart]);
+          // Only undo this call's own claim: guard on the flag still being
+          // true so a release can never clear a flag some other successful
+          // claim set. Only the claiming call can set it true, so today this
+          // is unreachable, but it is guarded anyway for consistency with
+          // the threshold release above.
+          await db.none("UPDATE cycle_alerts SET pace_notified = false WHERE cycle_start = $1 AND pace_notified = true", [cycleStart]);
         } else if (result.status === "sent") {
           sent.push("cycle_pace");
         }
