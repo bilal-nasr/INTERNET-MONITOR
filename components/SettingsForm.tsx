@@ -255,7 +255,7 @@ export function SettingsForm({ initial }: { initial: PublicSettings }) {
               id="monthly_quota_gb"
               type="number"
               min="0.01"
-              step="1"
+              step="0.01"
               required
               value={form.monthly_quota_gb}
               onChange={(e) => update("monthly_quota_gb", e.target.value)}
