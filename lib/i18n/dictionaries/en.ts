@@ -359,6 +359,23 @@ export const en = {
     upShort: "Up {duration}",
     downBytes: "Down {bytes}",
     upBytes: "Up {bytes}",
+    downtimeHeading: "Downtime",
+    totalDowntime: "Total downtime",
+    downtimeShare: "{percent}% of the range",
+    longestOutage: "Longest outage",
+    outageEndedAt: "back at {time}",
+    outageOngoing: "still down",
+    outagesCount: plural({
+      one: "{count} outage",
+      other: "{count} outages",
+    }),
+    outagesHint: "gaps between one session and the next",
+    noOutages: "No outages in this range.",
+    calendarHeading: "Downtime by day",
+    calendarHint: "darker means longer offline",
+    calendarCell: "{day}: offline {duration}",
+    calendarCellNone: "{day}: no outages",
+    calendarTooLong: "Choose a range of {max} days or fewer to see the calendar.",
   },
 
   settings: {

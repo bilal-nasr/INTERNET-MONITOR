@@ -1,10 +1,13 @@
 import type { Metadata } from "next";
 import { connection } from "next/server";
 import { AutoRefresh } from "@/components/AutoRefresh";
+import { OutageCalendar } from "@/components/OutageCalendar";
+import { OutageSummary } from "@/components/OutageSummary";
 import { RangePicker } from "@/components/RangePicker";
 import { SessionsTable, SessionTotalsCards } from "@/components/SessionsTable";
 import { fill } from "@/lib/i18n";
 import { getI18n } from "@/lib/i18n/server";
+import { downtimeByDay, outagesFromSessions } from "@/lib/outages";
 import { DEFAULT_PRESET, InvalidRangeError, rangeErrorMessage, resolveRange } from "@/lib/range";
 import { getSessions, getSessionTotals } from "@/lib/sessions";
 import { getSettings } from "@/lib/settings";
@@ -50,6 +53,15 @@ export default async function SessionsPage({ searchParams }: { searchParams: Pro
     getSessionTotals(window),
   ]);
 
+  // Derived from the sessions already fetched, so the report costs no extra
+  // round trip. It is bounded by LIMIT like the table: on a range with more
+  // than LIMIT sessions the oldest gaps are not shown, which the footnote says.
+  const outages = outagesFromSessions(sessions, window);
+  const byDay = downtimeByDay(outages, settings.timezone);
+  const rangeSeconds = range.from
+    ? Math.round((range.to.getTime() - range.from.getTime()) / 1000)
+    : null;
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -71,6 +83,10 @@ export default async function SessionsPage({ searchParams }: { searchParams: Pro
       )}
 
       <SessionTotalsCards totals={totals} />
+
+      <h2 className="pt-2 text-sm font-semibold tracking-tight">{d.sessions.downtimeHeading}</h2>
+      <OutageSummary outages={outages} rangeSeconds={rangeSeconds} timezone={settings.timezone} />
+      <OutageCalendar byDay={byDay} from={range.from} to={range.to} timezone={settings.timezone} />
 
       <SessionsTable sessions={sessions} timezone={settings.timezone} />
 
