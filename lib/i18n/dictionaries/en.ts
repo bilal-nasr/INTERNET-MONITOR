@@ -383,6 +383,14 @@ export const en = {
     alertEmailHint: "The test goes to the saved address. Save first if you just changed it.",
     alertLanguage: "Alert language",
     alertLanguageHint: "Applies to the emails sent when the daily quota is exceeded.",
+    alertThresholds: "Daily alert marks (% of quota)",
+    alertThresholdsHint:
+      "Comma-separated, ascending. A mail goes out when usage in the window first reaches each mark. 100 is the exceeded alert. Leave empty to turn daily mails off.",
+    cycleAlertThresholds: "Monthly alert marks (% of cap)",
+    cycleAlertThresholdsHint: "Same rule, measured against the monthly cap over the whole cycle.",
+    cyclePaceAlert: "Warn when the projection crosses the cap",
+    cyclePaceAlertHint:
+      "One mail per cycle, sent the first time the projected end-of-cycle usage exceeds the cap (after the third day, so a heavy first day does not trigger it).",
     routerSection: "Router",
     routerSectionHint:
       "The router pushes its counters to /api/ingest; the app never connects to the router. Set the interface name so readings are labelled correctly.",
@@ -404,6 +412,9 @@ export const en = {
       wan_interface_name: "WAN interface name",
       polling_enabled: "Polling",
       language: "Alert language",
+      alert_thresholds: "Daily alert marks",
+      cycle_alert_thresholds: "Monthly alert marks",
+      cycle_pace_alert: "Projection warning",
     },
   },
 
@@ -610,6 +621,7 @@ export const en = {
     interfaceRequired: "The interface name is required.",
     unknownLanguage: "That language is not supported.",
     windowOrder: "The end of the window must be after its start.",
+    thresholdsInvalid: "Alert marks must be whole numbers from 1 to 100, ascending, at most 8 of them.",
     alertEmailMissing: "No alert email is saved. Save an alert email first.",
     exportFormat: "The format must be csv or json.",
     exportDates: "Both dates must be written as YYYY-MM-DD.",

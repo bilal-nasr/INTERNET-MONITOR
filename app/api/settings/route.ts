@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { isThresholdList, MAX_THRESHOLDS } from "@/lib/alerts/thresholds";
 import { badRequest, errorResponse, rejectUnauthenticated } from "@/lib/api";
 import type { Dictionary } from "@/lib/i18n";
 import { LOCALES } from "@/lib/i18n/config";
@@ -33,6 +34,15 @@ function patchSchema(d: Dictionary) {
       wan_interface_name: z.string().trim().min(1, e.interfaceRequired).max(100),
       polling_enabled: z.boolean(),
       language: z.enum(LOCALES, e.unknownLanguage),
+      alert_thresholds: z
+        .array(z.coerce.number())
+        .max(MAX_THRESHOLDS, e.thresholdsInvalid)
+        .refine(isThresholdList, e.thresholdsInvalid),
+      cycle_alert_thresholds: z
+        .array(z.coerce.number())
+        .max(MAX_THRESHOLDS, e.thresholdsInvalid)
+        .refine(isThresholdList, e.thresholdsInvalid),
+      cycle_pace_alert: z.boolean(),
     })
     .partial()
     .strict();

@@ -19,6 +19,9 @@ interface FormState {
   wan_interface_name: string;
   polling_enabled: boolean;
   language: string;
+  alert_thresholds: string;
+  cycle_alert_thresholds: string;
+  cycle_pace_alert: boolean;
 }
 
 function toForm(s: PublicSettings): FormState {
@@ -33,6 +36,9 @@ function toForm(s: PublicSettings): FormState {
     wan_interface_name: s.wan_interface_name,
     polling_enabled: s.polling_enabled,
     language: s.language,
+    alert_thresholds: s.alert_thresholds.join(", "),
+    cycle_alert_thresholds: s.cycle_alert_thresholds.join(", "),
+    cycle_pace_alert: s.cycle_pace_alert,
   };
 }
 
@@ -58,6 +64,15 @@ async function readError(res: Response, d: Dictionary): Promise<string> {
   } catch {
     return httpError;
   }
+}
+
+/** "50, 80, 100" -> [50, 80, 100]. Blanks are dropped; anything else is passed on for the API to reject with a message. */
+function parseMarks(text: string): number[] {
+  return text
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0)
+    .map(Number);
 }
 
 const inputClass =
@@ -96,6 +111,9 @@ export function SettingsForm({ initial }: { initial: PublicSettings }) {
         wan_interface_name: form.wan_interface_name,
         polling_enabled: form.polling_enabled,
         language: form.language,
+        alert_thresholds: parseMarks(form.alert_thresholds),
+        cycle_alert_thresholds: parseMarks(form.cycle_alert_thresholds),
+        cycle_pace_alert: form.cycle_pace_alert,
       };
       const res = await fetch(`/api/settings?lang=${locale}`, {
         method: "PUT",
@@ -292,6 +310,54 @@ export function SettingsForm({ initial }: { initial: PublicSettings }) {
           </select>
           <p className={hintClass}>{d.settings.alertLanguageHint}</p>
         </div>
+
+        <div className="mt-4 grid gap-4 sm:grid-cols-2 sm:max-w-lg">
+          <div>
+            <label htmlFor="alert_thresholds" className={labelClass}>
+              {d.settings.alertThresholds}
+            </label>
+            <input
+              id="alert_thresholds"
+              type="text"
+              dir="ltr"
+              inputMode="numeric"
+              value={form.alert_thresholds}
+              onChange={(e) => update("alert_thresholds", e.target.value)}
+              className={`${inputClass} font-mono`}
+              placeholder="50, 80, 100"
+            />
+            <p className={hintClass}>{d.settings.alertThresholdsHint}</p>
+          </div>
+          <div>
+            <label htmlFor="cycle_alert_thresholds" className={labelClass}>
+              {d.settings.cycleAlertThresholds}
+            </label>
+            <input
+              id="cycle_alert_thresholds"
+              type="text"
+              dir="ltr"
+              inputMode="numeric"
+              value={form.cycle_alert_thresholds}
+              onChange={(e) => update("cycle_alert_thresholds", e.target.value)}
+              className={`${inputClass} font-mono`}
+              placeholder="80, 100"
+            />
+            <p className={hintClass}>{d.settings.cycleAlertThresholdsHint}</p>
+          </div>
+        </div>
+
+        <label className="mt-4 flex cursor-pointer items-center gap-3">
+          <input
+            type="checkbox"
+            checked={form.cycle_pace_alert}
+            onChange={(e) => update("cycle_pace_alert", e.target.checked)}
+            className="size-4 rounded border-border"
+          />
+          <span className="text-sm">
+            {d.settings.cyclePaceAlert}
+            <span className="block text-xs text-muted">{d.settings.cyclePaceAlertHint}</span>
+          </span>
+        </label>
       </Section>
 
       <Section title={d.settings.routerSection} description={d.settings.routerSectionHint}>

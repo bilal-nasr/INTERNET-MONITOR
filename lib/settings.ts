@@ -15,6 +15,12 @@ export interface SettingsRow {
   polling_enabled: boolean;
   /** Language quota alerts are written in. See `alertLocale`. */
   language: string;
+  /** Percent marks of the daily quota that trigger a mail. Ascending, 1..100. */
+  alert_thresholds: number[];
+  /** Percent marks of the monthly cap that trigger a mail. */
+  cycle_alert_thresholds: number[];
+  /** One mail per cycle when the projection first crosses the cap. */
+  cycle_pace_alert: boolean;
   updated_at: Date;
 }
 
@@ -41,6 +47,9 @@ export interface PublicSettings {
   wan_interface_name: string;
   polling_enabled: boolean;
   language: string;
+  alert_thresholds: number[];
+  cycle_alert_thresholds: number[];
+  cycle_pace_alert: boolean;
   updated_at: string;
 }
 
@@ -57,6 +66,9 @@ export type SettingsPatch = Partial<
     | "wan_interface_name"
     | "polling_enabled"
     | "language"
+    | "alert_thresholds"
+    | "cycle_alert_thresholds"
+    | "cycle_pace_alert"
   >
 >;
 
@@ -85,7 +97,8 @@ async function loadSettings(): Promise<SettingsRow> {
   const row = await db.oneOrNone<SettingsRow>(
     `SELECT id, quota_gb, monthly_quota_gb, billing_cycle_day, window_start,
             window_end, timezone, alert_email_to, wan_interface_name,
-            polling_enabled, language, updated_at
+            polling_enabled, language, alert_thresholds, cycle_alert_thresholds,
+            cycle_pace_alert, updated_at
      FROM settings WHERE id = 1`,
   );
   if (!row) throw new SettingsNotSeededError();
@@ -104,6 +117,9 @@ export function toPublicSettings(row: SettingsRow): PublicSettings {
     wan_interface_name: row.wan_interface_name,
     polling_enabled: row.polling_enabled,
     language: row.language,
+    alert_thresholds: row.alert_thresholds,
+    cycle_alert_thresholds: row.cycle_alert_thresholds,
+    cycle_pace_alert: row.cycle_pace_alert,
     updated_at: row.updated_at.toISOString(),
   };
 }
@@ -124,6 +140,9 @@ const WRITABLE = new Set<string>([
   "wan_interface_name",
   "polling_enabled",
   "language",
+  "alert_thresholds",
+  "cycle_alert_thresholds",
+  "cycle_pace_alert",
 ]);
 
 export async function updateSettings(patch: SettingsPatch): Promise<SettingsRow> {
