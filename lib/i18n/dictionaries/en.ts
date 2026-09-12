@@ -623,6 +623,7 @@ export const en = {
     dailyAverage: "Daily average so far",
     budget: "Budget per remaining day",
     footerThreshold: "You will be told again at the next mark, and once more if the cap is exceeded.",
+    footerOver: "The cap for this cycle has been passed. No further cap mail is due this cycle.",
     footerPace: "This projection warning is sent once per cycle.",
     dashboardLine: "Dashboard: {url}",
     openDashboard: "Open the dashboard",

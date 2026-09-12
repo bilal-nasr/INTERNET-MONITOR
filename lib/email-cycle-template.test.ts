@@ -54,6 +54,8 @@ describe("renderCycleEmail", () => {
       expect(body).toContain("972.00 GB (162% of cap)");
       expect(body).toContain("day 15 of 30, 15 left");
       expect(body).toContain("2026-09-05 to 2026-10-05 (Asia/Beirut)");
+      expect(body).toContain("32.40 GB");
+      expect(body).toContain("7.60 GB");
     }
     expect(html).toContain('href="https://netmonitor.example"');
     expect(text).toContain("Dashboard: https://netmonitor.example");
@@ -63,6 +65,21 @@ describe("renderCycleEmail", () => {
     const { text, html } = renderCycleEmail(report({ app_url: null }));
     expect(html).not.toContain("<a ");
     expect(text).not.toContain("Dashboard:");
+  });
+
+  test("promises the next mark for an ordinary threshold mail", () => {
+    const { text } = renderCycleEmail(report());
+    expect(text).toContain(
+      "You will be told again at the next mark, and once more if the cap is exceeded.",
+    );
+  });
+
+  test("says no further cap mail is due once the cap is exceeded", () => {
+    const { text } = renderCycleEmail(
+      report({ threshold: 100, cycle: { ...report().cycle, over: true, used_bytes: 601e9, percent: 100.2 } }),
+    );
+    expect(text).toContain("The cap for this cycle has been passed. No further cap mail is due this cycle.");
+    expect(text).not.toContain("You will be told again at the next mark");
   });
 
   test("renders Arabic right to left with no English prose", () => {

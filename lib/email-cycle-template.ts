@@ -74,7 +74,7 @@ export function renderCycleEmail(report: CycleReport): RenderedEmail {
       : c.over
         ? t.introOver
         : fill(t.introThreshold, { percent: v.percent });
-  const footer = report.kind === "pace" ? t.footerPace : t.footerThreshold;
+  const footer = report.kind === "pace" ? t.footerPace : c.over ? t.footerOver : t.footerThreshold;
 
   const rows: [string, string][] = [
     [t.cycleSpan, fill(t.cycleSpanValue, { start: c.start, end: c.end, timezone: report.timezone })],
