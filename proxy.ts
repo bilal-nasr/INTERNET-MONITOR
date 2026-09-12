@@ -40,6 +40,7 @@ import { dictionaryFromRequest } from "@/lib/i18n/request";
 const PUBLIC_API = new Set([
   "/api/ingest",
   "/api/health",
+  "/api/cron/tick",
   "/api/auth/login",
   "/api/auth/logout",
   "/api/auth/refresh",
