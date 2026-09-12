@@ -5,7 +5,7 @@
  */
 
 import type { RenderedEmail } from "@/lib/email-template";
-import { formatBytes } from "@/lib/format";
+import { escapeHtml as esc, formatBytes } from "@/lib/format";
 import { fill, getDictionaryFor } from "@/lib/i18n";
 import { DIRECTION, type Locale } from "@/lib/i18n/config";
 import { previousLocalDate } from "@/lib/time";
@@ -38,10 +38,6 @@ export interface CycleReport {
     daily_average_bytes: number;
     over: boolean;
   };
-}
-
-function esc(value: string): string {
-  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
 function pct(value: number): string {

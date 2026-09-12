@@ -6,9 +6,17 @@ import { renderQuotaPushScript } from "@/lib/router/script";
 import { TEMPLATE_DEFAULTS } from "@/lib/router/script-template";
 
 /**
- * quota-push with this deployment's values. The secret is rendered as a
- * placeholder here and filled in by the client view, which masks it until
- * asked; the URL comes from APP_URL or the address the page was opened on.
+ * quota-push with this deployment's values. The URL comes from APP_URL or the
+ * address the page was opened on.
+ *
+ * The secret is NOT kept from the browser. It is passed as a prop to a client
+ * component, so it is serialised into the RSC payload and sits in this page's
+ * HTML whether or not "Reveal" is ever pressed; the view's mask only keeps it
+ * off the screen (someone looking over a shoulder, a screenshot). That is
+ * acceptable because the settings page is owner-only and the owner is the one
+ * pasting the secret into the router anyway -- but it is a display nicety, not
+ * a protection, and nothing here should be read as one. Keeping it out of the
+ * page would mean fetching it on demand from an authenticated route.
  */
 export async function RouterScriptCard({ interfaceName }: { interfaceName: string }) {
   const [{ d }, h] = await Promise.all([getI18n(), headers()]);

@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import { escapeHtml } from "@/lib/format";
 import { DIRECTION, type Locale } from "@/lib/i18n/config";
 import { fill, getDictionaryFor } from "@/lib/i18n";
 import { renderAlertEmail, type AlertReport, type RenderedEmail } from "@/lib/email-template";
@@ -95,8 +96,4 @@ export function sendPasswordResetEmail(to: string, locale: Locale, username: str
       <p style="margin:0;color:#888;font-size:12px">${d.resetIgnore}</p>`,
   );
   return send(to, d.resetSubject, text, html);
-}
-
-function escapeHtml(value: string): string {
-  return value.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] ?? c);
 }

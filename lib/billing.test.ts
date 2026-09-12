@@ -1,5 +1,11 @@
 import { describe, expect, test } from "vitest";
-import { clampDayToMonth, cycleBounds, cycleProgress, projectCycleUsage } from "@/lib/billing";
+import {
+  clampDayToMonth,
+  closedCycleProgress,
+  cycleBounds,
+  cycleProgress,
+  projectCycleUsage,
+} from "@/lib/billing";
 
 const utc = "UTC";
 const beirut = "Asia/Beirut";
@@ -106,5 +112,51 @@ describe("projectCycleUsage", () => {
 
   test("returns zero at the exact start rather than dividing by zero", () => {
     expect(projectCycleUsage(0, start, start, end)).toBe(0);
+  });
+});
+
+/**
+ * The closed-cycle digest builds its report one millisecond before the cycle
+ * boundary, and the shared, floored `cycleProgress` reads that instant as a
+ * day short. `closedCycleProgress` is what getCycleUsage's `atCycleEnd` option
+ * uses, for the digest alone; `cycleProgress` itself is deliberately unchanged,
+ * because the dashboard and the cap alerts ask the live question.
+ */
+describe("closedCycleProgress", () => {
+  // August has 31 days, so a cycle anchored on the 1st is 31 days long.
+  const start = new Date("2026-08-01T00:00:00Z");
+  const end = new Date("2026-09-01T00:00:00Z");
+
+  test("the live reading a millisecond before the boundary is a day short (the bug)", () => {
+    const p = cycleProgress(new Date(end.getTime() - 1), start, end);
+    expect([p.days_elapsed, p.days_total, p.days_remaining]).toEqual([30, 31, 1]);
+  });
+
+  test("a finished cycle has used every one of its days", () => {
+    expect(closedCycleProgress(start, end)).toEqual({
+      days_total: 31,
+      days_elapsed: 31,
+      days_remaining: 0,
+      fraction: 1,
+    });
+  });
+
+  test("still closes on a whole cycle when spring DST makes it an hour short", () => {
+    // Beirut springs forward in late March: 1 March to 1 April local is 31 days
+    // less an hour. Evaluating cycleProgress at the end floors that to 30.
+    const { start: s, end: e } = cycleBounds(new Date("2026-03-15T12:00:00Z"), 1, beirut);
+    expect(cycleProgress(e, s, e).days_elapsed).toBe(30);
+    expect(closedCycleProgress(s, e)).toMatchObject({ days_total: 31, days_elapsed: 31, days_remaining: 0 });
+  });
+
+  test("and when autumn DST makes it an hour long", () => {
+    const { start: s, end: e } = cycleBounds(new Date("2026-10-15T12:00:00Z"), 1, beirut);
+    expect(closedCycleProgress(s, e)).toMatchObject({ days_total: 31, days_elapsed: 31, days_remaining: 0 });
+  });
+
+  test("leaves the live arithmetic alone", () => {
+    // The gauge and the cap alerts read this; the contained fix must not move it.
+    const p = cycleProgress(new Date("2026-08-11T12:00:00Z"), start, end);
+    expect([p.days_elapsed, p.days_remaining]).toEqual([10, 21]);
   });
 });

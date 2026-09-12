@@ -88,6 +88,23 @@ export function cycleProgress(now: Date, start: Date, end: Date): CycleProgress 
 }
 
 /**
+ * The progress of a cycle that is over, stated the way a report about it should.
+ *
+ * Not `cycleProgress(end, start, end)`. That floors elapsed time into days
+ * while it rounds the cycle's length, so a cycle that spans the spring DST
+ * change -- 31 days less an hour, in Beirut in March -- would still close on
+ * "day 30 of 31" with a day remaining. A finished cycle has used every one of
+ * its days, whatever its length in milliseconds, so that is said outright.
+ *
+ * `cycleProgress` is left as it is: the dashboard gauge and the cap alerts ask
+ * how far through a running cycle `now` is, and flooring is right for that.
+ */
+export function closedCycleProgress(start: Date, end: Date): CycleProgress {
+  const { days_total, fraction } = cycleProgress(end, start, end);
+  return { days_total, days_elapsed: days_total, days_remaining: 0, fraction };
+}
+
+/**
  * Where usage lands at the end of the cycle if the current rate holds.
  * Returns the actual total when the cycle has not started or has finished, so
  * a finished cycle reports what happened rather than a forecast.

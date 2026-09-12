@@ -21,7 +21,7 @@
  * relied on to inherit `dir` into a nested table.
  */
 
-import { formatBytes } from "@/lib/format";
+import { escapeHtml as esc, formatBytes } from "@/lib/format";
 import { fill, getDictionaryFor, type Dictionary } from "@/lib/i18n";
 import { DIRECTION, type Direction, type Locale } from "@/lib/i18n/config";
 import { formatDuration } from "@/lib/time";
@@ -207,14 +207,6 @@ function styleFor(locale: Locale): Style {
 }
 
 // ------------------------------------------------------------ building ----
-
-function esc(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
 
 /** Whole percentages above 10, one decimal below, so a small share is not "0%". */
 function pct(value: number): string {

@@ -93,13 +93,14 @@ describe("renderAlertEmail", () => {
   test("carries every section when the report is complete", () => {
     const { html } = renderAlertEmail(report());
     for (const heading of [
-      "Today&#039;s traffic",
+      // Every template now shares lib/format's escaper, which escapes the
+      // apostrophe as well, so the heading arrives in exactly one spelling.
+      "Today&#39;s traffic",
       "Billing cycle",
       "Last 7 days",
       "Connection health",
     ]) {
-      // The apostrophe is not escaped by esc(), so match the plain form too.
-      expect(html.includes(heading) || html.includes(heading.replace("&#039;", "'"))).toBe(true);
+      expect(html).toContain(heading);
     }
   });
 

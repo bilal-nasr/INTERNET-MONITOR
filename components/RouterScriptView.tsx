@@ -48,6 +48,7 @@ export function RouterScriptView({
           {revealed ? d.settings.scriptHide : d.settings.scriptReveal}
         </button>
       </div>
+      <p className="text-xs text-muted">{d.settings.scriptSecretInPage}</p>
       {/* A script is code: it stays left-to-right in Arabic too. */}
       <pre dir="ltr" className="max-h-96 overflow-auto rounded-md border border-border bg-background p-3 text-xs leading-relaxed">
         {shown}

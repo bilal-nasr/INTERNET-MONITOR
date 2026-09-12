@@ -107,6 +107,12 @@ async function run(ctx: JobContext): Promise<JobResult> {
     quotaBytes: quotaBytes(settings.quota_gb),
     threshold: null,
     now: reportAt,
+    // The cycle digest reports a cycle that has just closed, so the cycle
+    // figures are evaluated at the boundary rather than a millisecond short of
+    // it: "day 31 of 31", nothing remaining, and a daily average divided by
+    // every day of the month. The weekly digest is measured mid-cycle and asks
+    // the live question like everything else.
+    atCycleEnd: settings.digest === "cycle",
   };
   const report = await buildAlertReport(input).catch((err) => {
     console.warn("[cron] digest: could not build the full report", err);

@@ -30,11 +30,24 @@ export function SessionsList({ initial, timezone }: { initial: PublicSession[]; 
   const [toast, setToast] = useState<ToastState | null>(null);
   const dismiss = useCallback(() => setToast(null), []);
 
-  async function reload() {
-    const res = await fetch(`/api/auth/sessions?lang=${locale}`);
-    if (!res.ok) throw new Error(await readApiError(res, fill(d.settings.httpError, { status: res.status })));
-    const body = (await res.json()) as { sessions: PublicSession[] };
-    setRows(body.sessions);
+  /**
+   * Refresh the table from the database. The signing-out itself has already
+   * happened by the time this runs, so a failure here is a stale table and not
+   * a failed sign-out: it is reported quietly rather than as an error over the
+   * success, and the row it could not remove is taken out locally so the table
+   * still says what the database says.
+   */
+  async function reload(revoked: number | "others") {
+    try {
+      const res = await fetch(`/api/auth/sessions?lang=${locale}`);
+      if (!res.ok) throw new Error(await readApiError(res, fill(d.settings.httpError, { status: res.status })));
+      const body = (await res.json()) as { sessions: PublicSession[] };
+      setRows(body.sessions);
+    } catch {
+      setRows((current) =>
+        revoked === "others" ? current.filter((r) => r.current) : current.filter((r) => r.id !== revoked),
+      );
+    }
   }
 
   async function revoke(id: number) {
@@ -42,8 +55,8 @@ export function SessionsList({ initial, timezone }: { initial: PublicSession[]; 
     try {
       const res = await fetch(`/api/auth/sessions/${id}?lang=${locale}`, { method: "DELETE" });
       if (!res.ok) throw new Error(await readApiError(res, fill(d.settings.httpError, { status: res.status })));
-      await reload();
       setToast({ kind: "success", message: s.signedOutOne });
+      await reload(id);
     } catch (err) {
       setToast({ kind: "error", message: err instanceof Error ? err.message : String(err) });
     } finally {
@@ -56,8 +69,8 @@ export function SessionsList({ initial, timezone }: { initial: PublicSession[]; 
     try {
       const res = await fetch(`/api/auth/sessions?lang=${locale}`, { method: "DELETE" });
       if (!res.ok) throw new Error(await readApiError(res, fill(d.settings.httpError, { status: res.status })));
-      await reload();
       setToast({ kind: "success", message: s.signedOutOthers });
+      await reload("others");
     } catch (err) {
       setToast({ kind: "error", message: err instanceof Error ? err.message : String(err) });
     } finally {

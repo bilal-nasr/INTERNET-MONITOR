@@ -41,6 +41,13 @@ export interface AlertReportInput {
   /** The percent mark that fired, when this is a threshold warning; null for a test, a digest, or the plain exceeded mail. */
   threshold?: number | null;
   now?: Date;
+  /**
+   * Report the billing cycle as a finished one, measured at its own end rather
+   * than at `now`. Only the cycle digest sets it: it builds its report one
+   * millisecond before the boundary, where the live reading is "day 30 of 31"
+   * with a day left to run. See CycleUsageOptions in lib/stats.ts.
+   */
+  atCycleEnd?: boolean;
 }
 
 /** Shifts a YYYY-MM-DD local date by whole days, staying on the calendar. */
@@ -92,7 +99,9 @@ export async function buildAlertReport(input: AlertReportInput): Promise<AlertRe
     todayRange
       ? getSeries(todayRange, "hour", settings.timezone)
       : Promise.reject(new Error("no window today")),
-    getCycleUsage(settings.monthly_quota_gb, settings.billing_cycle_day, settings.timezone, now),
+    getCycleUsage(settings.monthly_quota_gb, settings.billing_cycle_day, settings.timezone, now, {
+      atCycleEnd: input.atCycleEnd,
+    }),
     historyRange
       ? getComplianceDays(historyRange, settings.timezone, settings.window_start, settings.window_end)
       : Promise.reject(new Error("no history range")),

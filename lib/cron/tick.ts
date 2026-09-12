@@ -36,7 +36,9 @@ export interface TickResponse {
  * it did.
  */
 export async function runTick(now = new Date()): Promise<TickResponse> {
-  if (!(await claimTick(now))) {
+  // No clock is passed: the lease is stamped and compared with the database's
+  // own `now()`, so it cannot be skewed by this instance's idea of the time.
+  if (!(await claimTick())) {
     return { ran_at: now.toISOString(), jobs: [] };
   }
 

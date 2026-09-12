@@ -192,6 +192,13 @@ export const en = {
     body: "The dashboard could not read the {table} table. Check {variable} and run {file} against the database (see README).",
   },
 
+  /** The 404 page. A wrong share link is the way most visitors reach it. */
+  notFound: {
+    title: "Page not found",
+    body: "Nothing lives at that address. A read-only link that used to work has either been replaced or turned off.",
+    home: "Go to the dashboard",
+  },
+
   setup: {
     title: "Almost there",
     subtitle:
@@ -384,6 +391,9 @@ export const en = {
     longestOutage: "Longest outage",
     outageEndedAt: "back at {time}",
     outageOngoing: "still down",
+    /** Labels the tile that counts the outages, inside the Downtime section. */
+    outagesLabel: "Outages",
+    includingStillDown: "including {duration} still down",
     outagesCount: plural({
       one: "{count} outage",
       other: "{count} outages",
@@ -492,6 +502,8 @@ export const en = {
     scriptCopy: "Copy script",
     scriptCopied: "Copied",
     scriptCopyFailed: "Copy failed, select the text instead",
+    scriptSecretInPage:
+      "Hiding only masks the secret on screen. It is in this page's source either way, which is fine because only you can open this page.",
     scriptSteps: [
       "System > Scripts, click +, name it quota-push, paste the script into Source, keep the default policies, OK.",
       "System > Scheduler, click +: name quota-push, start time startup, interval 00:00:30, on event /system script run quota-push.",
@@ -501,7 +513,9 @@ export const en = {
     devicesEnabled: "Per-device tracking on",
     devicesDisabled: "Per-device tracking off",
     devicesHint:
-      "Stores the counters the {script} router script sends and shows the Devices page. Needs the one-time setup in {setup}, which disables fasttrack on the router and costs CPU.",
+      "Stores the counters the {script} router script sends and shows the Devices page. Needs the one-time setup in {setup}, run once on the router; it leaves fasttrack enabled and changes nothing about it.",
+    devicesUndo:
+      "Switching this off stops storing device counters here. The router keeps the kid-control entry the setup added until you run {undo} on it.",
     retentionDays: "Keep full detail for (days)",
     retentionDaysHint:
       "Older readings are thinned to one per hour. Totals and charts stay correct; only minute-level detail for old dates is dropped.",
@@ -560,6 +574,8 @@ export const en = {
     pickFile: "Choose a file first.",
     result: "{inserted} imported, {skipped} already present, {rejected} rejected.",
     problems: "Rows that were not imported",
+    thinWarning:
+      "{count} of the readings just imported are older than the {days} days of full detail kept, so the nightly job will thin them to one per hour within a day. Raise Retention on Settings first if you want to keep them.",
     notImported:
       "Sessions and daily quota windows are not part of the file: they are derived from the readings as they arrive, and a session cannot be rebuilt from counters alone.",
   },
@@ -924,7 +940,8 @@ export const en = {
     internal: "Something went wrong on the server.",
     cannotRevokeCurrent: "This is the browser you are using. Use Sign out instead.",
     sessionNotFound: "That browser is already signed out.",
-    notASessionRowId: "{value} is not a session id.",
+    /** About a row in auth_sessions, not a WAN link session: see notASessionId. */
+    notASessionRowId: "{value} is not a signed-in browser.",
     range: {
       unknownPreset: "{value} is not a range this application knows.",
       unknownBucket: "{value} is not a grouping this application knows.",

@@ -45,7 +45,16 @@ export default async function DashboardPage() {
   const rates = ratesFromReadings(recent);
   const anomalies = flagAnomalies(history);
 
-  if (!latest) {
+  // The first-run checklist replaces the whole dashboard, so it has to mean
+  // "nothing has ever arrived", not "nothing is here this second". A reading
+  // can be absent from a working install: retention thinning removes old rows,
+  // and a long pause with a short window can leave the table empty. Sessions
+  // are never thinned and the daily history covers thirty days, so either one
+  // is proof the router has spoken, and the dashboard is shown with its empty
+  // states rather than the setup page.
+  const neverRan = !latest && !session && history.length === 0;
+
+  if (neverRan) {
     return (
       <div className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">

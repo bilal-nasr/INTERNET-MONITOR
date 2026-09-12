@@ -56,6 +56,12 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
           pollingEnabled={settings.polling_enabled}
           interfaceName={settings.wan_interface_name}
           session={session}
+          // The owner's setting, so a viewer sees "No contact" at the same
+          // moment the owner does rather than at the card's own fallback.
+          // staleAfterMinutes is a threshold; staleAlertAt is withheld on
+          // purpose, since when the owner was emailed is none of this page's
+          // business.
+          staleAfterMinutes={settings.stale_after_minutes}
         />
       </div>
 

@@ -94,7 +94,11 @@ year. Once a day the scheduler (see "Scheduled jobs") thins readings older than
 `Keep full detail for (days)` on `/settings` (90 by default) down to the last
 reading of each hour. Traffic figures are the growth of the counter between one
 reading and the next, so the totals, the daily history, the billing cycle and the
-statistics page all stay exactly right. What is lost for those old dates:
+statistics page stay right along the chain: every surviving pair's delta still
+covers the readings deleted between them. The one exception is the oldest hour
+still stored, whose leading readings have no earlier survivor left to measure
+from, so their growth is dropped (119,000 bytes out of 8,639,000 when the
+statements were checked against a real Postgres). What is lost for those old dates:
 minute-level charts, per-reading peak rates, and up to an hour of traffic around a
 counter reset that fell inside a thinned hour. Each run handles at most 30 days,
 so a large backlog is worked off over several days.
@@ -119,6 +123,9 @@ Sessions page starts from the next link event.
 ```yaml
 scrape_configs:
   - job_name: quota-monitor
+    # Prometheus scrapes every 15 seconds by default, and every scrape takes a
+    # connection from the same ten-connection pool the router's pushes use.
+    scrape_interval: 60s
     scheme: https
     authorization:
       credentials: <METRICS_TOKEN>
@@ -412,11 +419,12 @@ that language; without it the `NEXT_LOCALE` cookie and then `Accept-Language` de
 `/api/ingest` and `/api/health` are excluded: their callers are the router script and a health
 probe, neither of which has a language.
 
-Every route not listed under `/api/auth`, `/api/ingest`, `/api/health` or `/api/cron/tick`
-answers `401` `unauthorized` without a live session cookie; those four take a bearer token or
-nothing at all.
-Every route not listed under `/api/auth`, `/api/ingest`, `/api/health` or `/api/share/{token}` answers `401`
-`unauthorized` without a live session cookie.
+Every route answers `401` `unauthorized` without a live session cookie, except these:
+`/api/auth/...`, which is how a session is got in the first place; `/api/ingest`,
+`/api/ingest/devices`, `/api/cron/tick` and `/api/metrics`, which carry a bearer token;
+`/api/health`, which carries nothing; and `/api/share/{token}/usage`, whose credential is
+the token in the path. `/api/share` itself, which creates and revokes that link, needs the
+cookie like everything else.
 
 ### Ranges
 
@@ -455,10 +463,12 @@ day:
 
 Pick a trigger:
 
-- **Vercel**: `vercel.ts` declares a cron every five minutes. Vercel sends the
-  `CRON_SECRET` environment variable as the bearer token itself. On the Hobby
-  plan crons run once a day, which is enough for the digest but not for the
-  stale alert; add the GitHub trigger below.
+- **Vercel**: `vercel.ts` declares a daily cron at 06:00 UTC (08:00–09:59 in
+  Beirut). Vercel sends the `CRON_SECRET` environment variable as the bearer
+  token itself. The Hobby plan refuses to deploy a cron that runs more than once
+  a day, so a daily tick is enough for the digest and thinning but not for the
+  stale alert; add the GitHub trigger below. On Pro you can raise it to
+  `*/5 * * * *`.
 - **GitHub Actions**: `.github/workflows/tick.yml` runs every five minutes. Set
   the repository secret `CRON_SECRET` and the repository variable `TICK_URL`
   (`https://netmonitor.bilalnasr.com/api/cron/tick`). Free, and independent of
@@ -515,6 +525,8 @@ Then change the `url` line in the router script to the deployed address. Nothing
 ```
 app/
   [lang]/layout.tsx                 document: language, direction, fonts
+  [lang]/not-found.tsx              the 404, in the app's chrome and language
+  [lang]/share/[token]/page.tsx     the read-only dashboard behind the share token
   [lang]/(app)/layout.tsx           navigation and the session check every data page sits behind
   [lang]/(app)/page.tsx             dashboard, auto-refreshing
   [lang]/(app)/stats/page.tsx       every statistic for a chosen range, with charts

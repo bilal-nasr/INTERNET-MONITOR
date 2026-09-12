@@ -60,27 +60,31 @@ export function getJobRun(name: string): Promise<JobRun | null> {
  * each other both read "no digest sent yet", both spend ~500 ms building the
  * report, and both call Resend: the user gets the same mail twice.
  *
- * The UPDATE is the claim. It is a single statement, so Postgres serialises
- * the two ticks on the row lock and only the one that finds `last_run_at`
- * older than the lease window gets a row back; the loser sees zero rows and
- * does nothing. The INSERT before it only creates the row on a fresh database,
- * dated at the epoch so the first real tick can claim it.
+ * One statement is the claim. Postgres serialises the two ticks on the row
+ * lock and only the one that finds `last_run_at` older than the lease window
+ * gets a row back; the loser sees zero rows and does nothing. The INSERT is the
+ * same claim on a fresh database, where there is no row yet to conflict with -
+ * folded in rather than run first, because bootstrapping a row that exists
+ * cost every tick a second round trip for ever.
+ *
+ * Both sides of the comparison are the database's `now()`, and so is what is
+ * written. `now()` is fixed for the statement, so the lease is measured against
+ * the same clock that stamped it. Passing the caller's clock instead - which is
+ * what this used to do - subtracted any skew between serverless instances
+ * straight out of the lease window: an instance running a few seconds fast
+ * stamped a lease into the future, and one running slow could find a lease it
+ * should have been shut out by already expired and run a second tick alongside
+ * the first. There is no clock here to skew any more.
  */
-export async function claimTick(now = new Date()): Promise<boolean> {
-  await db.none(
-    `INSERT INTO job_runs (job, last_run_at, last_status, last_detail)
-     VALUES ($1, to_timestamp(0), 'pending', $2)
-     ON CONFLICT (job) DO NOTHING`,
-    [TICK_JOB, TICK_LEASE_DETAIL],
-  );
-
+export async function claimTick(): Promise<boolean> {
   const claimed = await db.oneOrNone<{ job: string }>(
-    `UPDATE job_runs
-        SET last_run_at = $2
-      WHERE job = $1
-        AND last_run_at < $3
-      RETURNING job`,
-    [TICK_JOB, now, new Date(now.getTime() - TICK_LEASE_MS)],
+    `INSERT INTO job_runs (job, last_run_at, last_status, last_detail)
+     VALUES ($1, now(), 'pending', $2)
+     ON CONFLICT (job) DO UPDATE
+        SET last_run_at = now()
+      WHERE job_runs.last_run_at < now() - ($3::double precision * INTERVAL '1 millisecond')
+     RETURNING job`,
+    [TICK_JOB, TICK_LEASE_DETAIL, TICK_LEASE_MS],
   );
 
   return claimed !== null;

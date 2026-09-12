@@ -11,6 +11,9 @@ interface ImportOutcome {
   skipped: number;
   rejected: number;
   errors: string[];
+  /** Rows written that already sit outside the retention window. */
+  inserted_before_cutoff: number;
+  retention_days: number;
 }
 
 /** Only the three counts belong in the sentence; `errors` is listed separately. */
@@ -89,6 +92,19 @@ export function ImportForm() {
       {outcome && (
         <div className="mt-4 text-sm">
           <p>{fill(d.import.result, counts(outcome))}</p>
+          {/*
+            Rows written older than the retention cutoff are on the nightly
+            thinning job's list already, so the warning sits with the result
+            rather than in a toast the reader dismisses on the way past.
+          */}
+          {outcome.inserted_before_cutoff > 0 && (
+            <p className="mt-2 rounded-lg border border-status-warning/40 bg-status-warning/10 px-3 py-2 text-xs">
+              {fill(d.import.thinWarning, {
+                count: outcome.inserted_before_cutoff,
+                days: outcome.retention_days,
+              })}
+            </p>
+          )}
           {outcome.errors.length > 0 && (
             <>
               <p className="mt-2 text-xs font-medium text-muted">{d.import.problems}</p>

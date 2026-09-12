@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { generateShareToken, tokensMatch } from "@/lib/share";
+import { generateShareToken, isPublicApiPath, tokensMatch } from "@/lib/share";
 
 describe("generateShareToken", () => {
   test("is 32 bytes of base64url", () => {
@@ -35,5 +35,43 @@ describe("tokensMatch", () => {
   test("a value that is not shaped like a token is refused before comparing", () => {
     expect(tokensMatch("short", "short")).toBe(false);
     expect(tokensMatch(`${stored}extra`, stored)).toBe(false);
+  });
+});
+
+describe("isPublicApiPath", () => {
+  const token = generateShareToken();
+
+  test("the share feed is public", () => {
+    expect(isPublicApiPath(`/api/share/${token}/usage`)).toBe(true);
+  });
+
+  test("the route that creates and revokes the link is not", () => {
+    // It is how sharing is turned on and off, so it must meet the session gate.
+    expect(isPublicApiPath("/api/share")).toBe(false);
+    expect(isPublicApiPath("/api/share/")).toBe(false);
+  });
+
+  test("a route that merely starts with the same letters is not", () => {
+    // What a bare startsWith("/api/share/") would have waved through.
+    expect(isPublicApiPath(`/api/shareX/${token}/usage`)).toBe(false);
+    expect(isPublicApiPath(`/api/share-admin/${token}/usage`)).toBe(false);
+  });
+
+  test("nothing else under the token is public", () => {
+    expect(isPublicApiPath(`/api/share/${token}`)).toBe(false);
+    expect(isPublicApiPath(`/api/share/${token}/settings`)).toBe(false);
+    expect(isPublicApiPath(`/api/share/${token}/usage/history`)).toBe(false);
+  });
+
+  test("a segment that is not shaped like a token is not a token", () => {
+    expect(isPublicApiPath("/api/share/short/usage")).toBe(false);
+    expect(isPublicApiPath(`/api/share/${token}x/usage`)).toBe(false);
+    expect(isPublicApiPath(`/api/share/${token.slice(0, 42)}./usage`)).toBe(false);
+  });
+
+  test("no other API route is public", () => {
+    expect(isPublicApiPath("/api/settings")).toBe(false);
+    expect(isPublicApiPath("/")).toBe(false);
+    expect(isPublicApiPath("")).toBe(false);
   });
 });

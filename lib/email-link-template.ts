@@ -10,6 +10,7 @@
  */
 
 import type { RenderedEmail } from "@/lib/email-template";
+import { escapeHtml as esc } from "@/lib/format";
 import { fill, getDictionaryFor } from "@/lib/i18n";
 import { DIRECTION, type Locale } from "@/lib/i18n/config";
 import { makeFormatters } from "@/lib/i18n/format";
@@ -46,10 +47,6 @@ const C = {
 
 const FONT = "-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif";
 const FONT_AR = "Segoe UI,Tahoma,Geeza Pro,Noto Naskh Arabic,Arial,sans-serif";
-
-function esc(value: string): string {
-  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-}
 
 // -------------------------------------------------------------- render ----
 

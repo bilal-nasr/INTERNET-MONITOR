@@ -15,6 +15,7 @@ import {
 } from "@/lib/auth/sessions";
 import { DEFAULT_LOCALE, LOCALE_COOKIE, isLocale, matchAcceptLanguage } from "@/lib/i18n/config";
 import { dictionaryFromRequest } from "@/lib/i18n/request";
+import { isPublicApiPath } from "@/lib/share";
 
 /**
  * Two jobs, in this order: put every page under a language, then let nobody
@@ -50,12 +51,6 @@ const PUBLIC_API = new Set([
   "/api/auth/forgot",
   "/api/auth/reset",
 ]);
-
-/**
- * Route prefixes that carry their own credential in the path. The share feed
- * checks its token itself; the proxy only has to stand aside.
- */
-const PUBLIC_API_PREFIXES = ["/api/share/"];
 
 /** Page segments under /[lang] that render signed out. */
 const PUBLIC_PAGES = new Set(["login", "forgot-password", "reset-password", "share"]);
@@ -125,8 +120,9 @@ function proceed(request: NextRequest, session: Session, secure: boolean): NextR
 
 async function handleApi(request: NextRequest): Promise<NextResponse> {
   const { pathname } = request.nextUrl;
-  if (PUBLIC_API.has(pathname) || PUBLIC_API_PREFIXES.some((prefix) => pathname.startsWith(prefix)))
-    return passThrough(request);
+  // The share feed carries its own credential in the path and checks it
+  // itself; every other route under /api/share stays behind the session.
+  if (PUBLIC_API.has(pathname) || isPublicApiPath(pathname)) return passThrough(request);
 
   const secure = isSecureRequest(request);
   const session = await resolveSession(request);

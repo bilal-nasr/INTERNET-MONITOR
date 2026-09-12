@@ -12,7 +12,7 @@
  * thousands of rows. Nothing here ever ships raw readings to the application.
  */
 
-import { cycleBounds, cycleProgress, projectCycleUsage } from "@/lib/billing";
+import { closedCycleProgress, cycleBounds, cycleProgress, projectCycleUsage } from "@/lib/billing";
 import { db } from "@/lib/db";
 import { quotaBytes } from "@/lib/format";
 import type { Dictionary } from "@/lib/i18n";
@@ -536,18 +536,43 @@ export interface CycleUsage {
   over: boolean;
 }
 
+export interface CycleUsageOptions {
+  /**
+   * Report the cycle's own length rather than how much of it `now` has used up.
+   *
+   * For a live figure the two are the same question. For the closed-cycle
+   * digest they are not: it measures one millisecond before the boundary, and
+   * `cycleProgress` floors elapsed days, so a 31-day cycle reads "day 30 of
+   * 31" with one day still to go - and `daily_average_bytes`, dividing by 30
+   * instead of 31, runs about 3% high in a report about a month that is over.
+   *
+   * With this set, progress is that of the cycle at its own end (see
+   * `closedCycleProgress`): days elapsed is the whole cycle, days remaining is
+   * zero, and the projection returns the actual total, which is what a
+   * finished cycle should say. Only the digest asks for it. The rounding in
+   * `cycleProgress` itself is untouched, because the dashboard gauge and the
+   * cap alerts read the same numbers from it and they are asking the live
+   * question, where flooring is right.
+   */
+  atCycleEnd?: boolean;
+}
+
 export async function getCycleUsage(
   monthlyQuotaGb: number,
   cycleDay: number,
   timezone: string,
   now = new Date(),
+  options: CycleUsageOptions = {},
 ): Promise<CycleUsage> {
   const { start, end } = cycleBounds(now, cycleDay, timezone);
-  const progress = cycleProgress(now, start, end);
+  // The usage range still ends at `now`; only the arithmetic about how far
+  // through the cycle we are moves to the boundary.
+  const progressAt = options.atCycleEnd ? end : now;
+  const progress = options.atCycleEnd ? closedCycleProgress(start, end) : cycleProgress(now, start, end);
   const { total_bytes: used } = await getRangeSummary({ from: start, to: now });
 
   const cap = quotaBytes(monthlyQuotaGb);
-  const projected = projectCycleUsage(used, now, start, end);
+  const projected = projectCycleUsage(used, progressAt, start, end);
   const remaining = Math.max(0, cap - used);
 
   return {

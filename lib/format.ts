@@ -1,5 +1,28 @@
 const GB = 1e9;
 
+const HTML_ESCAPES: Record<string, string> = {
+  "&": "&amp;",
+  "<": "&lt;",
+  ">": "&gt;",
+  '"': "&quot;",
+  "'": "&#39;",
+};
+
+/**
+ * A value made safe to drop into hand-written HTML.
+ *
+ * The one escaper for everything that builds markup by hand: the three email
+ * renderers and the password-reset mail. They each carried their own copy and
+ * the copies had drifted -- only one escaped the apostrophe -- so a name or a
+ * URL with a `'` in it reached the markup intact, which matters the moment an
+ * attribute is written with single quotes rather than double. All five
+ * characters are escaped here so one value is safe in text and in an attribute
+ * quoted either way.
+ */
+export function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (c) => HTML_ESCAPES[c] ?? c);
+}
+
 /** Decimal gigabytes, matching the quota definition (quota_gb * 1e9). */
 export function bytesToGb(bytes: number): number {
   return bytes / GB;

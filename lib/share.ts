@@ -26,3 +26,27 @@ export function tokensMatch(a: string | null | undefined, b: string | null | und
   if (!looksLikeToken(a) || !looksLikeToken(b)) return false;
   return timingSafeEqual(Buffer.from(a), Buffer.from(b));
 }
+
+/**
+ * The one API path that is answered without a session: the share feed, which
+ * carries its own credential in the URL and checks it itself. The proxy asks
+ * this before it asks for a cookie.
+ *
+ * Spelled out segment by segment rather than as a prefix, because a prefix
+ * would also stand aside for anything else that happens to start with the same
+ * letters: `/api/share` itself, which creates and revokes the link and must
+ * stay behind the session, and any `/api/share.../` route added later. The
+ * token segment is held to the same shape as an issued token, so the match is
+ * the route that exists and nothing more.
+ */
+export function isPublicApiPath(pathname: string): boolean {
+  const [empty, api, share, token, usage, ...rest] = pathname.split("/");
+  return (
+    empty === "" &&
+    api === "api" &&
+    share === "share" &&
+    looksLikeToken(token) &&
+    usage === "usage" &&
+    rest.length === 0
+  );
+}

@@ -1,3 +1,4 @@
+import { invalidateCycleCache } from "@/lib/cycle-cache";
 import { db } from "@/lib/db";
 import { memoized } from "@/lib/memo";
 import { DEFAULT_LOCALE, isLocale, type Locale } from "@/lib/i18n/config";
@@ -6,6 +7,7 @@ import { DEFAULT_LOCALE, isLocale, type Locale } from "@/lib/i18n/config";
 export type DigestKind = "off" | "weekly" | "cycle";
 export const DIGEST_KINDS: readonly DigestKind[] = ["off", "weekly", "cycle"];
 
+/** Guards the settings write path; see `updateSettings`. */
 export function isDigestKind(value: string): value is DigestKind {
   return (DIGEST_KINDS as readonly string[]).includes(value);
 }
@@ -225,6 +227,13 @@ export async function updateSettings(patch: SettingsPatch): Promise<SettingsRow>
   for (const c of columns) {
     if (!WRITABLE.has(c)) throw new Error(`refusing to write unknown settings column: ${String(c)}`);
   }
+  // The column has a CHECK behind it, and the settings route validates with
+  // zod before it gets here; this is for every other caller (the share route,
+  // an import, a script) that reaches the write path without that schema, so a
+  // bad value is refused by name here rather than as a constraint violation.
+  if (patch.digest !== undefined && !isDigestKind(patch.digest)) {
+    throw new Error(`refusing to write unknown digest kind: ${String(patch.digest)}`);
+  }
   if (columns.length === 0) return getSettings();
   cached.invalidate();
 
@@ -240,5 +249,12 @@ export async function updateSettings(patch: SettingsPatch): Promise<SettingsRow>
   );
   // A read that raced the write may have refilled the cache with the old row.
   cached.invalidate();
+  // The cycle figure is keyed on the cap, the cycle day and the timezone, so a
+  // change to any of them is caught by the key -- but the cached figure also
+  // holds a `used` and an `over` measured before this save, and the ingest path
+  // answers the router from it for up to five minutes. Dropping it here is what
+  // makes a lowered cap take effect on the next push rather than at the next
+  // refresh; it is the hook the exported invalidator was written for.
+  invalidateCycleCache();
   return row;
 }

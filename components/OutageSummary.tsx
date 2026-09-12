@@ -44,9 +44,7 @@ export async function OutageSummary({
 
   const hints = [
     share !== null ? fill(s.downtimeShare, { percent: share.toFixed(share >= 10 ? 0 : 1) }) : null,
-    // Placeholder: wants its own key, sessions.includingStillDown,
-    // "including {duration} still down".
-    ongoing ? fill(d.common.offlineFor, { duration: f.duration(ongoing.seconds) }) : null,
+    ongoing ? fill(s.includingStillDown, { duration: f.duration(ongoing.seconds) }) : null,
   ].filter((part): part is string => part !== null);
 
   const tiles: Tile[] = [
@@ -66,10 +64,7 @@ export async function OutageSummary({
         : s.noOutages,
     },
     {
-      // Placeholder: this tile wants its own key, sessions.outagesLabel
-      // ("Outages"). s.downtimeHeading names the section this tile sits inside,
-      // so using it here labels the section and one of its tiles identically.
-      label: d.stats.tiles.drops,
+      label: s.outagesLabel,
       value: plural(locale, s.outagesCount, outages.length),
       hint: s.outagesHint,
     },

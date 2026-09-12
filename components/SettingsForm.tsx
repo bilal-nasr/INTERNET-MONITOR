@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState, type FormEvent } from "react";
+import { useCallback, useId, useState, type FormEvent, type ReactNode } from "react";
 import { useI18n } from "@/components/I18nProvider";
 import { Toast, type ToastState } from "@/components/Toast";
 import { Interpolate } from "@/lib/i18n/react";
@@ -395,25 +395,12 @@ export function SettingsForm({ initial }: { initial: PublicSettings }) {
           </p>
         </div>
 
-        <label className="mt-4 flex cursor-pointer items-center gap-3">
-          <button
-            type="button"
-            role="switch"
-            aria-checked={form.devices_enabled}
-            onClick={() => update("devices_enabled", !form.devices_enabled)}
-            className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
-              form.devices_enabled ? "bg-series-1" : "bg-border"
-            }`}
-          >
-            <span
-              className={`absolute top-0.5 start-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
-                form.devices_enabled ? "translate-x-5 rtl:-translate-x-5" : ""
-              }`}
-            />
-          </button>
-          <span className="text-sm">
-            {form.devices_enabled ? d.settings.devicesEnabled : d.settings.devicesDisabled}
-            <span className="block text-xs text-muted">
+        <div className="mt-4">
+          <Switch
+            checked={form.devices_enabled}
+            onChange={(v) => update("devices_enabled", v)}
+            label={form.devices_enabled ? d.settings.devicesEnabled : d.settings.devicesDisabled}
+            hint={
               <Interpolate
                 template={d.settings.devicesHint}
                 values={{
@@ -421,9 +408,9 @@ export function SettingsForm({ initial }: { initial: PublicSettings }) {
                   setup: <code>router/devices-setup.rsc</code>,
                 }}
               />
-            </span>
-          </span>
-        </label>
+            }
+          />
+        </div>
 
         <div className="mt-4 sm:max-w-xs">
           <label htmlFor="retention_days" className={labelClass}>
@@ -523,6 +510,16 @@ export function SettingsForm({ initial }: { initial: PublicSettings }) {
   );
 }
 
+/**
+ * An on/off setting: the switch, its label, and a line explaining it.
+ *
+ * Not a `<label>` around a `<button>`. A button is not a labelable element, so
+ * a wrapping label neither names it -- a screen reader announced a bare
+ * "switch, on" -- nor forwards a click on the text to it, which left the words
+ * beside every switch looking clickable and doing nothing. The button is named
+ * by the label and described by the hint through ids, and the text forwards
+ * its own click. Keyboard users reach the button itself, as with any label.
+ */
 function Switch({
   checked,
   onChange,
@@ -531,16 +528,23 @@ function Switch({
 }: {
   checked: boolean;
   onChange: (next: boolean) => void;
-  label: string;
-  hint: string;
+  label: ReactNode;
+  hint: ReactNode;
 }) {
+  const id = useId();
+  const labelId = `${id}-label`;
+  const hintId = `${id}-hint`;
+  const toggle = () => onChange(!checked);
+
   return (
-    <label className="flex cursor-pointer items-center gap-3">
+    <div className="flex items-center gap-3">
       <button
         type="button"
         role="switch"
         aria-checked={checked}
-        onClick={() => onChange(!checked)}
+        aria-labelledby={labelId}
+        aria-describedby={hintId}
+        onClick={toggle}
         className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
           checked ? "bg-series-1" : "bg-border"
         }`}
@@ -554,11 +558,15 @@ function Switch({
           }`}
         />
       </button>
-      <span className="text-sm">
-        {label}
-        <span className="block text-xs text-muted">{hint}</span>
+      {/* Pointer convenience only, as a native label is: the button above is
+          the control, and the one a keyboard or a screen reader operates. */}
+      <span className="cursor-pointer text-sm" onClick={toggle}>
+        <span id={labelId}>{label}</span>
+        <span id={hintId} className="block text-xs text-muted">
+          {hint}
+        </span>
       </span>
-    </label>
+    </div>
   );
 }
 
