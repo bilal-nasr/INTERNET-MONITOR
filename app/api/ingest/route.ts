@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { checkCycleAlerts } from "@/lib/alerts/cycle";
 import { badRequest, errorResponse, isCronAuthorized } from "@/lib/api";
 import { db } from "@/lib/db";
 import { recordReading, storeReading } from "@/lib/readings";
@@ -117,10 +118,15 @@ export async function POST(request: Request) {
 
     const result = await recordReading(settings, wanCounters, now, null, stored);
 
+    // Never fails the push: the reading is already stored, and the check
+    // reports its own outcome in the response for the router log.
+    const cycleCheck = await checkCycleAlerts(settings, now);
+
     return NextResponse.json({
       ...result,
       reported_event: body.event ?? null,
       router_clock_skew_seconds: clockSkewSeconds,
+      cycle_check: cycleCheck,
       session: session.session
         ? {
             id: session.session.id,
