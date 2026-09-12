@@ -6,7 +6,13 @@ import {
   isSecureRequest,
   setAccessCookie,
 } from "@/lib/auth/cookies";
-import { authenticateAccess, refreshAccess, type RefreshResult } from "@/lib/auth/sessions";
+import { AUTH_CONTEXT_HEADER, encodeAuthContext } from "@/lib/auth/context-header";
+import {
+  authenticateAccess,
+  refreshAccess,
+  type AuthContext,
+  type RefreshResult,
+} from "@/lib/auth/sessions";
 import { DEFAULT_LOCALE, LOCALE_COOKIE, isLocale, matchAcceptLanguage } from "@/lib/i18n/config";
 import { dictionaryFromRequest } from "@/lib/i18n/request";
 
@@ -23,6 +29,11 @@ import { dictionaryFromRequest } from "@/lib/i18n/request";
  * neither is sent to the login page (a page) or answered 401 (the API). The
  * router's push to /api/ingest carries a bearer token instead and is let
  * through untouched, as are the health probe and the auth endpoints themselves.
+ *
+ * What the lookup found is handed to the page in a request header, so the
+ * render does not repeat it. Every forwarded request has that header rewritten
+ * here, whether or not anyone is signed in, so a copy sent by a client is
+ * never the one a page reads.
  */
 
 /** Routes that must work with no session: the router, the probe, and signing in. */
@@ -40,6 +51,7 @@ const PUBLIC_API = new Set([
 const PUBLIC_PAGES = new Set(["login", "forgot-password", "reset-password"]);
 
 interface Session {
+  context: AuthContext;
   /** Set when the access token had to be minted from the refresh token. */
   refreshed: RefreshResult | null;
   refreshToken: string | null;
@@ -47,23 +59,41 @@ interface Session {
 
 async function resolveSession(request: NextRequest): Promise<Session | null> {
   const access = request.cookies.get(ACCESS_COOKIE)?.value;
-  if (access && (await authenticateAccess(access))) return { refreshed: null, refreshToken: null };
+  if (access) {
+    const context = await authenticateAccess(access);
+    if (context) return { context, refreshed: null, refreshToken: null };
+  }
 
   const refresh = request.cookies.get(REFRESH_COOKIE)?.value ?? null;
   if (!refresh) return null;
   const refreshed = await refreshAccess(refresh);
-  return refreshed ? { refreshed, refreshToken: refresh } : null;
+  return refreshed ? { context: refreshed.context, refreshed, refreshToken: refresh } : null;
 }
 
 /**
- * Continue to the route. After a refresh the new token is written to the
- * response for the browser, and also into the request's own Cookie header, so
- * the render that follows reads the live token rather than the lapsed one.
+ * Continue to the route, signed out. The auth header is removed rather than
+ * left alone so a client cannot plant one.
+ */
+function passThrough(request: NextRequest): NextResponse {
+  const headers = new Headers(request.headers);
+  headers.delete(AUTH_CONTEXT_HEADER);
+  return NextResponse.next({ request: { headers } });
+}
+
+/**
+ * Continue to the route, signed in. The verified session travels in a request
+ * header. After a refresh the new token is also written to the response for
+ * the browser, and into the request's own Cookie header, so the render that
+ * follows reads the live token rather than the lapsed one.
  */
 function proceed(request: NextRequest, session: Session, secure: boolean): NextResponse {
-  if (!session.refreshed || !session.refreshToken) return NextResponse.next();
-
   const headers = new Headers(request.headers);
+  headers.set(AUTH_CONTEXT_HEADER, encodeAuthContext(session.context));
+
+  if (!session.refreshed || !session.refreshToken) {
+    return NextResponse.next({ request: { headers } });
+  }
+
   const others = request.cookies
     .getAll()
     .filter((c) => c.name !== ACCESS_COOKIE)
@@ -85,7 +115,7 @@ function proceed(request: NextRequest, session: Session, secure: boolean): NextR
 
 async function handleApi(request: NextRequest): Promise<NextResponse> {
   const { pathname } = request.nextUrl;
-  if (PUBLIC_API.has(pathname)) return NextResponse.next();
+  if (PUBLIC_API.has(pathname)) return passThrough(request);
 
   const secure = isSecureRequest(request);
   const session = await resolveSession(request);
@@ -127,7 +157,7 @@ async function handlePage(request: NextRequest): Promise<NextResponse> {
     if (session && page === "login") {
       return NextResponse.redirect(new URL(`/${locale}`, request.url));
     }
-    return session ? proceed(request, session, secure) : NextResponse.next();
+    return session ? proceed(request, session, secure) : passThrough(request);
   }
 
   if (!session) {

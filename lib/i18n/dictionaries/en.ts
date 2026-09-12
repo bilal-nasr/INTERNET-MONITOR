@@ -351,8 +351,6 @@ export const en = {
   settings: {
     title: "Settings",
     subtitle: "Changes take effect on the next poll. No redeploy needed.",
-    loading: "Loading settings...",
-    loadFailed: "Could not load settings",
     saved: "Settings saved.",
     saveFailed: "Save failed: {reason}",
     save: "Save settings",

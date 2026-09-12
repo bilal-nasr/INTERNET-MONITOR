@@ -1,15 +1,18 @@
 /**
  * Who is signed in, as seen from server code.
  *
- * The proxy has already turned away anyone without a live token before a page
- * or a route handler runs, but nothing here relies on that: every caller checks
- * again against the database. It costs one indexed lookup and means a page
- * that somehow escapes the proxy's matcher is still not a leak.
+ * The proxy looks the access token up before a page renders and forwards what
+ * it found in a request header, so a Server Component reads that rather than
+ * asking the database a second time. A request that somehow escapes the
+ * proxy's matcher carries no such header and is treated as signed out, so the
+ * shortcut cannot turn into a leak. Route Handlers see the raw request and
+ * still check the cookie against the database themselves.
  */
 
-import { cookies } from "next/headers";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { cache } from "react";
+import { AUTH_CONTEXT_HEADER, decodeAuthContext } from "@/lib/auth/context-header";
 import { ACCESS_COOKIE, readCookie } from "@/lib/auth/cookies";
 import { authenticateAccess, type AuthContext } from "@/lib/auth/sessions";
 import { getLocale } from "@/lib/i18n/server";
@@ -21,10 +24,9 @@ export class UnauthorizedError extends Error {
   }
 }
 
-/** For Server Components. Cached per request, so the layout and a page share one lookup. */
+/** For Server Components. Cached per request, so the layout and a page share one decode. */
 export const getAuth = cache(async (): Promise<AuthContext | null> => {
-  const token = (await cookies()).get(ACCESS_COOKIE)?.value;
-  return authenticateAccess(token);
+  return decodeAuthContext((await headers()).get(AUTH_CONTEXT_HEADER));
 });
 
 /**

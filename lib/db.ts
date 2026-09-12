@@ -18,7 +18,15 @@ function createDb(): Db {
   return pgp({
     connectionString,
     ssl: sslConfig(connectionString),
-    max: 5,
+    // The statistics page fans out ten queries at once; a smaller pool would
+    // run them in two waves, each a full round trip to the database.
+    max: 10,
+    // Opening a connection costs a TLS handshake, over a second to a remote
+    // database. The pool's default drops an idle connection after ten seconds,
+    // which is shorter than the dashboard's refresh interval, so every refresh
+    // would pay that handshake again. Keep them for a few minutes instead.
+    idleTimeoutMillis: 5 * 60 * 1000,
+    keepAlive: true,
   });
 }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useState, type FormEvent } from "react";
 import { useI18n } from "@/components/I18nProvider";
 import { Toast, type ToastState } from "@/components/Toast";
 import { Interpolate } from "@/lib/i18n/react";
@@ -65,39 +65,24 @@ const inputClass =
 const labelClass = "block text-sm font-medium";
 const hintClass = "mt-1 text-xs text-muted";
 
-export function SettingsForm() {
+/**
+ * `initial` is the row as the server page read it, so the form is filled in
+ * from the first paint rather than after a round trip through /api/settings.
+ */
+export function SettingsForm({ initial }: { initial: PublicSettings }) {
   const { locale, d } = useI18n();
-  const [form, setForm] = useState<FormState | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const [form, setForm] = useState<FormState>(() => toForm(initial));
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [toast, setToast] = useState<ToastState | null>(null);
   const dismiss = useCallback(() => setToast(null), []);
 
-  useEffect(() => {
-    let cancelled = false;
-    fetch(`/api/settings?lang=${locale}`)
-      .then(async (res) => {
-        if (!res.ok) throw new Error(await readError(res, d));
-        return (await res.json()) as PublicSettings;
-      })
-      .then((s) => {
-        if (cancelled) return;
-        setForm(toForm(s));
-      })
-      .catch((err: Error) => !cancelled && setLoadError(err.message));
-    return () => {
-      cancelled = true;
-    };
-  }, [locale, d]);
-
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
-    setForm((f) => (f ? { ...f, [key]: value } : f));
+    setForm((f) => ({ ...f, [key]: value }));
   }
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!form) return;
     setSaving(true);
     try {
       const payload = {
@@ -150,18 +135,6 @@ export function SettingsForm() {
     } finally {
       setTesting(false);
     }
-  }
-
-  if (loadError) {
-    return (
-      <div className="rounded-xl border border-status-critical/40 bg-status-critical/5 p-5 text-sm">
-        <p className="font-medium text-status-critical">{d.settings.loadFailed}</p>
-        <p className="mt-1 text-muted">{loadError}</p>
-      </div>
-    );
-  }
-  if (!form) {
-    return <p className="text-sm text-muted">{d.settings.loading}</p>;
   }
 
   return (

@@ -3,6 +3,7 @@ import { AccountForm } from "@/components/AccountForm";
 import { SettingsForm } from "@/components/SettingsForm";
 import { requireAuth } from "@/lib/auth/server";
 import { getI18n } from "@/lib/i18n/server";
+import { getSettings, toPublicSettings } from "@/lib/settings";
 
 export async function generateMetadata(): Promise<Metadata> {
   const { d } = await getI18n();
@@ -10,14 +11,14 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function SettingsPage() {
-  const [{ d }, auth] = await Promise.all([getI18n(), requireAuth()]);
+  const [{ d }, auth, settings] = await Promise.all([getI18n(), requireAuth(), getSettings()]);
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-xl font-semibold tracking-tight">{d.settings.title}</h1>
         <p className="text-sm text-muted">{d.settings.subtitle}</p>
       </div>
-      <SettingsForm />
+      <SettingsForm initial={toPublicSettings(settings)} />
       <AccountForm user={auth.user} />
     </div>
   );

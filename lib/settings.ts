@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { memoized } from "@/lib/memo";
 import { DEFAULT_LOCALE, isLocale, type Locale } from "@/lib/i18n/config";
 
 export interface SettingsRow {
@@ -66,7 +67,21 @@ export class SettingsNotSeededError extends Error {
   }
 }
 
-export async function getSettings(): Promise<SettingsRow> {
+/**
+ * The row is read by every page and every API call and written only from the
+ * settings form, so it is kept in memory between requests. A save in this
+ * process drops the copy at once; a save made elsewhere (another container
+ * behind the same database) shows up within the ttl.
+ */
+const SETTINGS_TTL_MS = 30_000;
+
+const cached = memoized(loadSettings, SETTINGS_TTL_MS);
+
+export function getSettings(): Promise<SettingsRow> {
+  return cached.get();
+}
+
+async function loadSettings(): Promise<SettingsRow> {
   const row = await db.oneOrNone<SettingsRow>(
     `SELECT id, quota_gb, monthly_quota_gb, billing_cycle_day, window_start,
             window_end, timezone, alert_email_to, wan_interface_name,
@@ -117,15 +132,19 @@ export async function updateSettings(patch: SettingsPatch): Promise<SettingsRow>
     if (!WRITABLE.has(c)) throw new Error(`refusing to write unknown settings column: ${String(c)}`);
   }
   if (columns.length === 0) return getSettings();
+  cached.invalidate();
 
   const insertCols = ["id", ...columns].map((c) => `"${c}"`).join(", ");
   const insertVals = ["1", ...columns.map((c) => `$\{${c}\}`)].join(", ");
   const updates = [...columns.map((c) => `"${c}" = EXCLUDED."${c}"`), "updated_at = now()"].join(", ");
 
-  return db.one<SettingsRow>(
+  const row = await db.one<SettingsRow>(
     `INSERT INTO settings (${insertCols}) VALUES (${insertVals})
      ON CONFLICT (id) DO UPDATE SET ${updates}
      RETURNING *`,
     patch,
   );
+  // A read that raced the write may have refilled the cache with the old row.
+  cached.invalidate();
+  return row;
 }

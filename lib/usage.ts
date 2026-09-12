@@ -82,6 +82,48 @@ export async function getDailyWindow(date: string): Promise<DailyWindow | null> 
   return db.oneOrNone<DailyWindow>("SELECT * FROM daily_windows WHERE window_date = $1", [date]);
 }
 
+/**
+ * The day's window row and the usage since its baseline, in one round trip.
+ *
+ * Same arithmetic as `sumUsageSince`, with the window's baseline read inside
+ * the query instead of fetched first and passed back in. The dashboard asks
+ * for this on every refresh, and the two-step version cost it a second trip to
+ * the database each time. A day with no window yet yields no row and zero used.
+ */
+async function getWindowUsage(
+  date: string,
+  until: Date | null,
+): Promise<{ window: DailyWindow | null; used: number }> {
+  const row = await db.oneOrNone<DailyWindow & { used: number }>(
+    `WITH w AS (
+       SELECT id, window_date, baseline_bytes, baseline_recorded_at, notified
+       FROM daily_windows WHERE window_date = $1
+     ),
+     r AS (
+       SELECT ir.total_bytes,
+              LAG(ir.total_bytes) OVER (
+                PARTITION BY ir.interface_name ORDER BY ir.recorded_at, ir.id
+              ) AS prev
+       FROM interface_readings ir, w
+       WHERE ir.recorded_at >= w.baseline_recorded_at
+         AND ($2::timestamptz IS NULL OR ir.recorded_at < $2::timestamptz)
+     )
+     SELECT w.*,
+            (SELECT COALESCE(SUM(
+               CASE
+                 WHEN prev IS NULL THEN 0
+                 WHEN total_bytes >= prev THEN total_bytes - prev
+                 ELSE total_bytes
+               END
+             ), 0)::bigint FROM r) AS used
+     FROM w`,
+    [date, until],
+  );
+  if (!row) return { window: null, used: 0 };
+  const { used, ...window } = row;
+  return { window, used };
+}
+
 export interface TodayUsage {
   /** When this snapshot was computed (ISO 8601). */
   generated_at: string;
@@ -107,16 +149,14 @@ export interface TodayUsage {
 
 export async function getTodayUsage(settings: SettingsRow, now = new Date()): Promise<TodayUsage> {
   const parts = localParts(now, settings.timezone);
-  const [window, readingsCount, latest] = await Promise.all([
-    getDailyWindow(parts.date),
-    countReadingsForLocalDate(parts.date, settings.timezone),
-    getLatestReading(),
-  ]);
-
   // The window end is inclusive to the minute, so the exclusive bound is the
   // start of the following minute.
   const windowEnd = localTimeInstant(parts.date, settings.window_end, settings.timezone, 1);
-  const used = window ? await sumUsageSince(window.baseline_recorded_at, windowEnd) : 0;
+  const [{ window, used }, readingsCount, latest] = await Promise.all([
+    getWindowUsage(parts.date, windowEnd),
+    countReadingsForLocalDate(parts.date, settings.timezone),
+    getLatestReading(),
+  ]);
   const quota = quotaBytes(settings.quota_gb);
 
   return {
