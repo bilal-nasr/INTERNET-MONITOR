@@ -379,6 +379,10 @@ export const ar = {
     pollingEnabled: "المراقبة مفعّلة",
     pollingPaused: "المراقبة موقوفة",
     pollingHint: "عند الإيقاف، تُهمل القراءات الواردة من الراوتر. ويُحتفظ بالسجل السابق.",
+    devicesEnabled: "تتبع الأجهزة مفعّل",
+    devicesDisabled: "تتبع الأجهزة متوقف",
+    devicesHint:
+      "يخزّن العدادات التي يرسلها سكربت {script} على الراوتر ويعرض صفحة الأجهزة. يحتاج الإعداد لمرة واحدة في {setup}، وهو يعطّل fasttrack على الراوتر ويستهلك المعالج.",
     scheduleSection: "الفحوصات المجدولة",
     scheduleSectionHint:
       "تُنفَّذ بواسطة المجدول الذي يستدعي /api/cron/tick (راجع README، قسم Scheduled jobs). من دون مجدول لا يؤثر هذان الإعدادان.",
@@ -399,6 +403,7 @@ export const ar = {
       alert_email_to: "بريد التنبيهات",
       wan_interface_name: "اسم واجهة WAN",
       polling_enabled: "المراقبة",
+      devices_enabled: "تتبع الأجهزة",
       language: "لغة التنبيهات",
       stale_after_minutes: "مدة الصمت قبل التنبيه",
       digest: "الملخص المجدول",

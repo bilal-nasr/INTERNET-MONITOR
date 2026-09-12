@@ -402,6 +402,10 @@ export const en = {
     pollingEnabled: "Polling enabled",
     pollingPaused: "Polling paused",
     pollingHint: "When paused, readings pushed by the router are discarded. History is kept.",
+    devicesEnabled: "Per-device tracking on",
+    devicesDisabled: "Per-device tracking off",
+    devicesHint:
+      "Stores the counters the {script} router script sends and shows the Devices page. Needs the one-time setup in {setup}, which disables fasttrack on the router and costs CPU.",
     scheduleSection: "Scheduled checks",
     scheduleSectionHint:
       "Run by the scheduler that calls /api/cron/tick (see README, \"Scheduled jobs\"). Without a scheduler these two settings do nothing.",
@@ -423,6 +427,7 @@ export const en = {
       alert_email_to: "Alert email",
       wan_interface_name: "WAN interface name",
       polling_enabled: "Polling",
+      devices_enabled: "Per-device tracking",
       language: "Alert language",
       stale_after_minutes: "Silence before alerting",
       digest: "Scheduled summary",

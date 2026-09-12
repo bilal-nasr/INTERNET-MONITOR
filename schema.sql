@@ -153,6 +153,34 @@ ALTER TABLE settings ADD COLUMN IF NOT EXISTS billing_cycle_day INTEGER NOT NULL
 -- English alerts until /settings says otherwise.
 ALTER TABLE settings ADD COLUMN IF NOT EXISTS language TEXT NOT NULL DEFAULT 'en';
 
+-- Per-device accounting (plan 05). Off by default: it needs a router-side
+-- script and, on this router, fasttrack disabled, which is a cost the owner
+-- chooses on /settings.
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS devices_enabled BOOLEAN NOT NULL DEFAULT false;
+
+-- One row per LAN device the router has ever reported. `name` is what the
+-- owner typed on /devices; NULL falls back to the last DHCP hostname, then
+-- to the MAC itself.
+CREATE TABLE IF NOT EXISTS devices (
+  mac         TEXT PRIMARY KEY,
+  name        TEXT,
+  hostname    TEXT,
+  ip          TEXT,
+  first_seen  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  last_seen   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- One counter sample per device per push. The counters are cumulative as the
+-- router reports them (kid-control bytes-up / bytes-down); usage is the growth
+-- between consecutive rows of one MAC, like interface_readings.
+CREATE TABLE IF NOT EXISTS device_readings (
+  id           SERIAL PRIMARY KEY,
+  recorded_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  mac          TEXT NOT NULL REFERENCES devices (mac) ON DELETE CASCADE,
+  tx_bytes     BIGINT NOT NULL,
+  rx_bytes     BIGINT NOT NULL
+);
+
 -- Scheduled checks (plan 02). stale_after_minutes = 0 disables the
 -- "router has gone quiet" alert. digest picks the scheduled summary.
 ALTER TABLE settings ADD COLUMN IF NOT EXISTS stale_after_minutes INTEGER NOT NULL DEFAULT 10;
@@ -255,6 +283,13 @@ CREATE INDEX IF NOT EXISTS password_resets_user_id_idx ON password_resets (user_
 
 CREATE INDEX IF NOT EXISTS alerts_created_at_idx ON alerts (created_at DESC);
 CREATE INDEX IF NOT EXISTS alerts_kind_scope_idx ON alerts (kind, scope_key);
+
+-- Every per-device statistic takes deltas within one MAC in (recorded_at, id)
+-- order; this index serves that window directly.
+CREATE INDEX IF NOT EXISTS device_readings_mac_recorded_idx
+  ON device_readings (mac, recorded_at, id);
+CREATE INDEX IF NOT EXISTS device_readings_recorded_at_idx
+  ON device_readings (recorded_at DESC);
 
 -- ------------------------------------------------------------------ seed ----
 

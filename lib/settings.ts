@@ -23,6 +23,8 @@ export interface SettingsRow {
   polling_enabled: boolean;
   /** Language quota alerts are written in. See `alertLocale`. */
   language: string;
+  /** Whether device pushes are stored and the Devices page is shown. */
+  devices_enabled: boolean;
   /** Minutes without a push before the link_stale alert. 0 disables it. */
   stale_after_minutes: number;
   digest: DigestKind;
@@ -58,6 +60,7 @@ export interface PublicSettings {
   wan_interface_name: string;
   polling_enabled: boolean;
   language: string;
+  devices_enabled: boolean;
   stale_after_minutes: number;
   digest: string;
   alert_thresholds: number[];
@@ -79,6 +82,7 @@ export type SettingsPatch = Partial<
     | "wan_interface_name"
     | "polling_enabled"
     | "language"
+    | "devices_enabled"
     | "stale_after_minutes"
     | "digest"
     | "alert_thresholds"
@@ -113,7 +117,8 @@ async function loadSettings(): Promise<SettingsRow> {
     `SELECT id, quota_gb, monthly_quota_gb, billing_cycle_day, window_start,
             window_end, timezone, alert_email_to, wan_interface_name,
             polling_enabled, language, alert_thresholds, cycle_alert_thresholds,
-            cycle_pace_alert, stale_after_minutes, digest, updated_at
+            cycle_pace_alert, stale_after_minutes, digest, devices_enabled,
+            updated_at
      FROM settings WHERE id = 1`,
   );
   if (!row) throw new SettingsNotSeededError();
@@ -132,6 +137,7 @@ export function toPublicSettings(row: SettingsRow): PublicSettings {
     wan_interface_name: row.wan_interface_name,
     polling_enabled: row.polling_enabled,
     language: row.language,
+    devices_enabled: row.devices_enabled,
     stale_after_minutes: row.stale_after_minutes,
     digest: row.digest,
     alert_thresholds: row.alert_thresholds,
@@ -157,6 +163,7 @@ const WRITABLE = new Set<string>([
   "wan_interface_name",
   "polling_enabled",
   "language",
+  "devices_enabled",
   "stale_after_minutes",
   "digest",
   "alert_thresholds",
