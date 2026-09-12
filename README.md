@@ -87,6 +87,62 @@ Timestamps come from the server clock, except the moment the link came up, which
 
 The known limit: traffic between the last sample and an unexpected drop cannot be recovered, so a session can under-report by up to one polling interval.
 
+### Retention
+
+Readings arrive every 30 seconds, about 2,900 rows a day and over a million a
+year. Once a day the scheduler (see "Scheduled jobs") thins readings older than
+`Keep full detail for (days)` on `/settings` (90 by default) down to the last
+reading of each hour. Traffic figures are the growth of the counter between one
+reading and the next, so the totals, the daily history, the billing cycle and the
+statistics page all stay exactly right. What is lost for those old dates:
+minute-level charts, per-reading peak rates, and up to an hour of traffic around a
+counter reset that fell inside a thinned hour. Each run handles at most 30 days,
+so a large backlog is worked off over several days.
+
+### Import
+
+`/export` also takes a file back. Choose a CSV or JSON written by the export and
+press Import: every reading is loaded unless the database already holds one at the
+same instant on the same interface, and a row the parser cannot read is listed
+rather than stopping the import. Files from before the `interface_name` column are
+accepted and labelled with the interface from `/settings`. Sessions and daily quota
+windows are not in the file: they are derived from readings as they arrive, and a
+session cannot be rebuilt from counters alone, so after restoring a database the
+Sessions page starts from the next link event.
+
+### Metrics and Home Assistant
+
+`GET /api/metrics` serves the dashboard's headline figures as Prometheus gauges
+(`quota_monitor_today_used_bytes`, `quota_monitor_cycle_percent`,
+`quota_monitor_link_up`, ...). A scraper authenticates with `METRICS_TOKEN`:
+
+```yaml
+scrape_configs:
+  - job_name: quota-monitor
+    scheme: https
+    authorization:
+      credentials: <METRICS_TOKEN>
+    static_configs:
+      - targets: ["netmonitor.bilalnasr.com"]
+    metrics_path: /api/metrics
+```
+
+Home Assistant reads the JSON feed behind the read-only share link (see "Sharing";
+this needs the share link feature) with a REST sensor:
+
+```yaml
+rest:
+  - resource: https://netmonitor.bilalnasr.com/api/share/<token>/usage
+    scan_interval: 60
+    sensor:
+      - name: "Internet used today"
+        unit_of_measurement: "GB"
+        value_template: "{{ (value_json.today.used_since_baseline / 1e9) | round(2) }}"
+      - name: "Internet cycle used"
+        unit_of_measurement: "%"
+        value_template: "{{ value_json.cycle.percent_of_cap | round(1) }}"
+```
+
 ## Setup
 
 ### 1. Database
@@ -325,7 +381,8 @@ rejected with `400`.
 
 Two things cannot happen on the ingest path because they need to run when the
 router is *not* pushing: noticing that it has gone quiet, and sending a summary
-on a calendar. Both run from one endpoint:
+on a calendar. Both run from one endpoint, together with the daily thinning
+of old readings:
 
 ```
 GET or POST /api/cron/tick
@@ -340,6 +397,7 @@ day:
 | --- | --- | --- |
 | `stale` | Emails when no reading has arrived for longer than the limit, and once more when readings resume. | Silence before alerting (minutes); 0 turns it off. |
 | `digest` | Sends the quota report on a schedule: Monday 08:00 (weekly) or 08:00 on the first day of a billing cycle. | Scheduled summary. |
+| `thinReadings` | Once a day, collapses readings older than the retention cutoff to one per hour (see [Retention](#retention)). | Keep full detail for (days). |
 
 Pick a trigger:
 
@@ -436,7 +494,8 @@ lib/
   email-link-template.ts  the router-has-gone-quiet mail
   time.ts                timezone, window and duration helpers
   i18n/                  locales, the two dictionaries, and date and number formatting
-  cron/                  the scheduler: job registry, tick runner, the stale and digest jobs, and the pure schedule arithmetic
+  cron/                  the scheduler: job registry, tick runner, the stale, digest and thinning jobs, and the pure schedule arithmetic
+  retention.ts           when thinning is due and the cutoff it uses
 router/quota-push.rsc        pushes counters to the app
 router/pppoe-reconnect.rsc   cycles the WAN session (daily scheduler, watchdog)
 router/internet-watchdog.md  netwatch setup for ISP outages

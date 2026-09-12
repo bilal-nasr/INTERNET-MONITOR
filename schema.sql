@@ -35,6 +35,10 @@ CREATE TABLE IF NOT EXISTS settings (
   -- exist on the router first (see router/throttle-setup.rsc).
   throttle_on_breach  BOOLEAN NOT NULL DEFAULT false,
   throttle_on_cap     BOOLEAN NOT NULL DEFAULT false,
+  -- Readings older than this many days are thinned to one per hour by the
+  -- scheduler's thinReadings job. Traffic totals are unaffected; only sub-hour
+  -- detail for old ranges is dropped. See README "Retention".
+  retention_days      INTEGER NOT NULL DEFAULT 90 CHECK (retention_days BETWEEN 7 AND 3650),
   updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -190,6 +194,9 @@ CREATE TABLE IF NOT EXISTS device_readings (
   tx_bytes     BIGINT NOT NULL,
   rx_bytes     BIGINT NOT NULL
 );
+-- Retention. A database upgraded from an earlier release keeps ninety days of
+-- full detail, which is what a fresh one gets too.
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS retention_days INTEGER NOT NULL DEFAULT 90;
 
 -- Scheduled checks (plan 02). stale_after_minutes = 0 disables the
 -- "router has gone quiet" alert. digest picks the scheduled summary.
@@ -263,6 +270,10 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'settings_digest_check') THEN
     ALTER TABLE settings ADD CONSTRAINT settings_digest_check
       CHECK (digest IN ('off', 'weekly', 'cycle'));
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'settings_retention_days_check') THEN
+    ALTER TABLE settings ADD CONSTRAINT settings_retention_days_check
+      CHECK (retention_days BETWEEN 7 AND 3650);
   END IF;
 END
 $$;

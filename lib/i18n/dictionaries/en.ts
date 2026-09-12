@@ -502,6 +502,9 @@ export const en = {
     devicesDisabled: "Per-device tracking off",
     devicesHint:
       "Stores the counters the {script} router script sends and shows the Devices page. Needs the one-time setup in {setup}, which disables fasttrack on the router and costs CPU.",
+    retentionDays: "Keep full detail for (days)",
+    retentionDaysHint:
+      "Older readings are thinned to one per hour. Totals and charts stay correct; only minute-level detail for old dates is dropped.",
     scheduleSection: "Scheduled checks",
     scheduleSectionHint:
       "Run by the scheduler that calls /api/cron/tick (see README, \"Scheduled jobs\"). Without a scheduler these two settings do nothing.",
@@ -525,6 +528,7 @@ export const en = {
       polling_enabled: "Polling",
       devices_enabled: "Per-device tracking",
       language: "Alert language",
+      retention_days: "Keep full detail for (days)",
       stale_after_minutes: "Silence before alerting",
       digest: "Scheduled summary",
       alert_thresholds: "Daily alert marks",
@@ -539,11 +543,25 @@ export const en = {
     title: "Export readings",
     subtitle: "Download raw interface counter readings for a date range.",
     columnsHint:
-      "Dates are inclusive and interpreted in the timezone from Settings. Columns: recorded_at (ISO 8601 UTC), tx_bytes, rx_bytes, total_bytes.",
+      "Dates are inclusive and interpreted in the timezone from Settings. Columns: recorded_at (ISO 8601 UTC), tx_bytes, rx_bytes, total_bytes, interface_name.",
     pickBothDates: "Pick both dates.",
     startBeforeEnd: "The start date must be on or before the end date.",
     downloadCsv: "Download CSV",
     downloadJson: "Download JSON",
+  },
+
+  import: {
+    title: "Import readings",
+    subtitle:
+      "Load a CSV or JSON file written by the export above. Readings already in the database are left alone.",
+    chooseFile: "File",
+    upload: "Import",
+    uploading: "Importing...",
+    pickFile: "Choose a file first.",
+    result: "{inserted} imported, {skipped} already present, {rejected} rejected.",
+    problems: "Rows that were not imported",
+    notImported:
+      "Sessions and daily quota windows are not part of the file: they are derived from the readings as they arrive, and a session cannot be rebuilt from counters alone.",
   },
 
   alerts: {
@@ -828,11 +846,16 @@ export const en = {
     staleMinutesRange: "The silence limit must be between 0 and 1440 minutes.",
     unknownDigest: "That summary schedule is not supported.",
     windowOrder: "The end of the window must be after its start.",
+    retentionWhole: "The retention must be a whole number of days.",
+    retentionRange: "The retention must be between 7 and 3650 days.",
     thresholdsInvalid: "Alert marks must be whole numbers from 1 to 100, ascending, at most 8 of them.",
     alertEmailMissing: "No alert email is saved. Save an alert email first.",
     exportFormat: "The format must be csv or json.",
     exportDates: "Both dates must be written as YYYY-MM-DD.",
     exportOrder: "The start date must be on or before the end date.",
+    importEmpty: "No readings could be read from that file.",
+    importTooLarge: "The file is larger than 50 MB. Split it into smaller exports.",
+    importType: "Send the file as text/csv or application/json.",
     limitRange: "The limit must be a whole number between 1 and {max}.",
     daysRange: "The days must be a whole number between 1 and {max}.",
     tooManyIds: "At most {max} sessions may be selected at once.",

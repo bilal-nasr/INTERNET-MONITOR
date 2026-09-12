@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { ExportForm } from "@/components/ExportForm";
+import { ImportForm } from "@/components/ImportForm";
 import { getI18n } from "@/lib/i18n/server";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -16,6 +17,7 @@ export default async function ExportPage() {
         <p className="text-sm text-muted">{d.export.subtitle}</p>
       </div>
       <ExportForm />
+      <ImportForm />
     </div>
   );
 }

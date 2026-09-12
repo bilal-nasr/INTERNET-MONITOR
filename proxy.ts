@@ -42,6 +42,7 @@ const PUBLIC_API = new Set([
   "/api/ingest/devices",
   "/api/health",
   "/api/cron/tick",
+  "/api/metrics",
   "/api/auth/login",
   "/api/auth/logout",
   "/api/auth/refresh",

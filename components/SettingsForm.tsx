@@ -20,6 +20,7 @@ interface FormState {
   polling_enabled: boolean;
   language: string;
   devices_enabled: boolean;
+  retention_days: string;
   stale_after_minutes: string;
   digest: string;
   alert_thresholds: string;
@@ -42,6 +43,7 @@ function toForm(s: PublicSettings): FormState {
     polling_enabled: s.polling_enabled,
     language: s.language,
     devices_enabled: s.devices_enabled,
+    retention_days: String(s.retention_days),
     stale_after_minutes: String(s.stale_after_minutes),
     digest: s.digest,
     alert_thresholds: s.alert_thresholds.join(", "),
@@ -122,6 +124,7 @@ export function SettingsForm({ initial }: { initial: PublicSettings }) {
         polling_enabled: form.polling_enabled,
         language: form.language,
         devices_enabled: form.devices_enabled,
+        retention_days: Number(form.retention_days),
         stale_after_minutes: Number(form.stale_after_minutes),
         digest: form.digest,
         alert_thresholds: parseMarks(form.alert_thresholds),
@@ -421,6 +424,24 @@ export function SettingsForm({ initial }: { initial: PublicSettings }) {
             </span>
           </span>
         </label>
+
+        <div className="mt-4 sm:max-w-xs">
+          <label htmlFor="retention_days" className={labelClass}>
+            {d.settings.retentionDays}
+          </label>
+          <input
+            id="retention_days"
+            type="number"
+            min="7"
+            max="3650"
+            step="1"
+            required
+            value={form.retention_days}
+            onChange={(e) => update("retention_days", e.target.value)}
+            className={inputClass}
+          />
+          <p className={hintClass}>{d.settings.retentionDaysHint}</p>
+        </div>
       </Section>
 
       <Section title={d.settings.enforcementSection} description={d.settings.enforcementSectionHint}>

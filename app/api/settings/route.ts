@@ -44,6 +44,11 @@ function patchSchema(d: Dictionary) {
       throttle_on_breach: z.boolean(),
       throttle_on_cap: z.boolean(),
       devices_enabled: z.boolean(),
+      retention_days: z.coerce
+        .number()
+        .int(e.retentionWhole)
+        .min(7, e.retentionRange)
+        .max(3650, e.retentionRange),
       stale_after_minutes: z.coerce
         .number()
         .int(e.staleMinutesWhole)

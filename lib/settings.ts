@@ -29,6 +29,11 @@ export interface SettingsRow {
   throttle_on_cap: boolean;
   /** Whether device pushes are stored and the Devices page is shown. */
   devices_enabled: boolean;
+  /**
+   * Days of full-detail readings kept. Older ones are thinned to one per hour
+   * by the scheduler's thinning job; totals are unaffected.
+   */
+  retention_days: number;
   /** Minutes without a push before the link_stale alert. 0 disables it. */
   stale_after_minutes: number;
   digest: DigestKind;
@@ -67,6 +72,7 @@ export interface PublicSettings {
   throttle_on_breach: boolean;
   throttle_on_cap: boolean;
   devices_enabled: boolean;
+  retention_days: number;
   stale_after_minutes: number;
   digest: string;
   alert_thresholds: number[];
@@ -91,6 +97,7 @@ export type SettingsPatch = Partial<
     | "throttle_on_breach"
     | "throttle_on_cap"
     | "devices_enabled"
+    | "retention_days"
     | "stale_after_minutes"
     | "digest"
     | "alert_thresholds"
@@ -128,6 +135,7 @@ async function loadSettings(): Promise<SettingsRow> {
             cycle_pace_alert, stale_after_minutes, digest,
             throttle_on_breach, throttle_on_cap, updated_at
             cycle_pace_alert, stale_after_minutes, digest, devices_enabled,
+            cycle_pace_alert, stale_after_minutes, digest, retention_days,
             updated_at
      FROM settings WHERE id = 1`,
   );
@@ -150,6 +158,7 @@ export function toPublicSettings(row: SettingsRow): PublicSettings {
     throttle_on_breach: row.throttle_on_breach,
     throttle_on_cap: row.throttle_on_cap,
     devices_enabled: row.devices_enabled,
+    retention_days: row.retention_days,
     stale_after_minutes: row.stale_after_minutes,
     digest: row.digest,
     alert_thresholds: row.alert_thresholds,
@@ -178,6 +187,7 @@ const WRITABLE = new Set<string>([
   "throttle_on_breach",
   "throttle_on_cap",
   "devices_enabled",
+  "retention_days",
   "stale_after_minutes",
   "digest",
   "alert_thresholds",

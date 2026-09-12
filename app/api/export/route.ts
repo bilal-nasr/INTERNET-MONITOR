@@ -7,6 +7,10 @@ import type { Reading } from "@/lib/usage";
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const PAGE_SIZE = 2000;
 
+interface ExportRow extends Reading {
+  interface_name: string | null;
+}
+
 function isValidDate(value: string): boolean {
   if (!DATE_RE.test(value)) return false;
   const d = new Date(`${value}T00:00:00Z`);
@@ -14,9 +18,9 @@ function isValidDate(value: string): boolean {
 }
 
 /** Fetch readings in id order, one page at a time, so exports never load the whole range in memory. */
-async function fetchPage(from: string, to: string, timezone: string, afterId: number): Promise<Reading[]> {
-  return db.any<Reading>(
-    `SELECT id, recorded_at, tx_bytes, rx_bytes, total_bytes
+async function fetchPage(from: string, to: string, timezone: string, afterId: number): Promise<ExportRow[]> {
+  return db.any<ExportRow>(
+    `SELECT id, recorded_at, tx_bytes, rx_bytes, total_bytes, interface_name
      FROM interface_readings
      WHERE recorded_at >= ($1::date::timestamp AT TIME ZONE $3::text)
        AND recorded_at <  (($2::date + 1)::timestamp AT TIME ZONE $3::text)
@@ -27,12 +31,18 @@ async function fetchPage(from: string, to: string, timezone: string, afterId: nu
   );
 }
 
-function toRow(r: Reading) {
+/** A name with a comma or a quote is wrapped the way every CSV reader expects. */
+function csvField(value: string): string {
+  return /[",\r\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+}
+
+function toRow(r: ExportRow) {
   return {
     recorded_at: r.recorded_at.toISOString(),
     tx_bytes: r.tx_bytes,
     rx_bytes: r.rx_bytes,
     total_bytes: r.total_bytes,
+    interface_name: r.interface_name,
   };
 }
 
@@ -66,7 +76,9 @@ export async function GET(request: Request) {
         let first = true;
 
         controller.enqueue(
-          encoder.encode(format === "csv" ? "recorded_at,tx_bytes,rx_bytes,total_bytes\n" : "["),
+          encoder.encode(
+            format === "csv" ? "recorded_at,tx_bytes,rx_bytes,total_bytes,interface_name\n" : "[",
+          ),
         );
 
         for (;;) {
@@ -77,7 +89,7 @@ export async function GET(request: Request) {
           for (const r of page) {
             const row = toRow(r);
             if (format === "csv") {
-              chunk += `${row.recorded_at},${row.tx_bytes},${row.rx_bytes},${row.total_bytes}\n`;
+              chunk += `${row.recorded_at},${row.tx_bytes},${row.rx_bytes},${row.total_bytes},${csvField(row.interface_name ?? "")}\n`;
             } else {
               chunk += (first ? "" : ",") + JSON.stringify(row);
               first = false;

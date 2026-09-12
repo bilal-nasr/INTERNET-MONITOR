@@ -5,6 +5,7 @@ import { getSettings } from "@/lib/settings";
 // Importing the job modules registers them. Order here is the run order.
 import "@/lib/cron/stale";
 import "@/lib/cron/digest";
+import "@/lib/cron/thin";
 
 export interface TickJobReport {
   name: string;
