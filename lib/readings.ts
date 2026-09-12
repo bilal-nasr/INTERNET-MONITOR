@@ -1,5 +1,7 @@
+import { dispatchAlert } from "@/lib/alerts/dispatch";
+import { nextThreshold } from "@/lib/alerts/thresholds";
 import { db } from "@/lib/db";
-import { sendAlertEmail } from "@/lib/email";
+import { renderAlertEmail } from "@/lib/email-template";
 import { buildAlertReport, minimalAlertReport } from "@/lib/email-report";
 import { quotaBytes } from "@/lib/format";
 import type { SettingsRow } from "@/lib/settings";
@@ -29,6 +31,7 @@ export interface RecordedResult {
     exceeded: boolean;
     alert_sent: boolean;
     already_notified: boolean;
+    notified_level: number;
   };
 }
 
@@ -141,43 +144,54 @@ export async function recordReading(
   const used = await sumUsageSince(window!.baseline_recorded_at, windowEnd);
   const quota = quotaBytes(settings.quota_gb);
   const exceeded = used > quota;
+  const percent = quota > 0 ? (used / quota) * 100 : 0;
 
-  // Alert once per day. The flag is claimed with a conditional update before
-  // the email is sent, so two readings arriving at once cannot both send it.
-  // If the send then fails the claim is released, leaving the next reading to
-  // retry exactly as before.
+  // One mail per mark per day. The mark is claimed with a conditional update
+  // before anything is sent, so two readings arriving at once cannot both send
+  // it. A failed send releases the claim, and the next reading tries again.
+  // A missing address keeps the claim: the row in `alerts` says it was skipped,
+  // and there is no point re-deciding that on every push for the rest of the day.
   let alertSent = false;
-  if (exceeded && !window!.notified && !settings.alert_email_to) {
-    // Recording the reading still succeeded, so failing the request here would
-    // only make the router log an error on every push for the rest of the day.
-    console.warn("[readings] quota exceeded but alert_email_to is not set in /settings");
-  } else if (exceeded && !window!.notified) {
+  let notifiedLevel = window!.notified_level;
+  const level = nextThreshold(percent, notifiedLevel, settings.alert_thresholds);
+  if (level !== null) {
     const claimed = await db.oneOrNone<{ id: number }>(
-      "UPDATE daily_windows SET notified = true WHERE id = $1 AND notified = false RETURNING id",
-      [window!.id],
+      `UPDATE daily_windows SET notified_level = $2, notified = ($2 >= 100)
+       WHERE id = $1 AND notified_level < $2 RETURNING id`,
+      [window!.id, level],
     );
     if (claimed) {
-      try {
-        // The extra aggregates run once a day, on the one push that trips the
-        // quota, and never on the pushes either side of it. If any of them
-        // fail the alert still goes out carrying the figures already in hand.
-        const figures = {
-          settings,
-          kind: "alert" as const,
-          date: local.date,
-          usedBytes: used,
-          quotaBytes: quota,
-          now,
-        };
-        const report = await buildAlertReport(figures).catch((err) => {
-          console.warn("[readings] could not build the full alert report", err);
-          return minimalAlertReport(figures);
-        });
-        await sendAlertEmail(settings.alert_email_to!, report);
-        alertSent = true;
-      } catch (err) {
-        await db.none("UPDATE daily_windows SET notified = false WHERE id = $1", [window!.id]);
-        throw err;
+      // The extra aggregates run once per mark, never on the pushes either side
+      // of it. If any of them fail the mail still goes out with the headline.
+      const figures = {
+        settings,
+        kind: "alert" as const,
+        date: local.date,
+        usedBytes: used,
+        quotaBytes: quota,
+        threshold: level,
+        now,
+      };
+      const report = await buildAlertReport(figures).catch((err) => {
+        console.warn("[readings] could not build the full alert report", err);
+        return minimalAlertReport(figures);
+      });
+      const result = await dispatchAlert({
+        kind: level >= 100 ? "daily_exceeded" : "daily_threshold",
+        level,
+        scopeKey: local.date,
+        to: settings.alert_email_to,
+        email: renderAlertEmail(report),
+        payload: { used_bytes: used, quota_bytes: quota, percent: Math.round(percent * 10) / 10 },
+      });
+      if (result.status === "failed") {
+        await db.none(
+          `UPDATE daily_windows SET notified_level = $2, notified = ($2 >= 100) WHERE id = $1`,
+          [window!.id, notifiedLevel],
+        );
+      } else {
+        notifiedLevel = level;
+        alertSent = result.status === "sent";
       }
     }
   }
@@ -191,7 +205,8 @@ export async function recordReading(
       quota_bytes: quota,
       exceeded,
       alert_sent: alertSent,
-      already_notified: window!.notified,
+      already_notified: notifiedLevel >= 100,
+      notified_level: notifiedLevel,
     },
   };
 }

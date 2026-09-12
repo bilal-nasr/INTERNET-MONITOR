@@ -17,6 +17,8 @@ export interface DailyWindow {
   baseline_bytes: number;
   baseline_recorded_at: Date;
   notified: boolean;
+  /** Highest alert mark (percent) already mailed for this day; 0 when none. */
+  notified_level: number;
 }
 
 /**
@@ -96,7 +98,7 @@ async function getWindowUsage(
 ): Promise<{ window: DailyWindow | null; used: number }> {
   const row = await db.oneOrNone<DailyWindow & { used: number }>(
     `WITH w AS (
-       SELECT id, window_date, baseline_bytes, baseline_recorded_at, notified
+       SELECT id, window_date, baseline_bytes, baseline_recorded_at, notified, notified_level
        FROM daily_windows WHERE window_date = $1
      ),
      r AS (
@@ -137,6 +139,7 @@ export interface TodayUsage {
   used_since_baseline: number;
   percent_of_quota: number;
   notified: boolean;
+  notified_level: number;
   last_reading: {
     recorded_at: string;
     tx_bytes: number;
@@ -177,6 +180,7 @@ export async function getTodayUsage(settings: SettingsRow, now = new Date()): Pr
     used_since_baseline: used,
     percent_of_quota: quota > 0 ? (used / quota) * 100 : 0,
     notified: window?.notified ?? false,
+    notified_level: window?.notified_level ?? 0,
     last_reading: latest
       ? {
           recorded_at: latest.recorded_at.toISOString(),
