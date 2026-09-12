@@ -186,6 +186,24 @@ export const en = {
     body: "The dashboard could not read the {table} table. Check {variable} and run {file} against the database (see README).",
   },
 
+  setup: {
+    title: "Almost there",
+    subtitle:
+      "No reading has arrived yet. Work through the list; this page refreshes itself and turns into the dashboard on the first push.",
+    done: "done",
+    missing: "missing",
+    waiting: "waiting",
+    database: "Database reachable and seeded",
+    secret: "CRON_SECRET set on the server",
+    secretHint: "The bearer token the router sends. Set it in the environment and restart.",
+    emailKey: "RESEND_API_KEY set on the server",
+    emailKeyHint: "Without it alerts cannot be sent. Readings still work.",
+    alertAddress: "Alert email saved in Settings",
+    router: "Router script installed and pushing",
+    routerHint: "Paste the generated script from {link} into WinBox, then run it once. Interface: {iface}.",
+    settingsLink: "Settings",
+  },
+
   cycle: {
     heading: "This billing cycle",
     span: "{start} to {end}",
