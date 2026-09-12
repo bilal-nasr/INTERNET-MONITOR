@@ -53,7 +53,8 @@ describe("renderCycleEmail", () => {
       expect(body).toContain("486.00 GB of 600.00 GB (81%)");
       expect(body).toContain("972.00 GB (162% of cap)");
       expect(body).toContain("day 15 of 30, 15 left");
-      expect(body).toContain("2026-09-05 to 2026-10-05 (Asia/Beirut)");
+      // The cycle ends at midnight on the 5th, so the last day it covers is the 4th.
+      expect(body).toContain("2026-09-05 to 2026-10-04 (Asia/Beirut)");
       expect(body).toContain("32.40 GB");
       expect(body).toContain("7.60 GB");
     }

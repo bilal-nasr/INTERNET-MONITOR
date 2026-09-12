@@ -1,6 +1,30 @@
-import { recordAlert, type AlertKind, type AlertLogRow, type AlertStatus } from "@/lib/alerts/log";
+import { latestAlert, recordAlert, type AlertKind, type AlertLogRow, type AlertStatus } from "@/lib/alerts/log";
 import { sendRendered } from "@/lib/email";
 import type { RenderedEmail } from "@/lib/email-template";
+
+/**
+ * How long to leave a kind and scope alone after a send failed.
+ *
+ * A failed send is far more often a misconfiguration than an outage - an unset
+ * RESEND_API_KEY, an ALERT_EMAIL_FROM on an unverified domain - and those fail
+ * identically on every attempt. Since a claim is released when the send fails,
+ * the mark is due again on the next push thirty seconds later, which would
+ * rebuild the report (six aggregates), call Resend and write another `failed`
+ * row, forever. Fifteen minutes costs a real outage at most one mark's delay
+ * and turns 2,880 futile attempts a day into 96.
+ */
+export const FAILED_SEND_COOLDOWN_MS = 15 * 60_000;
+
+/**
+ * True when the newest logged attempt for this kind and scope failed less than
+ * the cooldown ago. Callers check this *before* claiming a mark, so a skipped
+ * attempt leaves the claim state untouched and a later push retries it.
+ */
+export async function inFailureCooldown(kind: AlertKind, scopeKey: string, now = new Date()): Promise<boolean> {
+  const last = await latestAlert(kind, scopeKey);
+  if (!last || last.status !== "failed") return false;
+  return now.getTime() - last.created_at.getTime() < FAILED_SEND_COOLDOWN_MS;
+}
 
 export interface DispatchInput {
   kind: AlertKind;

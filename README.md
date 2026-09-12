@@ -34,10 +34,15 @@ Every minute the router runs a small script (`router/quota-push.rsc`) that reads
 2. Stores the counters in `interface_readings`.
 3. Updates the current session in `sessions`, or starts a new one if the link reconnected.
 4. If the local time (in `settings.timezone`) is inside `window_start`-`window_end`:
-   - creates today's `daily_windows` row on the first reading, using the current total as the baseline;
+   - creates today's `daily_windows` row on the first reading, with the last reading at or before
+     the window opened as the baseline, or the current one when there is no earlier reading;
    - computes usage since the baseline by summing the deltas between consecutive readings;
-   - if usage exceeds `quota_gb * 1e9` bytes and today's row is not yet `notified`, emails `alert_email_to` and marks the row.
-5. Outside the window it only records the reading.
+   - if usage has reached a daily mark not yet mailed today, claims that mark in
+     `daily_windows.notified_level` and emails `alert_email_to` (see [Alerts](#alerts)).
+5. Outside the window none of step 4 runs: the reading is stored and nothing else about the daily
+   quota is computed or mailed.
+6. Checks the monthly cap, inside the window or out of it, at most once every five minutes, and
+   mails its marks and the projection warning.
 
 Quota is decimal gigabytes: 8 GB = 8,000,000,000 bytes.
 
@@ -65,7 +70,12 @@ address, is a row in the `alerts` table and appears on `/alerts`.
   the projected end-of-cycle usage exceeds the cap, from the fourth day of the cycle onwards.
 
 A mark is claimed in the database before the mail is sent, so two readings arriving together
-cannot both send it, and a failed send releases the claim so the next reading retries.
+cannot both send it, and a failed send releases the claim so a later reading retries it. That
+retry waits fifteen minutes after a failure, since a send that fails usually fails for a reason
+that will not have changed thirty seconds later - an unset `RESEND_API_KEY`, a from-address on an
+unverified domain. Alerting never fails a push: the reading is already stored, and whatever goes
+wrong afterwards is reported on `/alerts` instead. The projection warning is held back when a cap
+mail just went out in the same check, because that mail already carries the projection.
 
 ### Session accounting
 
@@ -215,6 +225,7 @@ so they follow the `language` column in `settings` rather than a URL. Set it on 
 | `GET` | `/api/sessions?range=last_30d&limit=200` | Link sessions with uptime, offline gap and traffic, plus totals. Accepts the same range parameters as `/api/stats`; `days=N` still works. |
 | `GET` | `/api/sessions/totals?ids=1,2,3` | Totals for an explicit set of sessions, summed in the database. Backs the selection bar on the sessions page. |
 | `GET` | `/api/stats?range=today` | Every statistic for one range: totals, a bucketed series, weekday and hour patterns, link reliability, quota compliance and billing-cycle figures. See the range table below. |
+| `GET` | `/api/alerts?limit=100&before=<id>` | Every alert the app decided to send, newest first: kind, mark, recipient, subject, status and the figures it carried. `limit` is at most 500; `before` takes a row id and pages backwards. |
 | `GET` | `/api/settings` | Current settings. |
 | `PUT` | `/api/settings` | Any subset of fields. Validates quota > 0, `window_end` after `window_start`, email format, IANA timezone and `language` (`en` or `ar`). |
 | `GET` | `/api/export?format=csv\|json&from=YYYY-MM-DD&to=YYYY-MM-DD` | Streams readings in the range, dates inclusive, in the configured timezone. |
@@ -287,6 +298,7 @@ app/
   [lang]/(app)/page.tsx             dashboard, auto-refreshing
   [lang]/(app)/stats/page.tsx       every statistic for a chosen range, with charts
   [lang]/(app)/sessions/page.tsx    link sessions with uptime and per-session traffic
+  [lang]/(app)/alerts/page.tsx      every alert the app decided to send, and how it went
   [lang]/(app)/settings/page.tsx    settings form and the account section
   [lang]/(app)/export/page.tsx      date range export
   [lang]/(auth)/login/              sign in, forgot password, reset password
@@ -296,6 +308,7 @@ components/              UI pieces; components/auth/ holds the sign-in forms
 proxy.ts                 language redirect, then the session gate with transparent refresh
 lib/
   auth/                  password hashing, tokens, auth_sessions rows, cookies, resets, throttle
+  alerts/                the alert log and dispatcher, the daily and monthly threshold checks
   db.ts                  pg-promise pool, type parsers and TLS selection
   certs.ts               bundled Supabase root CA
   settings.ts            settings read and upsert
@@ -310,6 +323,7 @@ lib/
   email.ts               Resend delivery
   email-report.ts        the figures an alert shows, gathered from lib/stats.ts
   email-template.ts      the alert email, rendered to subject, text and HTML
+  email-cycle-template.ts  the monthly-cap email, rendered the same way
   time.ts                timezone, window and duration helpers
   i18n/                  locales, the two dictionaries, and date and number formatting
 router/quota-push.rsc        pushes counters to the app
@@ -331,8 +345,10 @@ docker-compose.yml       local run, optionally with Postgres
   thousands of rows and none of them are shipped to the browser.
 - Selecting sessions on `/sessions` totals them in the database rather than in the browser, so the
   figure is exact and matches the definition of "total" used everywhere else.
-- One alert per day. To re-arm after testing: `UPDATE daily_windows SET notified = false WHERE window_date = CURRENT_DATE;`
-- If the email send fails, the request returns 502 and `notified` stays false, so the next reading retries.
+- One mail per daily mark per day. To re-arm every mark after testing:
+  `UPDATE daily_windows SET notified = false, notified_level = 0 WHERE window_date = CURRENT_DATE;`
+- A failed send does not fail the push. The claim on the mark is released, the attempt is recorded
+  as a `failed` row on `/alerts`, and a reading at least fifteen minutes later tries again.
 - The dashboard refreshes every 15 seconds and the sessions page every 20, pausing while the browser tab is hidden. Click the "Live" pill to refresh immediately.
 - Today's usage and the session totals measure different things. Today's usage is bounded by the quota window; session totals cover whole connections, so the two numbers are not meant to match.
 - The quota and the sessions are independent. The quota is keyed to the local date and resets when the window next opens, so cycling the WAN session does not reset it. To align them, set the window to 00:00-23:59.

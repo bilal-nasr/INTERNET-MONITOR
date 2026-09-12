@@ -227,3 +227,20 @@ export function localTimeInstant(
     timeZone,
   );
 }
+
+/**
+ * The local date one day before `date`, both "YYYY-MM-DD". Used to show an
+ * exclusive end bound as the inclusive last day it covers.
+ *
+ * Calendar arithmetic on the date itself, deliberately: the date is already
+ * local, so the answer never depends on the clock, and going through an instant
+ * would be wrong in a zone whose DST change lands on midnight (Asia/Beirut
+ * springs forward at 00:00, so the local midnight of that day does not exist).
+ * An unparseable value is returned unchanged rather than guessed at.
+ */
+export function previousLocalDate(date: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date.trim());
+  if (!m) return date;
+  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]) - 1));
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+}

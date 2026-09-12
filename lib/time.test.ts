@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { windowSeconds } from "@/lib/time";
+import { previousLocalDate, windowSeconds } from "@/lib/time";
 
 describe("windowSeconds", () => {
   test("converts the window to seconds since local midnight", () => {
@@ -22,5 +22,27 @@ describe("windowSeconds", () => {
 
   test("falls back to the whole day when a time cannot be parsed", () => {
     expect(windowSeconds("not-a-time", "23:59:00")).toEqual({ start: 0, end: 86_400 });
+  });
+});
+
+describe("previousLocalDate", () => {
+  test("turns an exclusive end bound into the inclusive last day", () => {
+    expect(previousLocalDate("2026-10-05")).toBe("2026-10-04");
+  });
+
+  test("steps back over a month boundary", () => {
+    expect(previousLocalDate("2026-10-01")).toBe("2026-09-30");
+  });
+
+  test("steps back over a year boundary", () => {
+    expect(previousLocalDate("2026-01-01")).toBe("2025-12-31");
+  });
+
+  test("knows February in a leap year", () => {
+    expect(previousLocalDate("2028-03-01")).toBe("2028-02-29");
+  });
+
+  test("leaves a value it cannot parse alone", () => {
+    expect(previousLocalDate("not-a-date")).toBe("not-a-date");
   });
 });

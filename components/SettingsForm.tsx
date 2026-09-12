@@ -326,7 +326,6 @@ export function SettingsForm({ initial }: { initial: PublicSettings }) {
               id="alert_thresholds"
               type="text"
               dir="ltr"
-              inputMode="numeric"
               value={form.alert_thresholds}
               onChange={(e) => update("alert_thresholds", e.target.value)}
               className={`${inputClass} font-mono`}
@@ -342,7 +341,6 @@ export function SettingsForm({ initial }: { initial: PublicSettings }) {
               id="cycle_alert_thresholds"
               type="text"
               dir="ltr"
-              inputMode="numeric"
               value={form.cycle_alert_thresholds}
               onChange={(e) => update("cycle_alert_thresholds", e.target.value)}
               className={`${inputClass} font-mono`}

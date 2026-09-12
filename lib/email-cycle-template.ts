@@ -8,6 +8,7 @@ import type { RenderedEmail } from "@/lib/email-template";
 import { formatBytes } from "@/lib/format";
 import { fill, getDictionaryFor } from "@/lib/i18n";
 import { DIRECTION, type Locale } from "@/lib/i18n/config";
+import { previousLocalDate } from "@/lib/time";
 
 export interface CycleReport {
   kind: "threshold" | "pace";
@@ -18,7 +19,11 @@ export interface CycleReport {
   threshold: number | null;
   app_url: string | null;
   cycle: {
-    /** Local dates, YYYY-MM-DD. `end` is the day the next cycle begins. */
+    /**
+     * Local dates, YYYY-MM-DD. `end` is exclusive: the day the next cycle
+     * begins. The span is shown to the day before it, which is the last day
+     * this cycle actually covers.
+     */
     start: string;
     end: string;
     used_bytes: number;
@@ -77,7 +82,7 @@ export function renderCycleEmail(report: CycleReport): RenderedEmail {
   const footer = report.kind === "pace" ? t.footerPace : c.over ? t.footerOver : t.footerThreshold;
 
   const rows: [string, string][] = [
-    [t.cycleSpan, fill(t.cycleSpanValue, { start: c.start, end: c.end, timezone: report.timezone })],
+    [t.cycleSpan, fill(t.cycleSpanValue, { start: c.start, end: previousLocalDate(c.end), timezone: report.timezone })],
     [t.used, fill(t.usedValue, { used: v.used, cap: v.cap, percent: pct(c.percent) })],
     [t.projected, fill(t.projectedValue, { projected: v.projected, percent: v.projectedPercent })],
     [t.progress, fill(t.progressValue, { elapsed: c.days_elapsed, total: c.days_total, remaining: c.days_remaining })],

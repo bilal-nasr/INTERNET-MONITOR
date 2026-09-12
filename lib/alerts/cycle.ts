@@ -1,4 +1,4 @@
-import { dispatchAlert } from "@/lib/alerts/dispatch";
+import { dispatchAlert, inFailureCooldown } from "@/lib/alerts/dispatch";
 import type { AlertKind } from "@/lib/alerts/log";
 import { paceCrossesCap } from "@/lib/alerts/pace";
 import { nextThreshold } from "@/lib/alerts/thresholds";
@@ -63,6 +63,9 @@ function toReport(kind: CycleReport["kind"], threshold: number | null, settings:
 
 export async function checkCycleAlerts(settings: SettingsRow, now = new Date()): Promise<CycleCheck> {
   if (now.getTime() - lastCheckedAt < CHECK_EVERY_MS) return { status: "throttled", sent: [] };
+  // Marked before the work, so a failed check also consumes the throttle: the
+  // alternative re-runs the cycle-wide aggregate on every 30-second push for as
+  // long as the failure lasts, which is the worse of the two failure modes.
   lastCheckedAt = now.getTime();
 
   const sent: AlertKind[] = [];
@@ -78,10 +81,19 @@ export async function checkCycleAlerts(settings: SettingsRow, now = new Date()):
     );
 
     const level = nextThreshold(cycle.percent_of_cap, state.notified_level, settings.cycle_alert_thresholds);
-    if (level !== null) {
-      const claimed = await db.oneOrNone(
-        `UPDATE cycle_alerts SET notified_level = $2, updated_at = now()
-         WHERE cycle_start = $1 AND notified_level < $2 RETURNING cycle_start`,
+    // Skip the send entirely while the last attempt for this kind and cycle is
+    // a recent failure, so a misconfigured mailbox is not retried every five
+    // minutes. Nothing is claimed, so a later check retries the same mark.
+    if (level !== null && !(await inFailureCooldown("cycle_threshold", cycleStart, now))) {
+      // Claim the mark and read the value it replaces in one statement: the
+      // FOR UPDATE sub-select locks the row first, so `prev` is what this
+      // update overwrote rather than the value read before the mail was built,
+      // which a concurrent instance may have moved on in the meantime.
+      const claimed = await db.oneOrNone<{ prev: number }>(
+        `UPDATE cycle_alerts c SET notified_level = $2, updated_at = now()
+         FROM (SELECT notified_level AS prev FROM cycle_alerts WHERE cycle_start = $1 FOR UPDATE) p
+         WHERE c.cycle_start = $1 AND c.notified_level < $2
+         RETURNING p.prev`,
         [cycleStart, level],
       );
       if (claimed) {
@@ -100,7 +112,7 @@ export async function checkCycleAlerts(settings: SettingsRow, now = new Date()):
           // claim and let the same mark be mailed again later.
           await db.none(
             `UPDATE cycle_alerts SET notified_level = $3 WHERE cycle_start = $1 AND notified_level = $2`,
-            [cycleStart, level, state.notified_level],
+            [cycleStart, level, claimed.prev],
           );
         } else if (result.status === "sent") {
           sent.push("cycle_threshold");
@@ -108,7 +120,17 @@ export async function checkCycleAlerts(settings: SettingsRow, now = new Date()):
       }
     }
 
-    if (settings.cycle_pace_alert && !state.pace_notified && paceCrossesCap(cycle)) {
+    // Not after a cap mail went out in this same check: that mail already
+    // carries the projection in its own figures, so the pace warning would say
+    // the same thing twice. `pace_notified` is left unset, so it still goes out
+    // on a later check while the projection keeps crossing the cap.
+    if (
+      settings.cycle_pace_alert &&
+      !state.pace_notified &&
+      !sent.includes("cycle_threshold") &&
+      paceCrossesCap(cycle) &&
+      !(await inFailureCooldown("cycle_pace", cycleStart, now))
+    ) {
       const claimed = await db.oneOrNone(
         `UPDATE cycle_alerts SET pace_notified = true, updated_at = now()
          WHERE cycle_start = $1 AND pace_notified = false RETURNING cycle_start`,

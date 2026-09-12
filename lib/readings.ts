@@ -1,4 +1,4 @@
-import { dispatchAlert } from "@/lib/alerts/dispatch";
+import { dispatchAlert, inFailureCooldown } from "@/lib/alerts/dispatch";
 import { nextThreshold } from "@/lib/alerts/thresholds";
 import { db } from "@/lib/db";
 import { renderAlertEmail } from "@/lib/email-template";
@@ -68,6 +68,21 @@ export async function storeReading(
     local: { date: local.date, time: local.time, timezone: settings.timezone },
     windowActive: isWithinWindow(local.minutes, settings.window_start, settings.window_end),
   };
+}
+
+/**
+ * Give a claimed mark back. Only this call's own claim is undone: a concurrent
+ * push may already have claimed and sent a higher mark since this one failed,
+ * and writing the old value back unconditionally would clobber that claim and
+ * let the same mark be mailed again later. `notified` is kept in step with
+ * `notified_level` whatever value this writes.
+ */
+function releaseDailyClaim(windowId: number, level: number, prev: number): Promise<null> {
+  return db.none(
+    `UPDATE daily_windows SET notified_level = $3, notified = ($3 >= 100)
+     WHERE id = $1 AND notified_level = $2`,
+    [windowId, level, prev],
+  );
 }
 
 /**
@@ -148,57 +163,83 @@ export async function recordReading(
 
   // One mail per mark per day. The mark is claimed with a conditional update
   // before anything is sent, so two readings arriving at once cannot both send
-  // it. A failed send releases the claim, and the next reading tries again.
+  // it. A failed send releases the claim, and a later reading tries again once
+  // the failure cooldown has passed.
   // A missing address keeps the claim: the row in `alerts` says it was skipped,
   // and there is no point re-deciding that on every push for the rest of the day.
   let alertSent = false;
   let notifiedLevel = window!.notified_level;
   const level = nextThreshold(percent, notifiedLevel, settings.alert_thresholds);
-  if (level !== null) {
-    const claimed = await db.oneOrNone<{ id: number }>(
-      `UPDATE daily_windows SET notified_level = $2, notified = ($2 >= 100)
-       WHERE id = $1 AND notified_level < $2 RETURNING id`,
-      [window!.id, level],
-    );
-    if (claimed) {
-      // The extra aggregates run once per mark, never on the pushes either side
-      // of it. If any of them fail the mail still goes out with the headline.
-      const figures = {
-        settings,
-        kind: "alert" as const,
-        date: local.date,
-        usedBytes: used,
-        quotaBytes: quota,
-        threshold: level,
-        now,
-      };
-      const report = await buildAlertReport(figures).catch((err) => {
-        console.warn("[readings] could not build the full alert report", err);
-        return minimalAlertReport(figures);
-      });
-      const result = await dispatchAlert({
-        kind: level >= 100 ? "daily_exceeded" : "daily_threshold",
-        level,
-        scopeKey: local.date,
-        to: settings.alert_email_to,
-        email: renderAlertEmail(report),
-        payload: { used_bytes: used, quota_bytes: quota, percent: Math.round(percent * 10) / 10 },
-      });
-      if (result.status === "failed") {
-        // Only undo this call's own claim. A concurrent push may already
-        // have claimed and sent a higher mark since this claim failed;
-        // writing back the old value unconditionally would clobber that
-        // claim and let the same mark be mailed again later. Keep `notified`
-        // in step with `notified_level` whatever value this writes.
-        await db.none(
-          `UPDATE daily_windows SET notified_level = $3, notified = ($3 >= 100)
-           WHERE id = $1 AND notified_level = $2`,
-          [window!.id, level, notifiedLevel],
+  // Claimed but not yet resolved: set between the claim and the send, cleared
+  // once the outcome is known, so the catch below knows a claim is outstanding.
+  let claimedPrev: number | null = null;
+  try {
+    if (level !== null) {
+      const kind = level >= 100 ? ("daily_exceeded" as const) : ("daily_threshold" as const);
+      // Mail that is failing stays failing: skip the whole rebuild-and-send
+      // while the newest attempt for this kind and day is a recent failure.
+      // Nothing is claimed, so a push after the cooldown tries the mark again.
+      const coolingDown = await inFailureCooldown(kind, local.date, now);
+      if (!coolingDown) {
+        // Claim the mark and read the value it replaces in the same statement.
+        // The FOR UPDATE sub-select locks the row first, so `prev` is the value
+        // this update actually overwrote, not the one read several round trips
+        // ago at the top of this function - a concurrent push may have claimed
+        // and mailed a mark in between, and releasing to the stale value would
+        // let that mark be mailed a second time.
+        const claimed = await db.oneOrNone<{ prev: number }>(
+          `UPDATE daily_windows d SET notified_level = $2, notified = ($2 >= 100)
+           FROM (SELECT notified_level AS prev FROM daily_windows WHERE id = $1 FOR UPDATE) p
+           WHERE d.id = $1 AND d.notified_level < $2
+           RETURNING p.prev`,
+          [window!.id, level],
         );
-      } else {
-        notifiedLevel = level;
-        alertSent = result.status === "sent";
+        if (claimed) {
+          claimedPrev = claimed.prev;
+          // The extra aggregates run once per mark, never on the pushes either
+          // side of it. If any of them fail the mail still goes out with the
+          // headline.
+          const figures = {
+            settings,
+            kind: "alert" as const,
+            date: local.date,
+            usedBytes: used,
+            quotaBytes: quota,
+            threshold: level,
+            now,
+          };
+          const report = await buildAlertReport(figures).catch((err) => {
+            console.warn("[readings] could not build the full alert report", err);
+            return minimalAlertReport(figures);
+          });
+          const result = await dispatchAlert({
+            kind,
+            level,
+            scopeKey: local.date,
+            to: settings.alert_email_to,
+            email: renderAlertEmail(report),
+            payload: { used_bytes: used, quota_bytes: quota, percent: Math.round(percent * 10) / 10 },
+          });
+          if (result.status === "failed") {
+            await releaseDailyClaim(window!.id, level, claimed.prev);
+          } else {
+            notifiedLevel = level;
+            alertSent = result.status === "sent";
+          }
+          claimedPrev = null;
+        }
       }
+    }
+  } catch (err) {
+    // The reading is already stored and is about to be answered for; alerting
+    // must never turn that into a failed push. dispatchAlert throws when the
+    // `alerts` insert itself fails, and the statements around it throw when the
+    // database is unwell. Release an outstanding claim so the mark is not lost.
+    console.error("[readings] alerting failed", err);
+    if (level !== null && claimedPrev !== null) {
+      await releaseDailyClaim(window!.id, level, claimedPrev).catch((releaseErr) => {
+        console.error("[readings] could not release the alert claim", releaseErr);
+      });
     }
   }
 
