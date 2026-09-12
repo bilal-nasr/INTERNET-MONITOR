@@ -8,9 +8,6 @@ importers:
 
   .:
     dependencies:
-      '@vercel/config':
-        specifier: ^0.7.0
-        version: 0.7.0
       next:
         specifier: 16.3.4
         version: 16.3.4(@babel/core@7.29.7)(@types/node@22.20.2)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -45,6 +42,9 @@ importers:
       '@types/react-dom':
         specifier: ^19
         version: 19.3.0(@types/react@19.3.0)
+      '@vercel/config':
+        specifier: ^0.7.0
+        version: 0.7.0
       eslint:
         specifier: ^9
         version: 9.39.5(jiti@2.7.0)

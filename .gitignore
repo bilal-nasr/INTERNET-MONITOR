@@ -32,6 +32,9 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# ...except the placeholder template the README refers to; it holds no real
+# secrets and must not be confused with .env.local, which stays ignored.
+!.env.local.example
 
 # vercel
 .vercel
