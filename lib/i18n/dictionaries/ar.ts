@@ -527,6 +527,11 @@ export const ar = {
       "تقرير حصة الإنترنت: {used} من أصل {quota} ({percent}) بتاريخ {date}",
     subjectThreshold:
       "حصة الإنترنت عند {percent}: {used} من أصل {quota} بتاريخ {date}",
+    subjectDigest: "تقرير الإنترنت الأسبوعي: {used} من {quota} في {date}",
+    subjectDigestCycle: "تقرير دورة الفوترة: {used} من {quota} في {date}",
+    introDigest: "ملخص الإنترنت المجدول.",
+    eyebrowDigest: "ملخص مجدول",
+    digestFooter: "أُرسل وفق الجدول. يمكن تغييره أو إيقافه من الإعدادات، الفحوصات المجدولة.",
 
     introExceeded:
       "تجاوز استهلاك الإنترنت المنزلي الحصة اليومية.",

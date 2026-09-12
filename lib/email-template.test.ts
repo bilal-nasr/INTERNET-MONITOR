@@ -285,3 +285,26 @@ describe("threshold marks", () => {
     expect(html).toContain("Quota exceeded");
   });
 });
+
+describe("digest", () => {
+  test("weekly digest: its own subject, intro, eyebrow and footer", () => {
+    const { subject, text, html } = renderAlertEmail(report({ kind: "digest", digest: "weekly", threshold: null }));
+    expect(subject).toBe("Weekly internet report: 12.40 GB of 10.00 GB on 2026-09-11");
+    expect(text).toContain("Your scheduled internet summary.");
+    expect(text).toContain("Sent on schedule.");
+    expect(text).not.toContain("This is the only alert you will receive for today.");
+    expect(html).toContain("Scheduled summary");
+    expect(html).not.toContain("Test preview");
+  });
+
+  test("cycle digest: subject names the billing cycle", () => {
+    const { subject } = renderAlertEmail(report({ kind: "digest", digest: "cycle", threshold: null }));
+    expect(subject).toBe("Billing cycle report: 12.40 GB of 10.00 GB on 2026-09-11");
+  });
+
+  test("digest keeps the figures of a normal report", () => {
+    const { html } = renderAlertEmail(report({ kind: "digest", digest: "weekly", threshold: null }));
+    expect(html).toContain("12.40 GB");
+    expect(html).toContain("Billing cycle");
+  });
+});

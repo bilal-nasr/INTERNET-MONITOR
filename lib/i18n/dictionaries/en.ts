@@ -556,6 +556,11 @@ export const en = {
     subjectExceeded: "Internet quota exceeded: {used} of {quota} ({percent}) on {date}",
     subjectReport: "Internet quota report: {used} of {quota} ({percent}) on {date}",
     subjectThreshold: "Internet quota at {percent}: {used} of {quota} on {date}",
+    subjectDigest: "Weekly internet report: {used} of {quota} on {date}",
+    subjectDigestCycle: "Billing cycle report: {used} of {quota} on {date}",
+    introDigest: "Your scheduled internet summary.",
+    eyebrowDigest: "Scheduled summary",
+    digestFooter: "Sent on schedule. Change or stop it under Settings, Scheduled checks.",
 
     introExceeded: "Your home internet usage has exceeded the daily quota.",
     introReport: "Daily quota report.",

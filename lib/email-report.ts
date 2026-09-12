@@ -30,7 +30,9 @@ const HISTORY_DAYS = 7;
 
 export interface AlertReportInput {
   settings: SettingsRow;
-  kind: "alert" | "test";
+  kind: "alert" | "test" | "digest";
+  /** Only for kind "digest": which schedule produced it. */
+  digest?: "weekly" | "cycle";
   /** Local date whose quota window the alert belongs to, YYYY-MM-DD. */
   date: string;
   /** Usage that tripped the alert, measured over the quota window. */
@@ -117,6 +119,7 @@ export async function buildAlertReport(input: AlertReportInput): Promise<AlertRe
 
   return {
     kind,
+    digest: input.digest,
     locale,
     generated_at: now.toISOString(),
     date,
@@ -222,6 +225,7 @@ export function minimalAlertReport(input: AlertReportInput): AlertReport {
   const now = input.now ?? new Date();
   return {
     kind: input.kind,
+    digest: input.digest,
     locale: alertLocale(input.settings),
     generated_at: now.toISOString(),
     date: input.date,

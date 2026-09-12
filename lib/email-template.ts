@@ -43,8 +43,10 @@ export interface AlertDay {
  * drops a section rather than losing the send.
  */
 export interface AlertReport {
-  /** A real over-quota alert, or the preview sent from the settings page. */
-  kind: "alert" | "test";
+  /** A real over-quota alert, the preview sent from the settings page, or a scheduled summary. */
+  kind: "alert" | "test" | "digest";
+  /** Which schedule produced a digest. Ignored for the other kinds. */
+  digest?: "weekly" | "cycle";
   /** The language every word in the message is written in. */
   locale: Locale;
   generated_at: string;
@@ -409,6 +411,13 @@ function isWarning(report: AlertReport): boolean {
 export function subjectLine(report: AlertReport): string {
   const st = styleFor(report.locale);
   const { today } = report;
+  if (report.kind === "digest") {
+    return fill(report.digest === "cycle" ? st.t.subjectDigestCycle : st.t.subjectDigest, {
+      used: formatBytes(today.used_bytes),
+      quota: formatBytes(today.quota_bytes),
+      date: report.date,
+    });
+  }
   const prefix = report.kind === "test" ? st.t.testPrefix : "";
   const template = isExceeded(report) ? st.t.subjectExceeded : isWarning(report) ? st.t.subjectThreshold : st.t.subjectReport;
   return (
@@ -447,11 +456,13 @@ function renderText(report: AlertReport, st: Style): string {
   }
 
   lines.push(
-    isExceeded(report)
-      ? t.introExceeded
-      : isWarning(report)
-        ? fill(t.introThreshold, { percent: `${report.threshold}%` })
-        : t.introReport,
+    report.kind === "digest"
+      ? t.introDigest
+      : isExceeded(report)
+        ? t.introExceeded
+        : isWarning(report)
+          ? fill(t.introThreshold, { percent: `${report.threshold}%` })
+          : t.introReport,
     "",
     t.sectionToday,
     line(L.date, fill(t.textDate, { date: report.date, timezone: report.timezone })),
@@ -560,7 +571,15 @@ function renderText(report: AlertReport, st: Style): string {
   }
 
   lines.push("");
-  lines.push(report.kind === "test" ? t.testFooter : isWarning(report) ? t.thresholdFooter : t.alertFooter);
+  lines.push(
+    report.kind === "digest"
+      ? t.digestFooter
+      : report.kind === "test"
+        ? t.testFooter
+        : isWarning(report)
+          ? t.thresholdFooter
+          : t.alertFooter,
+  );
   if (report.app_url) lines.push(fill(t.dashboardLine, { url: report.app_url }));
 
   return lines.join("\n");
@@ -593,7 +612,13 @@ function renderHtml(report: AlertReport, st: Style): string {
       card(
         eyebrow(
           st,
-          isExceeded(report) ? t.eyebrowExceeded : isWarning(report) ? fill(t.eyebrowThreshold, { percent: `${report.threshold}%` }) : t.eyebrowReport,
+          report.kind === "digest"
+            ? t.eyebrowDigest
+            : isExceeded(report)
+              ? t.eyebrowExceeded
+              : isWarning(report)
+                ? fill(t.eyebrowThreshold, { percent: `${report.threshold}%` })
+                : t.eyebrowReport,
           headlineTone,
           headlineTone,
         ) +
@@ -774,7 +799,14 @@ function renderHtml(report: AlertReport, st: Style): string {
     date: report.date,
   });
 
-  const footerNote = report.kind === "test" ? t.footerTest : isWarning(report) ? t.thresholdFooter : t.alertFooter;
+  const footerNote =
+    report.kind === "digest"
+      ? t.digestFooter
+      : report.kind === "test"
+        ? t.footerTest
+        : isWarning(report)
+          ? t.thresholdFooter
+          : t.alertFooter;
 
   return `<!DOCTYPE html>
 <html lang="${report.locale}" dir="${st.dir}">
