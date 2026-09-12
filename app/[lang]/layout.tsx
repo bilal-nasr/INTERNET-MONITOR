@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Cairo } from "next/font/google";
 import { I18nProvider } from "@/components/I18nProvider";
@@ -32,11 +32,21 @@ export function generateStaticParams() {
   return LOCALES.map((lang) => ({ lang }));
 }
 
+/** The browser chrome colour once installed, the same ink as the manifest. */
+export const viewport: Viewport = {
+  themeColor: "#171717",
+};
+
 export async function generateMetadata(): Promise<Metadata> {
   const { d } = await getI18n();
   return {
     title: d.meta.appName,
     description: d.meta.appDescription,
+    manifest: "/manifest.webmanifest",
+    icons: {
+      icon: "/icon.svg",
+      apple: "/icon-192.png",
+    },
   };
 }
 
