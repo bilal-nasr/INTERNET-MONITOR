@@ -18,3 +18,17 @@ export function formatBytes(bytes: number, digits = 2): string {
 export function quotaBytes(quotaGb: number): number {
   return Math.round(quotaGb * GB);
 }
+
+/**
+ * A throughput in bits per second, decimal units, the way ISPs quote a link.
+ * Bytes in, because that is what the counters hold; a negative rate cannot
+ * happen on a monotonic counter and is clamped rather than shown.
+ */
+export function formatRate(bytesPerSecond: number): string {
+  if (!Number.isFinite(bytesPerSecond)) return "-";
+  const bits = Math.max(0, bytesPerSecond) * 8;
+  if (bits >= 1e9) return `${(bits / 1e9).toFixed(2)} Gbit/s`;
+  if (bits >= 1e6) return `${(bits / 1e6).toFixed(1)} Mbit/s`;
+  if (bits >= 1e3) return `${Math.round(bits / 1e3)} kbit/s`;
+  return `${Math.round(bits)} bit/s`;
+}

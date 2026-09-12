@@ -5,6 +5,7 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  Cell,
   ReferenceLine,
   ResponsiveContainer,
   Tooltip,
@@ -24,6 +25,8 @@ interface Props {
   /** Today's date in the configured timezone, as YYYY-MM-DD. */
   today: string;
   days?: number;
+  /** Days (YYYY-MM-DD) flagged as unusual; drawn in the warning colour. */
+  anomalies?: string[];
 }
 
 /**
@@ -69,12 +72,13 @@ function makeTooltip(d: Dictionary) {
   };
 }
 
-export function HistoryChart({ history, quotaGb, today, days = 30 }: Props) {
+export function HistoryChart({ history, quotaGb, today, days = 30, anomalies = [] }: Props) {
   const { d, dir, locale } = useI18n();
   const router = useRouter();
   const data = fillDays(history, days, today);
   const hasData = history.some((h) => h.used_bytes > 0);
   const ChartTooltip = makeTooltip(d);
+  const flagged = new Set(anomalies);
 
   /**
    * A bare date on both ends is the whole local day (lib/range.ts pushes `to`
@@ -130,15 +134,20 @@ export function HistoryChart({ history, quotaGb, today, days = 30 }: Props) {
               />
               <Tooltip content={ChartTooltip} cursor={{ fill: "var(--border)", opacity: 0.4 }} />
               <ReferenceLine y={quotaGb} stroke="var(--status-critical)" strokeDasharray="4 4" />
-              {/* One colour: these bars are the whole day, while the quota only
-                  governs the window, so colouring by the quota would mislead. */}
-              <Bar
-                dataKey="gb"
-                radius={[4, 4, 0, 0]}
-                maxBarSize={28}
-                isAnimationActive={false}
-                fill="var(--series-1)"
-              />
+              {/* All bars share one hue because they are whole days while the
+                  quota governs only the window; the warning colour is reserved
+                  for flagged days. */}
+              <Bar dataKey="gb" radius={[4, 4, 0, 0]} maxBarSize={28} isAnimationActive={false}>
+                {/* Colour marks state, not identity: a flagged day is out of
+                    line with the days before it, and the list under the chart
+                    says by how much, so the colour never stands alone. */}
+                {data.map((row) => (
+                  <Cell
+                    key={row.day}
+                    fill={flagged.has(row.day) ? "var(--status-warning)" : "var(--series-1)"}
+                  />
+                ))}
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         ) : (

@@ -158,6 +158,10 @@ export const en = {
     historyHint: "all traffic; dashed line = {quota} GB window quota",
     historyEmpty: "No usage recorded yet. Data appears after a few polls.",
     drillHint: "Click a day to see it hour by hour.",
+    throughputHeading: "Live throughput",
+    throughputHint: "last {minutes} minutes",
+    throughputNow: "now",
+    throughputEmpty: "Two readings inside the last {minutes} minutes are needed to measure a rate.",
   },
 
   router: {
@@ -301,6 +305,12 @@ export const en = {
     nothingRecorded: "Nothing recorded in this range.",
     noTraffic: "No traffic recorded in this range.",
     noSessions: "No sessions recorded in this range.",
+  },
+
+  anomaly: {
+    heading: "Unusual days",
+    hint: "at least twice the usual day, judged against the days before it",
+    line: "{day}: {used}, {ratio}× the usual {baseline}",
   },
 
   durationBuckets: ["< 5m", "5m - 30m", "30m - 2h", "2h - 6h", "6h - 24h", "> 24h"],

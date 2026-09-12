@@ -142,6 +142,10 @@ export const ar = {
     historyHint: "كل حركة البيانات؛ الخط المتقطع = حصة النافذة {quota} GB",
     historyEmpty: "لم يُسجَّل أي استهلاك بعد. تظهر البيانات بعد بضع قراءات.",
     drillHint: "انقر على يوم لعرضه ساعة بساعة.",
+    throughputHeading: "السرعة الحالية",
+    throughputHint: "آخر {minutes} دقيقة",
+    throughputNow: "الآن",
+    throughputEmpty: "يلزم قراءتان خلال آخر {minutes} دقيقة لقياس السرعة.",
   },
 
   router: {
@@ -282,6 +286,12 @@ export const ar = {
     nothingRecorded: "لم يُسجَّل شيء في هذه الفترة.",
     noTraffic: "لم تُسجَّل حركة بيانات في هذه الفترة.",
     noSessions: "لم تُسجَّل أي جلسات في هذه الفترة.",
+  },
+
+  anomaly: {
+    heading: "أيام غير معتادة",
+    hint: "ضعف اليوم المعتاد على الأقل، مقارنةً بالأيام التي سبقته",
+    line: "{day}: {used}، {ratio}× المعتاد {baseline}",
   },
 
   durationBuckets: ["< 5 د", "5 د - 30 د", "30 د - 2 س", "2 س - 6 س", "6 س - 24 س", "> 24 س"],
