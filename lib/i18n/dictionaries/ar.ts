@@ -141,6 +141,11 @@ export const ar = {
     historyHeading: "الاستهلاك اليومي بالجيجابايت، آخر {days} يوماً",
     historyHint: "كل حركة البيانات؛ الخط المتقطع = حصة النافذة {quota} GB",
     historyEmpty: "لم يُسجَّل أي استهلاك بعد. تظهر البيانات بعد بضع قراءات.",
+    drillHint: "انقر على يوم لعرضه ساعة بساعة.",
+    throughputHeading: "السرعة الحالية",
+    throughputHint: "آخر {minutes} دقيقة",
+    throughputNow: "الآن",
+    throughputEmpty: "يلزم قراءتان خلال آخر {minutes} دقيقة لقياس السرعة.",
   },
 
   router: {
@@ -301,6 +306,12 @@ export const ar = {
     noSessions: "لم تُسجَّل أي جلسات في هذه الفترة.",
   },
 
+  anomaly: {
+    heading: "أيام غير معتادة",
+    hint: "ضعف اليوم المعتاد على الأقل، مقارنةً بالأيام التي سبقته",
+    line: "{day}: {used}، {ratio}× المعتاد {baseline}",
+  },
+
   durationBuckets: ["< 5 د", "5 د - 30 د", "30 د - 2 س", "2 س - 6 س", "6 س - 24 س", "> 24 س"],
 
   sessions: {
@@ -343,6 +354,27 @@ export const ar = {
     upShort: "متصل {duration}",
     downBytes: "وارد {bytes}",
     upBytes: "صادر {bytes}",
+    downtimeHeading: "الانقطاع",
+    totalDowntime: "إجمالي الانقطاع",
+    downtimeShare: "{percent}% من المدة",
+    longestOutage: "أطول انقطاع",
+    outageEndedAt: "عاد في {time}",
+    outageOngoing: "ما زال منقطعاً",
+    outagesCount: {
+      zero: "لا انقطاعات",
+      one: "انقطاع واحد",
+      two: "انقطاعان",
+      few: "{count} انقطاعات",
+      many: "{count} انقطاعاً",
+      other: "{count} انقطاع",
+    },
+    outagesHint: "الفجوات بين جلسة والتي تليها",
+    noOutages: "لا انقطاعات في هذه المدة.",
+    calendarHeading: "الانقطاع حسب اليوم",
+    calendarHint: "الأغمق يعني انقطاعاً أطول",
+    calendarCell: "{day}: منقطع {duration}",
+    calendarCellNone: "{day}: لا انقطاعات",
+    calendarTooLong: "اختر مدة {max} يوماً أو أقل لعرض التقويم.",
   },
 
   settings: {

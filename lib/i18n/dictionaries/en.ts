@@ -157,6 +157,11 @@ export const en = {
     historyHeading: "Daily usage in GB, last {days} days",
     historyHint: "all traffic; dashed line = {quota} GB window quota",
     historyEmpty: "No usage recorded yet. Data appears after a few polls.",
+    drillHint: "Click a day to see it hour by hour.",
+    throughputHeading: "Live throughput",
+    throughputHint: "last {minutes} minutes",
+    throughputNow: "now",
+    throughputEmpty: "Two readings inside the last {minutes} minutes are needed to measure a rate.",
   },
 
   router: {
@@ -320,6 +325,12 @@ export const en = {
     noSessions: "No sessions recorded in this range.",
   },
 
+  anomaly: {
+    heading: "Unusual days",
+    hint: "at least twice the usual day, judged against the days before it",
+    line: "{day}: {used}, {ratio}× the usual {baseline}",
+  },
+
   durationBuckets: ["< 5m", "5m - 30m", "30m - 2h", "2h - 6h", "6h - 24h", "> 24h"],
 
   sessions: {
@@ -366,6 +377,23 @@ export const en = {
     upShort: "Up {duration}",
     downBytes: "Down {bytes}",
     upBytes: "Up {bytes}",
+    downtimeHeading: "Downtime",
+    totalDowntime: "Total downtime",
+    downtimeShare: "{percent}% of the range",
+    longestOutage: "Longest outage",
+    outageEndedAt: "back at {time}",
+    outageOngoing: "still down",
+    outagesCount: plural({
+      one: "{count} outage",
+      other: "{count} outages",
+    }),
+    outagesHint: "gaps between one session and the next",
+    noOutages: "No outages in this range.",
+    calendarHeading: "Downtime by day",
+    calendarHint: "darker means longer offline",
+    calendarCell: "{day}: offline {duration}",
+    calendarCellNone: "{day}: no outages",
+    calendarTooLong: "Choose a range of {max} days or fewer to see the calendar.",
   },
 
   settings: {

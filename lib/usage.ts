@@ -244,3 +244,18 @@ export async function getDailyHistory(days: number, timezone: string): Promise<D
     [days, timezone],
   );
 }
+
+/**
+ * The raw readings of the last `minutes`, oldest first. Bounded by time rather
+ * than by count so a router pushing every 30 seconds and one pushing every
+ * minute both yield the same span on the throughput sparkline.
+ */
+export async function getRecentReadings(minutes: number): Promise<Reading[]> {
+  return db.any<Reading>(
+    `SELECT id, recorded_at, tx_bytes, rx_bytes, total_bytes
+     FROM interface_readings
+     WHERE recorded_at >= now() - make_interval(mins => $1)
+     ORDER BY recorded_at ASC, id ASC`,
+    [minutes],
+  );
+}

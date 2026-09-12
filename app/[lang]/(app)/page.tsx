@@ -1,18 +1,25 @@
 import { connection } from "next/server";
+import { AnomalyList } from "@/components/AnomalyList";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { HistoryChart } from "@/components/HistoryChart";
 import { SetupChecklist } from "@/components/SetupChecklist";
 import { CycleGauge } from "@/components/stats/CycleGauge";
 import { StatusCard } from "@/components/StatusCard";
+import { ThroughputCard } from "@/components/ThroughputCard";
 import { UsageProgress } from "@/components/UsageProgress";
 import { latestAlert } from "@/lib/alerts/log";
+import { flagAnomalies } from "@/lib/anomaly";
 import { Interpolate } from "@/lib/i18n/react";
 import { getI18n } from "@/lib/i18n/server";
 import { getLatestSessionSummary } from "@/lib/sessions";
 import { getSettings, type SettingsRow } from "@/lib/settings";
 import { setupStatus } from "@/lib/setup-status";
 import { getCycleUsage } from "@/lib/stats";
-import { getDailyHistory, getLatestReading, getTodayUsage } from "@/lib/usage";
+import { ratesFromReadings } from "@/lib/throughput";
+import { getDailyHistory, getLatestReading, getRecentReadings, getTodayUsage } from "@/lib/usage";
+
+/** Span of the throughput sparkline. Sixty pushes at the router's 30-second interval. */
+const THROUGHPUT_MINUTES = 30;
 
 export default async function DashboardPage() {
   await connection();
@@ -26,14 +33,17 @@ export default async function DashboardPage() {
     return <SetupError message={err instanceof Error ? err.message : String(err)} />;
   }
 
-  const [usage, history, session, cycle, staleAlert, latest] = await Promise.all([
+  const [usage, history, session, cycle, staleAlert, latest, recent] = await Promise.all([
     getTodayUsage(settings),
     getDailyHistory(30, settings.timezone),
     getLatestSessionSummary(),
     getCycleUsage(settings.monthly_quota_gb, settings.billing_cycle_day, settings.timezone),
     latestAlert("link_stale", "link").catch(() => null),
     getLatestReading(),
+    getRecentReadings(THROUGHPUT_MINUTES),
   ]);
+  const rates = ratesFromReadings(recent);
+  const anomalies = flagAnomalies(history);
 
   if (!latest) {
     return (
@@ -76,9 +86,17 @@ export default async function DashboardPage() {
         />
       </div>
 
+      <ThroughputCard rates={rates} minutes={THROUGHPUT_MINUTES} timezone={settings.timezone} />
+
       <CycleGauge cycle={cycle} timezone={settings.timezone} />
 
-      <HistoryChart history={history} quotaGb={settings.quota_gb} today={usage.date} />
+      <HistoryChart
+        history={history}
+        quotaGb={settings.quota_gb}
+        today={usage.date}
+        anomalies={anomalies.map((a) => a.day)}
+      />
+      <AnomalyList flags={anomalies} />
     </div>
   );
 }

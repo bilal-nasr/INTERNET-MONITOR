@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { connection } from "next/server";
+import { AnomalyList } from "@/components/AnomalyList";
 import { RangePicker } from "@/components/RangePicker";
 import { Card, StatTiles, type Tile } from "@/components/stats/chrome";
 import { ComplianceChart } from "@/components/stats/ComplianceChart";
@@ -10,6 +11,7 @@ import { DurationChart, HourProfileChart, WeekdayProfileChart } from "@/componen
 import { TopSessionsTable } from "@/components/stats/TopSessionsTable";
 import { UsageHeatmap } from "@/components/stats/UsageHeatmap";
 import { UsageTimeline } from "@/components/stats/UsageTimeline";
+import { flagAnomalies } from "@/lib/anomaly";
 import { formatBytes } from "@/lib/format";
 import { fill, plural, type Dictionary } from "@/lib/i18n";
 import type { Formatters } from "@/lib/i18n/format";
@@ -72,6 +74,9 @@ export default async function StatsPage({ searchParams }: { searchParams: Promis
   }
 
   const report = await buildStatsReport(settings, range, d);
+  // Judged on window-only usage, which is what the compliance chart draws, so a
+  // flagged bar and a flagged line describe the same number.
+  const anomalies = flagAnomalies(report.compliance.days);
 
   return (
     <div className="space-y-6">
@@ -174,6 +179,8 @@ export default async function StatsPage({ searchParams }: { searchParams: Promis
       >
         <ComplianceChart compliance={report.compliance} />
       </Card>
+
+      <AnomalyList flags={anomalies} />
 
       <p className="text-xs text-muted">{d.stats.methodology}</p>
     </div>
