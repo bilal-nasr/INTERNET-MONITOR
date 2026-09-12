@@ -15,8 +15,9 @@
  * every tick is free to try again the moment a recipient is configured.
  */
 
-import { dispatchAlert, FAILED_SEND_COOLDOWN_MS } from "@/lib/alerts/dispatch";
+import { dispatchAlert } from "@/lib/alerts/dispatch";
 import { latestAlert } from "@/lib/alerts/log";
+import { effectiveLastSentAt } from "@/lib/cron/digest-decision";
 import { registerJob, type Job, type JobContext, type JobResult } from "@/lib/cron/jobs";
 import { digestDueAt, digestReportDate, isDigestDue } from "@/lib/cron/schedule";
 import { buildAlertReport, minimalAlertReport, type AlertReportInput } from "@/lib/email-report";
@@ -40,17 +41,13 @@ async function run(ctx: JobContext): Promise<JobResult> {
   if (settings.digest === "off") return { status: "skipped", detail: "digest is off" };
 
   const last = await latestAlert("digest");
-  // Only a row that actually sent - or a failed one still within its cooldown
-  // - counts as "already handled" for this period. A skipped row (no
-  // recipient) never blocks; a failed row older than the cooldown no longer
-  // blocks either, so a fixed misconfiguration is retried on the next tick
-  // instead of staying silent until the next scheduled instant.
-  const inFailureCooldown =
-    last?.status === "failed" && now.getTime() - last.created_at.getTime() < FAILED_SEND_COOLDOWN_MS;
-  const lastSentAt = last && (last.status === "sent" || inFailureCooldown) ? last.created_at : null;
+  const lastSentAt = effectiveLastSentAt(last, now);
 
   if (!isDigestDue(settings.digest, now, lastSentAt, settings.billing_cycle_day, settings.timezone)) {
-    return { status: "skipped", detail: lastSentAt ? `last sent ${lastSentAt.toISOString()}` : "not due" };
+    // isDigestDue only returns false here when lastSentAt is non-null: digest
+    // is not "off" at this point, so due is always a real instant, and a null
+    // lastSentAt makes isDigestDue return true unconditionally.
+    return { status: "skipped", detail: `last sent ${lastSentAt!.toISOString()}` };
   }
 
   const dueAt = digestDueAt(settings.digest, now, settings.billing_cycle_day, settings.timezone) ?? now;
