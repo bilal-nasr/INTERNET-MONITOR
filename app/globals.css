@@ -89,6 +89,23 @@
   }
 }
 
+/*
+ * Native controls (the clock in a time input, a select's menu, scrollbars)
+ * follow the theme instead of staying light-mode grey on a dark page.
+ */
+:root {
+  color-scheme: light dark;
+}
+
+/*
+ * The scrollbar's room is kept whether or not the page is long enough to need
+ * it, so switching between a short settings tab and a long one does not nudge
+ * the whole page sideways.
+ */
+html {
+  scrollbar-gutter: stable;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);

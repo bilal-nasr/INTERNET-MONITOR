@@ -16,6 +16,7 @@ export function AccountForm({ user }: { user: PublicUser }) {
   const { locale, d } = useI18n();
   const a = d.auth.account;
   const [email, setEmail] = useState(user.email ?? "");
+  const [savedEmail, setSavedEmail] = useState(user.email ?? "");
   const [savingEmail, setSavingEmail] = useState(false);
 
   const [current, setCurrent] = useState("");
@@ -39,6 +40,7 @@ export function AccountForm({ user }: { user: PublicUser }) {
         setToast({ kind: "error", message: await readApiError(res, fill(d.settings.httpError, { status: res.status })) });
         return;
       }
+      setSavedEmail(email.trim());
       setToast({ kind: "success", message: a.emailSaved });
     } catch (err) {
       setToast({ kind: "error", message: err instanceof Error ? err.message : String(err) });
@@ -100,7 +102,11 @@ export function AccountForm({ user }: { user: PublicUser }) {
               />
             </div>
           </div>
-          <button type="submit" disabled={savingEmail} className={secondaryButtonClass}>
+          <button
+            type="submit"
+            disabled={savingEmail || email.trim() === savedEmail}
+            className={secondaryButtonClass}
+          >
             {savingEmail ? d.settings.saving : a.saveEmail}
           </button>
         </form>

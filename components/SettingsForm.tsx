@@ -128,8 +128,8 @@ const primaryButtonClass =
   "inline-flex items-center justify-center rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-50";
 
 /**
- * The settings page body: a tab strip, the settings form spread over the
- * first four tabs, and the sharing and account panels, which save on their
+ * The settings page body: the tab list, the settings form spread over the
+ * first four tabs, and the sharing card and account panel, which save on their
  * own and are passed in already rendered.
  *
  * Every panel stays mounted and is only hidden, so switching tabs never loses
@@ -190,7 +190,11 @@ export function SettingsForm({
     window.history.replaceState(null, "", url);
   }
 
-  /** Arrow keys move along the strip, in the reading direction; Home and End jump to either end. */
+  /**
+   * Arrow keys move along the list: left and right in the reading direction
+   * for the strip a phone shows, up and down for the column a desktop shows.
+   * Both pairs work at every width. Home and End jump to either end.
+   */
   function onTabKeyDown(e: KeyboardEvent<HTMLButtonElement>) {
     const count = SETTINGS_TABS.length;
     const index = SETTINGS_TABS.indexOf(tab);
@@ -198,6 +202,8 @@ export function SettingsForm({
     let next: number;
     if (e.key === "ArrowRight") next = rtl ? index - 1 : index + 1;
     else if (e.key === "ArrowLeft") next = rtl ? index + 1 : index - 1;
+    else if (e.key === "ArrowDown") next = index + 1;
+    else if (e.key === "ArrowUp") next = index - 1;
     else if (e.key === "Home") next = 0;
     else if (e.key === "End") next = count - 1;
     else return;
@@ -233,6 +239,8 @@ export function SettingsForm({
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    // Enter in a field with nothing changed has nothing to send.
+    if (!dirty) return;
     // The form is not validated natively: a browser refuses to point at an
     // invalid field inside a hidden panel and just does nothing. It is checked
     // here instead, and the offending tab is opened.
@@ -322,7 +330,6 @@ export function SettingsForm({
     alerts: { label: t.alerts, hint: t.alertsHint },
     router: { label: t.router, hint: t.routerHint },
     data: { label: t.data, hint: t.dataHint },
-    sharing: { label: t.sharing, hint: t.sharingHint },
     account: { label: t.account, hint: t.accountHint },
   };
 
@@ -336,20 +343,24 @@ export function SettingsForm({
         hidden={tab !== id}
         className="space-y-4"
       >
-        <p className="text-sm text-muted">{labels[id].hint}</p>
+        <div>
+          <h2 className="text-lg font-semibold tracking-tight">{labels[id].label}</h2>
+          <p className="text-sm text-muted">{labels[id].hint}</p>
+        </div>
         {children}
       </div>
     );
   }
 
   return (
-    <div className="max-w-3xl space-y-6">
-      {/* On a phone the strip scrolls sideways rather than wrapping, so the
-          underline under the current tab always sits on one line. */}
+    <div className="gap-10 space-y-6 lg:grid lg:grid-cols-[11rem_minmax(0,1fr)] lg:items-start lg:space-y-0">
+      {/* A column beside the panels on a desktop, where the width is there to
+          spare; a strip above them on a phone, scrolling sideways rather than
+          wrapping so the underline under the current tab stays on one line. */}
       <div
         role="tablist"
         aria-label={d.settings.tabsLabel}
-        className="-mx-4 flex overflow-x-auto border-b border-border px-4 [scrollbar-width:none] sm:mx-0 sm:px-0"
+        className="-mx-4 flex overflow-x-auto border-b border-border px-4 [scrollbar-width:none] sm:mx-0 sm:px-0 lg:sticky lg:top-6 lg:flex-col lg:gap-0.5 lg:overflow-visible lg:border-b-0"
       >
         {SETTINGS_TABS.map((id) => {
           const selected = tab === id;
@@ -364,16 +375,16 @@ export function SettingsForm({
               tabIndex={selected ? 0 : -1}
               onClick={() => selectTab(id)}
               onKeyDown={onTabKeyDown}
-              className={`-mb-px inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2.5 text-sm font-medium transition-colors ${
+              className={`-mb-px inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2.5 text-sm font-medium transition-colors lg:mb-0 lg:rounded-md lg:border-b-0 lg:py-2 lg:text-start ${
                 selected
-                  ? "border-foreground text-foreground"
-                  : "border-transparent text-muted hover:border-border hover:text-foreground"
+                  ? "border-foreground text-foreground lg:bg-border/60"
+                  : "border-transparent text-muted hover:border-border hover:text-foreground lg:hover:bg-border/40"
               }`}
             >
               {labels[id].label}
               {dirtyTabs.has(id) && (
                 <>
-                  <span aria-hidden className="size-1.5 rounded-full bg-status-warning" />
+                  <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-status-warning lg:ms-auto" />
                   <span className="sr-only">{d.settings.unsaved}</span>
                 </>
               )}
@@ -382,369 +393,375 @@ export function SettingsForm({
         })}
       </div>
 
-      <form onSubmit={onSubmit} noValidate>
-        {panel(
-          "limits",
-          <>
-            <SettingsCard title={d.settings.quotaSection} description={d.settings.quotaSectionHint}>
-              <div className="grid gap-4 sm:grid-cols-3">
-                <Field id="quota_gb" label={d.settings.quotaGb} hint={d.settings.quotaGbHint}>
-                  <WithUnit unit={d.settings.units.gb}>
+      <div className="min-w-0">
+        <form onSubmit={onSubmit} noValidate>
+          {panel(
+            "limits",
+            <>
+              <SettingsCard title={d.settings.quotaSection} description={d.settings.quotaSectionHint}>
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <Field id="quota_gb" label={d.settings.quotaGb} hint={d.settings.quotaGbHint}>
+                    <WithUnit unit={d.settings.units.gb}>
+                      <input
+                        id="quota_gb"
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        required
+                        value={form.quota_gb}
+                        onChange={(e) => update("quota_gb", e.target.value)}
+                        className={`${inputClass} pe-12`}
+                      />
+                    </WithUnit>
+                  </Field>
+                  <Field id="window_start" label={d.settings.windowStart}>
                     <input
-                      id="quota_gb"
-                      type="number"
-                      min="0.01"
-                      step="0.01"
+                      id="window_start"
+                      type="time"
                       required
-                      value={form.quota_gb}
-                      onChange={(e) => update("quota_gb", e.target.value)}
-                      className={`${inputClass} pe-12`}
+                      value={form.window_start}
+                      onChange={(e) => update("window_start", e.target.value)}
+                      className={inputClass}
                     />
-                  </WithUnit>
-                </Field>
-                <Field id="window_start" label={d.settings.windowStart}>
-                  <input
-                    id="window_start"
-                    type="time"
-                    required
-                    value={form.window_start}
-                    onChange={(e) => update("window_start", e.target.value)}
-                    className={inputClass}
-                  />
-                </Field>
-                <Field id="window_end" label={d.settings.windowEnd}>
-                  <input
-                    id="window_end"
-                    type="time"
-                    required
-                    value={form.window_end}
-                    onChange={(e) => update("window_end", e.target.value)}
-                    className={inputClass}
-                  />
-                </Field>
-              </div>
-              <Field id="timezone" label={d.settings.timezone} hint={d.settings.timezoneHint} className="sm:max-w-sm">
-                {/* An IANA name is an identifier, not prose: it stays ltr so
-                    "Asia/Beirut" does not come apart around the slash in Arabic. */}
-                <input
-                  id="timezone"
-                  type="text"
-                  required
-                  dir="ltr"
-                  list="tz-list"
-                  value={form.timezone}
-                  onChange={(e) => update("timezone", e.target.value)}
-                  className={inputClass}
-                  placeholder={d.settings.timezonePlaceholder}
-                />
-                <datalist id="tz-list">
-                  {typeof Intl.supportedValuesOf === "function" &&
-                    Intl.supportedValuesOf("timeZone").map((tz) => <option key={tz} value={tz} />)}
-                </datalist>
-              </Field>
-            </SettingsCard>
-
-            <SettingsCard title={d.settings.monthlySection} description={d.settings.monthlySectionHint}>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field id="monthly_quota_gb" label={d.settings.monthlyQuotaGb} hint={d.settings.monthlyQuotaGbHint}>
-                  <WithUnit unit={d.settings.units.gb}>
+                  </Field>
+                  <Field id="window_end" label={d.settings.windowEnd}>
                     <input
-                      id="monthly_quota_gb"
-                      type="number"
-                      min="0.01"
-                      step="0.01"
+                      id="window_end"
+                      type="time"
                       required
-                      value={form.monthly_quota_gb}
-                      onChange={(e) => update("monthly_quota_gb", e.target.value)}
-                      className={`${inputClass} pe-12`}
+                      value={form.window_end}
+                      onChange={(e) => update("window_end", e.target.value)}
+                      className={inputClass}
                     />
-                  </WithUnit>
-                </Field>
-                <Field id="billing_cycle_day" label={d.settings.billingCycleDay} hint={d.settings.billingCycleDayHint}>
-                  <input
-                    id="billing_cycle_day"
-                    type="number"
-                    min="1"
-                    max="31"
-                    step="1"
-                    required
-                    value={form.billing_cycle_day}
-                    onChange={(e) => update("billing_cycle_day", e.target.value)}
-                    className={inputClass}
-                  />
-                </Field>
-              </div>
-            </SettingsCard>
-          </>,
-        )}
-
-        {panel(
-          "alerts",
-          <>
-            <SettingsCard title={d.settings.emailCard}>
-              <Field id="alert_email_to" label={d.settings.alertEmail} hint={d.settings.alertEmailHint}>
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
-                  <input
-                    id="alert_email_to"
-                    type="email"
-                    dir="ltr"
-                    autoComplete="email"
-                    value={form.alert_email_to}
-                    onChange={(e) => update("alert_email_to", e.target.value)}
-                    className={`${inputClass} sm:max-w-sm`}
-                    placeholder="name@example.com"
-                  />
-                  <button
-                    type="button"
-                    onClick={sendTest}
-                    disabled={testing || !canTest}
-                    className={`${secondaryButtonClass} shrink-0 sm:mt-1`}
-                  >
-                    {testing ? d.settings.sending : d.settings.sendTest}
-                  </button>
+                  </Field>
                 </div>
-              </Field>
-              <p
-                role="status"
-                aria-live="polite"
-                className={`-mt-3 text-xs empty:hidden ${
-                  testResult?.kind === "error" ? "text-status-critical" : "text-green-700 dark:text-status-good"
-                }`}
-              >
-                {testResult?.message}
-              </p>
-              <Field id="language" label={d.settings.alertLanguage} hint={d.settings.alertLanguageHint} className="sm:max-w-sm">
-                <select
-                  id="language"
-                  value={form.language}
-                  onChange={(e) => update("language", e.target.value)}
-                  className={inputClass}
-                >
-                  {LOCALES.map((option) => (
-                    <option key={option} value={option}>
-                      {LOCALE_NAMES[option]}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-            </SettingsCard>
-
-            <SettingsCard title={d.settings.marksCard}>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field id="alert_thresholds" label={d.settings.alertThresholds} hint={d.settings.alertThresholdsHint}>
+                <Field id="timezone" label={d.settings.timezone} hint={d.settings.timezoneHint} className="sm:max-w-sm">
+                  {/* An IANA name is an identifier, not prose: it stays ltr so
+                      "Asia/Beirut" does not come apart around the slash in Arabic. */}
                   <input
-                    id="alert_thresholds"
+                    id="timezone"
                     type="text"
+                    required
                     dir="ltr"
-                    inputMode="decimal"
-                    value={form.alert_thresholds}
-                    onChange={(e) => update("alert_thresholds", e.target.value)}
-                    className={`${inputClass} font-mono`}
-                    placeholder="50, 80, 100"
+                    list="tz-list"
+                    value={form.timezone}
+                    onChange={(e) => update("timezone", e.target.value)}
+                    className={inputClass}
+                    placeholder={d.settings.timezonePlaceholder}
                   />
+                  <datalist id="tz-list">
+                    {typeof Intl.supportedValuesOf === "function" &&
+                      Intl.supportedValuesOf("timeZone").map((tz) => <option key={tz} value={tz} />)}
+                  </datalist>
                 </Field>
-                <Field
-                  id="cycle_alert_thresholds"
-                  label={d.settings.cycleAlertThresholds}
-                  hint={d.settings.cycleAlertThresholdsHint}
-                >
-                  <input
-                    id="cycle_alert_thresholds"
-                    type="text"
-                    dir="ltr"
-                    inputMode="decimal"
-                    value={form.cycle_alert_thresholds}
-                    onChange={(e) => update("cycle_alert_thresholds", e.target.value)}
-                    className={`${inputClass} font-mono`}
-                    placeholder="80, 100"
-                  />
-                </Field>
-              </div>
-              <Switch
-                checked={form.cycle_pace_alert}
-                onChange={(v) => update("cycle_pace_alert", v)}
-                label={d.settings.cyclePaceAlert}
-                hint={d.settings.cyclePaceAlertHint}
-              />
-            </SettingsCard>
+              </SettingsCard>
 
-            <SettingsCard title={d.settings.scheduleSection} description={d.settings.scheduleSectionHint}>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field
-                  id="stale_after_minutes"
-                  label={d.settings.staleAfterMinutes}
-                  hint={d.settings.staleAfterMinutesHint}
-                >
-                  <WithUnit unit={d.settings.units.minutes}>
+              <SettingsCard title={d.settings.monthlySection} description={d.settings.monthlySectionHint}>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field id="monthly_quota_gb" label={d.settings.monthlyQuotaGb} hint={d.settings.monthlyQuotaGbHint}>
+                    <WithUnit unit={d.settings.units.gb}>
+                      <input
+                        id="monthly_quota_gb"
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        required
+                        value={form.monthly_quota_gb}
+                        onChange={(e) => update("monthly_quota_gb", e.target.value)}
+                        className={`${inputClass} pe-12`}
+                      />
+                    </WithUnit>
+                  </Field>
+                  <Field id="billing_cycle_day" label={d.settings.billingCycleDay} hint={d.settings.billingCycleDayHint}>
                     <input
-                      id="stale_after_minutes"
+                      id="billing_cycle_day"
                       type="number"
-                      min="0"
-                      max="1440"
+                      min="1"
+                      max="31"
                       step="1"
                       required
-                      value={form.stale_after_minutes}
-                      onChange={(e) => update("stale_after_minutes", e.target.value)}
+                      value={form.billing_cycle_day}
+                      onChange={(e) => update("billing_cycle_day", e.target.value)}
+                      className={inputClass}
+                    />
+                  </Field>
+                </div>
+              </SettingsCard>
+            </>,
+          )}
+
+          {panel(
+            "alerts",
+            <>
+              <SettingsCard title={d.settings.emailCard}>
+                <Field id="alert_email_to" label={d.settings.alertEmail} hint={d.settings.alertEmailHint}>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
+                    <input
+                      id="alert_email_to"
+                      type="email"
+                      dir="ltr"
+                      autoComplete="email"
+                      value={form.alert_email_to}
+                      onChange={(e) => update("alert_email_to", e.target.value)}
+                      className={`${inputClass} sm:max-w-sm`}
+                      placeholder="name@example.com"
+                    />
+                    <button
+                      type="button"
+                      onClick={sendTest}
+                      disabled={testing || !canTest}
+                      className={`${secondaryButtonClass} shrink-0 sm:mt-1`}
+                    >
+                      {testing ? d.settings.sending : d.settings.sendTest}
+                    </button>
+                  </div>
+                </Field>
+                <p
+                  role="status"
+                  aria-live="polite"
+                  className={`-mt-3 text-xs empty:hidden ${
+                    testResult?.kind === "error" ? "text-status-critical" : "text-green-700 dark:text-status-good"
+                  }`}
+                >
+                  {testResult?.message}
+                </p>
+                <Field id="language" label={d.settings.alertLanguage} hint={d.settings.alertLanguageHint} className="sm:max-w-sm">
+                  <select
+                    id="language"
+                    value={form.language}
+                    onChange={(e) => update("language", e.target.value)}
+                    className={inputClass}
+                  >
+                    {LOCALES.map((option) => (
+                      <option key={option} value={option}>
+                        {LOCALE_NAMES[option]}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              </SettingsCard>
+
+              <SettingsCard title={d.settings.marksCard}>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field id="alert_thresholds" label={d.settings.alertThresholds} hint={d.settings.alertThresholdsHint}>
+                    <input
+                      id="alert_thresholds"
+                      type="text"
+                      dir="ltr"
+                      inputMode="decimal"
+                      value={form.alert_thresholds}
+                      onChange={(e) => update("alert_thresholds", e.target.value)}
+                      className={`${inputClass} font-mono`}
+                      placeholder="50, 80, 100"
+                    />
+                  </Field>
+                  <Field
+                    id="cycle_alert_thresholds"
+                    label={d.settings.cycleAlertThresholds}
+                    hint={d.settings.cycleAlertThresholdsHint}
+                  >
+                    <input
+                      id="cycle_alert_thresholds"
+                      type="text"
+                      dir="ltr"
+                      inputMode="decimal"
+                      value={form.cycle_alert_thresholds}
+                      onChange={(e) => update("cycle_alert_thresholds", e.target.value)}
+                      className={`${inputClass} font-mono`}
+                      placeholder="80, 100"
+                    />
+                  </Field>
+                </div>
+                <Switch
+                  checked={form.cycle_pace_alert}
+                  onChange={(v) => update("cycle_pace_alert", v)}
+                  label={d.settings.cyclePaceAlert}
+                  hint={d.settings.cyclePaceAlertHint}
+                />
+              </SettingsCard>
+
+              <SettingsCard title={d.settings.scheduleSection} description={d.settings.scheduleSectionHint}>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field
+                    id="stale_after_minutes"
+                    label={d.settings.staleAfterMinutes}
+                    hint={d.settings.staleAfterMinutesHint}
+                  >
+                    <WithUnit unit={d.settings.units.minutes}>
+                      <input
+                        id="stale_after_minutes"
+                        type="number"
+                        min="0"
+                        max="1440"
+                        step="1"
+                        required
+                        value={form.stale_after_minutes}
+                        onChange={(e) => update("stale_after_minutes", e.target.value)}
+                        className={`${inputClass} pe-16`}
+                      />
+                    </WithUnit>
+                  </Field>
+                  <Field id="digest" label={d.settings.digest} hint={d.settings.digestHint}>
+                    <select
+                      id="digest"
+                      value={form.digest}
+                      onChange={(e) => update("digest", e.target.value)}
+                      className={inputClass}
+                    >
+                      <option value="off">{d.settings.digestOff}</option>
+                      <option value="weekly">{d.settings.digestWeekly}</option>
+                      <option value="cycle">{d.settings.digestCycle}</option>
+                    </select>
+                  </Field>
+                </div>
+              </SettingsCard>
+            </>,
+          )}
+
+          {panel(
+            "router",
+            <>
+              <SettingsCard title={d.settings.monitoringSection} description={d.settings.routerSectionHint}>
+                <Switch
+                  checked={form.polling_enabled}
+                  onChange={(v) => update("polling_enabled", v)}
+                  label={form.polling_enabled ? d.settings.pollingEnabled : d.settings.pollingPaused}
+                  hint={d.settings.pollingHint}
+                />
+                <Field
+                  id="wan_interface_name"
+                  label={d.settings.wanInterfaceName}
+                  hint={<Interpolate template={d.settings.wanInterfaceNameHint} values={{ field: <code>iface</code> }} />}
+                  className="sm:max-w-sm"
+                >
+                  <input
+                    id="wan_interface_name"
+                    type="text"
+                    required
+                    dir="ltr"
+                    value={form.wan_interface_name}
+                    onChange={(e) => update("wan_interface_name", e.target.value)}
+                    className={`${inputClass} font-mono`}
+                    placeholder="pppoe-out1"
+                  />
+                </Field>
+              </SettingsCard>
+
+              <SettingsCard title={d.settings.devicesCard}>
+                <Switch
+                  checked={form.devices_enabled}
+                  onChange={(v) => update("devices_enabled", v)}
+                  label={form.devices_enabled ? d.settings.devicesEnabled : d.settings.devicesDisabled}
+                  hint={
+                    <Interpolate
+                      template={d.settings.devicesHint}
+                      values={{
+                        script: <code>devices-push</code>,
+                        setup: <code>router/devices-setup.rsc</code>,
+                      }}
+                    />
+                  }
+                />
+                {saved.devices_enabled && !form.devices_enabled && (
+                  <p className="rounded-lg border border-status-warning/40 bg-status-warning/10 px-3 py-2 text-sm">
+                    <Interpolate
+                      template={d.settings.devicesUndo}
+                      values={{ undo: <code>router/devices-undo.rsc</code> }}
+                    />
+                  </p>
+                )}
+              </SettingsCard>
+
+              <SettingsCard title={d.settings.enforcementSection} description={d.settings.enforcementSectionHint}>
+                <Switch
+                  checked={form.throttle_on_breach}
+                  onChange={(v) => update("throttle_on_breach", v)}
+                  label={d.settings.throttleOnBreach}
+                  hint={d.settings.throttleOnBreachHint}
+                />
+                <Switch
+                  checked={form.throttle_on_cap}
+                  onChange={(v) => update("throttle_on_cap", v)}
+                  label={d.settings.throttleOnCap}
+                  hint={d.settings.throttleOnCapHint}
+                />
+              </SettingsCard>
+
+              {routerScript}
+            </>,
+          )}
+
+          {/* The sharing card saves on its own and holds only type="button"
+              controls, so it can sit inside this form without submitting it. */}
+          {panel(
+            "data",
+            <>
+              <SettingsCard title={d.settings.retentionCard}>
+                <Field
+                  id="retention_days"
+                  label={d.settings.retentionDays}
+                  hint={d.settings.retentionDaysHint}
+                  className="sm:max-w-xs"
+                >
+                  <WithUnit unit={d.settings.units.days}>
+                    <input
+                      id="retention_days"
+                      type="number"
+                      min="7"
+                      max="3650"
+                      step="1"
+                      required
+                      value={form.retention_days}
+                      onChange={(e) => update("retention_days", e.target.value)}
                       className={`${inputClass} pe-16`}
                     />
                   </WithUnit>
                 </Field>
-                <Field id="digest" label={d.settings.digest} hint={d.settings.digestHint}>
-                  <select
-                    id="digest"
-                    value={form.digest}
-                    onChange={(e) => update("digest", e.target.value)}
-                    className={inputClass}
-                  >
-                    <option value="off">{d.settings.digestOff}</option>
-                    <option value="weekly">{d.settings.digestWeekly}</option>
-                    <option value="cycle">{d.settings.digestCycle}</option>
-                  </select>
-                </Field>
-              </div>
-            </SettingsCard>
-          </>,
-        )}
-
-        {panel(
-          "router",
-          <>
-            <SettingsCard title={d.settings.monitoringSection} description={d.settings.routerSectionHint}>
-              <Switch
-                checked={form.polling_enabled}
-                onChange={(v) => update("polling_enabled", v)}
-                label={form.polling_enabled ? d.settings.pollingEnabled : d.settings.pollingPaused}
-                hint={d.settings.pollingHint}
-              />
-              <Field
-                id="wan_interface_name"
-                label={d.settings.wanInterfaceName}
-                hint={<Interpolate template={d.settings.wanInterfaceNameHint} values={{ field: <code>iface</code> }} />}
-                className="sm:max-w-sm"
-              >
-                <input
-                  id="wan_interface_name"
-                  type="text"
-                  required
-                  dir="ltr"
-                  value={form.wan_interface_name}
-                  onChange={(e) => update("wan_interface_name", e.target.value)}
-                  className={`${inputClass} font-mono`}
-                  placeholder="pppoe-out1"
-                />
-              </Field>
-            </SettingsCard>
-
-            <SettingsCard title={d.settings.devicesCard}>
-              <Switch
-                checked={form.devices_enabled}
-                onChange={(v) => update("devices_enabled", v)}
-                label={form.devices_enabled ? d.settings.devicesEnabled : d.settings.devicesDisabled}
-                hint={
-                  <Interpolate
-                    template={d.settings.devicesHint}
-                    values={{
-                      script: <code>devices-push</code>,
-                      setup: <code>router/devices-setup.rsc</code>,
-                    }}
-                  />
-                }
-              />
-              {saved.devices_enabled && !form.devices_enabled && (
-                <p className="rounded-lg border border-status-warning/40 bg-status-warning/10 px-3 py-2 text-sm">
-                  <Interpolate
-                    template={d.settings.devicesUndo}
-                    values={{ undo: <code>router/devices-undo.rsc</code> }}
-                  />
-                </p>
-              )}
-            </SettingsCard>
-
-            <SettingsCard title={d.settings.enforcementSection} description={d.settings.enforcementSectionHint}>
-              <Switch
-                checked={form.throttle_on_breach}
-                onChange={(v) => update("throttle_on_breach", v)}
-                label={d.settings.throttleOnBreach}
-                hint={d.settings.throttleOnBreachHint}
-              />
-              <Switch
-                checked={form.throttle_on_cap}
-                onChange={(v) => update("throttle_on_cap", v)}
-                label={d.settings.throttleOnCap}
-                hint={d.settings.throttleOnCapHint}
-              />
-            </SettingsCard>
-
-            {routerScript}
-          </>,
-        )}
-
-        {panel(
-          "data",
-          <SettingsCard title={d.settings.retentionCard}>
-            <Field
-              id="retention_days"
-              label={d.settings.retentionDays}
-              hint={d.settings.retentionDaysHint}
-              className="sm:max-w-xs"
-            >
-              <WithUnit unit={d.settings.units.days}>
-                <input
-                  id="retention_days"
-                  type="number"
-                  min="7"
-                  max="3650"
-                  step="1"
-                  required
-                  value={form.retention_days}
-                  onChange={(e) => update("retention_days", e.target.value)}
-                  className={`${inputClass} pe-16`}
-                />
-              </WithUnit>
-            </Field>
-            <Link
-              href={`/${locale}/export`}
-              className="inline-flex items-center gap-1 text-sm font-medium text-series-1 hover:underline"
-            >
-              {d.settings.exportLink}
-              <span aria-hidden className="rtl:rotate-180">
-                &rarr;
-              </span>
-            </Link>
-          </SettingsCard>,
-        )}
-
-        {dirty && (
-          <div
-            data-unsaved-bar
-            className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface/95 shadow-[0_-4px_16px_rgb(0_0_0/0.06)] backdrop-blur"
-          >
-            <div className="mx-auto flex w-full max-w-5xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 sm:px-6">
-              <p role="status" aria-live="polite" className="min-w-0 flex-1 text-sm">
-                {saveError ? (
-                  <span className="text-status-critical">{saveError}</span>
-                ) : (
-                  <span className="inline-flex items-center gap-2">
-                    <span aria-hidden className="size-2 rounded-full bg-status-warning" />
-                    {d.settings.unsaved}
+                <Link
+                  href={`/${locale}/export`}
+                  className="inline-flex items-center gap-1 text-sm font-medium text-series-1 hover:underline"
+                >
+                  {d.settings.exportLink}
+                  <span aria-hidden className="rtl:rotate-180">
+                    &rarr;
                   </span>
-                )}
-              </p>
-              <div className="flex gap-2">
-                <button type="button" onClick={discard} disabled={saving} className={secondaryButtonClass}>
-                  {d.settings.discard}
-                </button>
-                <button type="submit" disabled={saving} className={primaryButtonClass}>
-                  {saving ? d.settings.saving : d.settings.save}
-                </button>
+                </Link>
+              </SettingsCard>
+              {sharing}
+            </>,
+          )}
+
+          {dirty && (
+            <div
+              data-unsaved-bar
+              className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface/95 shadow-[0_-4px_16px_rgb(0_0_0/0.06)] backdrop-blur"
+            >
+              <div className="mx-auto flex w-full max-w-5xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 sm:px-6">
+                <p role="status" aria-live="polite" className="min-w-0 flex-1 text-sm">
+                  {saveError ? (
+                    <span className="text-status-critical">{saveError}</span>
+                  ) : (
+                    <span className="inline-flex items-center gap-2">
+                      <span aria-hidden className="size-2 rounded-full bg-status-warning" />
+                      {d.settings.unsaved}
+                    </span>
+                  )}
+                </p>
+                <div className="flex gap-2">
+                  <button type="button" onClick={discard} disabled={saving} className={secondaryButtonClass}>
+                    {d.settings.discard}
+                  </button>
+                  <button type="submit" disabled={saving} className={primaryButtonClass}>
+                    {saving ? d.settings.saving : d.settings.save}
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        )}
-      </form>
+          )}
+        </form>
 
-      {panel("sharing", sharing)}
-      {panel("account", account)}
+        {panel("account", account)}
+      </div>
 
       <Toast toast={toast} onDismiss={dismiss} />
     </div>

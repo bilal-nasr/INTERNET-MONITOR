@@ -34,12 +34,13 @@ export async function RouterScriptCard({ interfaceName }: { interfaceName: strin
 
   return (
     <SettingsCard title={d.settings.scriptCardTitle} description={d.settings.scriptCardHint}>
-      <RouterScriptView script={script} secret={secret} secretMissing={secret === ""} />
-      <ol className="list-decimal space-y-1 ps-5 text-sm text-muted">
-        {d.settings.scriptSteps.map((step) => (
-          <li key={step}>{step}</li>
-        ))}
-      </ol>
+      <RouterScriptView script={script} secret={secret} secretMissing={secret === ""}>
+        <ol className="list-decimal space-y-1 ps-5 text-sm text-muted">
+          {d.settings.scriptSteps.map((step) => (
+            <li key={step}>{step}</li>
+          ))}
+        </ol>
+      </RouterScriptView>
     </SettingsCard>
   );
 }

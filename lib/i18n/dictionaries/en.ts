@@ -449,7 +449,7 @@ export const en = {
     unsaved: "You have unsaved changes.",
     discard: "Discard",
     tabsLabel: "Settings sections",
-    /** One tab per group of settings; the hint opens the tab's panel. */
+    /** One tab per group of settings; the hint sits under the panel's heading. */
     tabs: {
       limits: "Limits",
       limitsHint: "How much the connection may use each day and across a billing cycle.",
@@ -457,10 +457,8 @@ export const en = {
       alertsHint: "Where alert emails go and what sends one.",
       router: "Router",
       routerHint: "How readings arrive, what is tracked, and what the router does once a limit is passed.",
-      data: "Data",
-      dataHint: "How long detailed readings are kept.",
-      sharing: "Sharing",
-      sharingHint: "A view of usage for people who do not sign in.",
+      data: "Data & sharing",
+      dataHint: "How long detailed readings are kept, and who else can see usage.",
       account: "Account",
       accountHint: "Your sign-in details and the browsers signed in with them.",
     },
@@ -496,7 +494,7 @@ export const en = {
     alertEmail: "Alert email",
     alertEmailHint: "The test goes to the saved address. Save first if you just changed it.",
     alertLanguage: "Alert language",
-    alertLanguageHint: "Applies to the emails sent when the daily quota is exceeded.",
+    alertLanguageHint: "Used for every alert email and scheduled summary.",
     alertThresholds: "Daily alert marks (% of quota)",
     alertThresholdsHint:
       "Comma-separated, ascending. A mail goes out when usage in the window first reaches each mark. 100 is the exceeded alert. Leave empty to turn daily mails off.",
@@ -527,6 +525,8 @@ export const en = {
     scriptSecretMissing: "CRON_SECRET is not set on the server, so the script cannot be completed. Set it and restart.",
     scriptReveal: "Reveal secret",
     scriptHide: "Hide secret",
+    scriptShowCode: "Show script",
+    scriptHideCode: "Hide script",
     scriptCopy: "Copy script",
     scriptCopied: "Copied",
     scriptCopyFailed: "Copy failed, select the text instead",

@@ -79,7 +79,9 @@ export function ShareCard({ initialToken, locale }: { initialToken: string | nul
 
   return (
     <SettingsCard title={s.linkLabel} description={s.sectionHint}>
-      {token && link ? (
+      {/* Decided on the token alone: the link waits for the browser's origin,
+          and deciding on it too showed "Sharing is off" until hydration. */}
+      {token ? (
         <div className="space-y-3">
           {/* The card is already titled with these words; the label stays for a screen reader. */}
           <label htmlFor="share-link" className="sr-only">
@@ -91,11 +93,11 @@ export function ShareCard({ initialToken, locale }: { initialToken: string | nul
               id="share-link"
               readOnly
               dir="ltr"
-              value={link}
+              value={link ?? ""}
               onFocus={(e) => e.currentTarget.select()}
               className="w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-xs outline-none"
             />
-            <button type="button" onClick={copy} className={secondaryButtonClass}>
+            <button type="button" onClick={copy} disabled={!link} className={secondaryButtonClass}>
               {s.copy}
             </button>
           </div>
