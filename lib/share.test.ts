@@ -45,6 +45,13 @@ describe("isPublicApiPath", () => {
     expect(isPublicApiPath(`/api/share/${token}/usage`)).toBe(true);
   });
 
+  test("so is the endpoint that issues a share pass", () => {
+    // The visitor it serves has a link, not a session.
+    expect(isPublicApiPath(`/api/share/${token}/verify`)).toBe(true);
+    expect(isPublicApiPath(`/api/share/${token}/verify/extra`)).toBe(false);
+    expect(isPublicApiPath(`/api/share/${token}/other`)).toBe(false);
+  });
+
   test("the route that creates and revokes the link is not", () => {
     // It is how sharing is turned on and off, so it must meet the session gate.
     expect(isPublicApiPath("/api/share")).toBe(false);

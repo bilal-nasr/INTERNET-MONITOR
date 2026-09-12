@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { badRequest, errorResponse } from "@/lib/api";
+import { badRequest, captchaFailed, errorResponse } from "@/lib/api";
 import { createPasswordReset } from "@/lib/auth/reset";
 import { sessionMetaFromRequest } from "@/lib/auth/sessions";
 import { recordFailure, retryAfterSeconds } from "@/lib/auth/throttle";
@@ -10,9 +10,11 @@ import { fill } from "@/lib/i18n";
 import { dictionaryFromRequest, localeFromRequest } from "@/lib/i18n/request";
 import { publicBaseUrl } from "@/lib/public-url";
 import { getSettings } from "@/lib/settings";
+import { verifyTurnstile } from "@/lib/turnstile";
 
 const bodySchema = z.object({
   username: z.string().trim().min(1).max(100),
+  turnstile_token: z.string().max(2048).nullish(),
 });
 
 /**
@@ -36,9 +38,12 @@ export async function POST(request: Request) {
     return badRequest(d.errors.validationFailed, { username: [d.errors.usernameRequired] });
   }
 
+  const { ip } = sessionMetaFromRequest(request);
+  if (!(await verifyTurnstile(parsed.data.turnstile_token, ip))) return captchaFailed(d);
+
   // Every request counts against the limit, not just failed ones: the cost
   // here is the email, and five an hour per address is plenty.
-  const throttleKey = `forgot:${sessionMetaFromRequest(request).ip ?? "-"}`;
+  const throttleKey = `forgot:${ip ?? "-"}`;
   const wait = retryAfterSeconds(throttleKey);
   if (wait > 0) {
     return NextResponse.json(

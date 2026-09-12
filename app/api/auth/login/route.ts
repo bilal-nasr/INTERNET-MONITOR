@@ -1,16 +1,18 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { badRequest, errorResponse } from "@/lib/api";
+import { badRequest, captchaFailed, errorResponse } from "@/lib/api";
 import { isSecureRequest, setSessionCookies } from "@/lib/auth/cookies";
 import { createSession, sessionMetaFromRequest } from "@/lib/auth/sessions";
 import { clearFailures, recordFailure, retryAfterSeconds } from "@/lib/auth/throttle";
 import { verifyCredentials } from "@/lib/auth/users";
 import { fill } from "@/lib/i18n";
 import { dictionaryFromRequest } from "@/lib/i18n/request";
+import { verifyTurnstile } from "@/lib/turnstile";
 
 const bodySchema = z.object({
   username: z.string().trim().min(1).max(100),
   password: z.string().min(1).max(1000),
+  turnstile_token: z.string().max(2048).nullish(),
 });
 
 /**
@@ -35,6 +37,10 @@ export async function POST(request: Request) {
   }
 
   const meta = sessionMetaFromRequest(request);
+  // Before the throttle: a request with no human behind it should not count
+  // against the owner's own attempts.
+  if (!(await verifyTurnstile(parsed.data.turnstile_token, meta.ip))) return captchaFailed(d);
+
   const throttleKey = `login:${meta.ip ?? "-"}:${parsed.data.username.toLowerCase()}`;
   const wait = retryAfterSeconds(throttleKey);
   if (wait > 0) {

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { LoginForm } from "@/components/auth/LoginForm";
 import { getI18n } from "@/lib/i18n/server";
+import { getTurnstileSiteKey } from "@/lib/turnstile";
 
 export async function generateMetadata(): Promise<Metadata> {
   const { d } = await getI18n();
@@ -9,7 +10,7 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function LoginPage() {
-  const { d } = await getI18n();
+  const [{ d }, siteKey] = await Promise.all([getI18n(), getTurnstileSiteKey()]);
   return (
     <div className="space-y-6">
       <div>
@@ -18,7 +19,7 @@ export default async function LoginPage() {
       </div>
       {/* The form reads ?next= from the query string, which ties it to the request. */}
       <Suspense fallback={null}>
-        <LoginForm />
+        <LoginForm siteKey={siteKey} />
       </Suspense>
     </div>
   );

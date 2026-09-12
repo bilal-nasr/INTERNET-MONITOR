@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { useI18n } from "@/components/I18nProvider";
 import { inputClass, labelClass, primaryButtonClass, readApiError } from "@/components/auth/fields";
+import { Turnstile } from "@/components/Turnstile";
 import { fill } from "@/lib/i18n";
 import type { Locale } from "@/lib/i18n/config";
 
@@ -20,7 +21,7 @@ function safeNext(value: string | null, locale: Locale): string {
   return value;
 }
 
-export function LoginForm() {
+export function LoginForm({ siteKey }: { siteKey: string | null }) {
   const { locale, d } = useI18n();
   const router = useRouter();
   const params = useSearchParams();
@@ -30,6 +31,10 @@ export function LoginForm() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [captcha, setCaptcha] = useState<string | null>(null);
+  // Bumped after a refused submit: the token was spent, so the widget remounts for another.
+  const [attempt, setAttempt] = useState(0);
+  const waiting = siteKey !== null && captcha === null;
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -39,9 +44,11 @@ export function LoginForm() {
       const res = await fetch(`/api/auth/login?lang=${locale}`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ username, password, turnstile_token: captcha }),
       });
       if (!res.ok) {
+        setCaptcha(null);
+        setAttempt((a) => a + 1);
         setError(await readApiError(res, fill(d.settings.httpError, { status: res.status })));
         return;
       }
@@ -90,13 +97,17 @@ export function LoginForm() {
         />
       </div>
 
+      {siteKey && (
+        <Turnstile key={attempt} siteKey={siteKey} action="login" onToken={setCaptcha} />
+      )}
+
       {error && (
         <p role="alert" className="text-sm text-status-critical">
           {error}
         </p>
       )}
 
-      <button type="submit" disabled={busy || !username || !password} className={primaryButtonClass}>
+      <button type="submit" disabled={busy || waiting || !username || !password} className={primaryButtonClass}>
         {busy ? d.auth.login.submitting : d.auth.login.submit}
       </button>
 

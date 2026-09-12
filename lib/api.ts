@@ -47,6 +47,11 @@ export function badRequest(message: string, details?: unknown): NextResponse {
   return NextResponse.json({ error: "bad_request", message, details }, { status: 400 });
 }
 
+/** The browser did not pass the Turnstile check; see `lib/turnstile.ts`. */
+export function captchaFailed(d: Dictionary): NextResponse {
+  return NextResponse.json({ error: "captcha_failed", message: d.errors.captchaFailed }, { status: 403 });
+}
+
 /** Constant-time check of `Authorization: Bearer <secret>`. False when no secret is configured. */
 export function hasBearer(request: Request, secret: string | undefined): boolean {
   if (!secret) return false;

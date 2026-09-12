@@ -4,14 +4,19 @@ import Link from "next/link";
 import { useState, type FormEvent } from "react";
 import { useI18n } from "@/components/I18nProvider";
 import { inputClass, labelClass, primaryButtonClass, readApiError } from "@/components/auth/fields";
+import { Turnstile } from "@/components/Turnstile";
 import { fill } from "@/lib/i18n";
 
-export function ForgotPasswordForm() {
+export function ForgotPasswordForm({ siteKey }: { siteKey: string | null }) {
   const { locale, d } = useI18n();
   const [username, setUsername] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [captcha, setCaptcha] = useState<string | null>(null);
+  // Bumped after a refused submit: the token was spent, so the widget remounts for another.
+  const [attempt, setAttempt] = useState(0);
+  const waiting = siteKey !== null && captcha === null;
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -21,9 +26,11 @@ export function ForgotPasswordForm() {
       const res = await fetch(`/api/auth/forgot?lang=${locale}`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ username }),
+        body: JSON.stringify({ username, turnstile_token: captcha }),
       });
       if (!res.ok) {
+        setCaptcha(null);
+        setAttempt((a) => a + 1);
         setError(await readApiError(res, fill(d.settings.httpError, { status: res.status })));
         return;
       }
@@ -68,13 +75,17 @@ export function ForgotPasswordForm() {
         />
       </div>
 
+      {siteKey && (
+        <Turnstile key={attempt} siteKey={siteKey} action="forgot-password" onToken={setCaptcha} />
+      )}
+
       {error && (
         <p role="alert" className="text-sm text-status-critical">
           {error}
         </p>
       )}
 
-      <button type="submit" disabled={busy || !username} className={primaryButtonClass}>
+      <button type="submit" disabled={busy || waiting || !username} className={primaryButtonClass}>
         {busy ? d.auth.forgot.submitting : d.auth.forgot.submit}
       </button>
 

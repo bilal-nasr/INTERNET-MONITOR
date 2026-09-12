@@ -28,9 +28,10 @@ export function tokensMatch(a: string | null | undefined, b: string | null | und
 }
 
 /**
- * The one API path that is answered without a session: the share feed, which
- * carries its own credential in the URL and checks it itself. The proxy asks
- * this before it asks for a cookie.
+ * The API paths answered without a session: the share feed, and the endpoint
+ * that trades a passed Turnstile check for a share pass. Both carry their own
+ * credential in the URL and check it themselves. The proxy asks this before it
+ * asks for a cookie.
  *
  * Spelled out segment by segment rather than as a prefix, because a prefix
  * would also stand aside for anything else that happens to start with the same
@@ -40,13 +41,13 @@ export function tokensMatch(a: string | null | undefined, b: string | null | und
  * the route that exists and nothing more.
  */
 export function isPublicApiPath(pathname: string): boolean {
-  const [empty, api, share, token, usage, ...rest] = pathname.split("/");
+  const [empty, api, share, token, action, ...rest] = pathname.split("/");
   return (
     empty === "" &&
     api === "api" &&
     share === "share" &&
     looksLikeToken(token) &&
-    usage === "usage" &&
+    (action === "usage" || action === "verify") &&
     rest.length === 0
   );
 }

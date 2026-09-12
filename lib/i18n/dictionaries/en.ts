@@ -632,6 +632,8 @@ export const en = {
     working: "Working...",
     pageTitle: "Usage",
     pageFooter: "Read-only view. Settings and history are not available from this link.",
+    gateTitle: "Checking your browser",
+    gateHint: "A quick check that this is a person and not a bot. The usage appears as soon as it passes.",
   },
 
   alerts: {
@@ -933,6 +935,7 @@ export const en = {
     unauthorized: "You are not signed in.",
     invalidCredentials: "Wrong username or password.",
     tooManyAttempts: "Too many failed attempts. Try again in {seconds} seconds.",
+    captchaFailed: "The browser check did not pass. Wait for it to finish and try again.",
     usernameRequired: "The username is required.",
     passwordRequired: "The password is required.",
     passwordTooShort: "The password must be at least 8 characters.",

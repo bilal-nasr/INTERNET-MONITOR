@@ -331,6 +331,15 @@ Setup:
 Names come from the DHCP lease's host-name; rename any device on the page. Usage is the
 growth of each device's counter between pushes, so a router reboot loses at most one
 minute. Pushes are batched at 200 devices.
+## Bot check (Cloudflare Turnstile)
+
+Set `TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET_KEY` to put a Turnstile widget on sign in, forgot
+password, reset password and the share link. The server verifies every token with Cloudflare, so
+`POST /api/auth/login`, `/forgot` and `/reset` then need a `turnstile_token` in the body and answer
+`403` `captcha_failed` without a valid one. Leave either key unset to turn the check off. Both are
+read at runtime. In the Cloudflare dashboard, list every hostname the dashboard is opened on,
+including `localhost` if you use Turnstile in development.
+
 ## Sharing
 
 The Sharing section on `/settings` creates a read-only link, `/<lang>/share/<token>`, that shows
@@ -338,6 +347,9 @@ the dashboard's three cards (today's window, the router, the billing cycle) to a
 with no sign-in. It never shows settings, history or the sessions page. Replacing the link stops
 the old one working; turning sharing off does the same. The token is a secret: treat the link
 like a password and replace it if it leaks.
+
+With Turnstile configured (below), a browser opening the link passes a Cloudflare bot check first
+and is then let in for 12 hours. The JSON feed is not gated.
 
 The same token serves `GET /api/share/<token>/usage`, which returns today's usage and the cycle
 figures as JSON. A Home Assistant REST sensor can read it:
@@ -411,6 +423,7 @@ so they follow the `language` column in `settings` rather than a URL. Set it on 
 | `GET` `DELETE` | `/api/auth/sessions` | The browsers signed in to the account; `DELETE` signs every other one out. |
 | `DELETE` | `/api/auth/sessions/{id}` | Signs one browser out. `400` for the caller's own session, `404` when it is already gone. |
 | `POST` `DELETE` | `/api/share` | Creates or replaces the read-only link (`{ "token", "url" }`), or turns sharing off. |
+| `POST` | `/api/share/{token}/verify` | Public. `{ "turnstile_token" }`; sets the 12-hour share-pass cookie. `404` for a wrong token, `403` `captcha_failed` when the check fails. |
 | `GET` | `/api/share/{token}/usage` | Public. Today's window usage and the billing cycle as JSON, for Home Assistant and similar. `404` for a wrong token. |
 
 Any route that can reject a request takes an optional `lang` (`en` or `ar`), and answers in
@@ -422,8 +435,8 @@ probe, neither of which has a language.
 Every route answers `401` `unauthorized` without a live session cookie, except these:
 `/api/auth/...`, which is how a session is got in the first place; `/api/ingest`,
 `/api/ingest/devices`, `/api/cron/tick` and `/api/metrics`, which carry a bearer token;
-`/api/health`, which carries nothing; and `/api/share/{token}/usage`, whose credential is
-the token in the path. `/api/share` itself, which creates and revokes that link, needs the
+`/api/health`, which carries nothing; and `/api/share/{token}/usage` and `/verify`, whose
+credential is the token in the path. `/api/share` itself, which creates and revokes that link, needs the
 cookie like everything else.
 
 ### Ranges

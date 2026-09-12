@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { badRequest, errorResponse } from "@/lib/api";
+import { badRequest, captchaFailed, errorResponse } from "@/lib/api";
 import { consumePasswordReset } from "@/lib/auth/reset";
+import { sessionMetaFromRequest } from "@/lib/auth/sessions";
 import { looksLikeToken } from "@/lib/auth/tokens";
 import type { Dictionary } from "@/lib/i18n";
 import { dictionaryFromRequest } from "@/lib/i18n/request";
+import { verifyTurnstile } from "@/lib/turnstile";
 
 const MIN_PASSWORD_LENGTH = 8;
 
@@ -14,6 +16,7 @@ function bodySchema(d: Dictionary) {
       token: z.string().refine(looksLikeToken, d.errors.resetInvalid),
       password: z.string().min(MIN_PASSWORD_LENGTH, d.errors.passwordTooShort).max(1000),
       confirm_password: z.string().max(1000),
+      turnstile_token: z.string().max(2048).nullish(),
     })
     .refine((v) => v.password === v.confirm_password, {
       message: d.errors.passwordMismatch,
@@ -34,6 +37,10 @@ export async function POST(request: Request) {
   const parsed = bodySchema(d).safeParse(body);
   if (!parsed.success) {
     return badRequest(d.errors.validationFailed, z.flattenError(parsed.error).fieldErrors);
+  }
+
+  if (!(await verifyTurnstile(parsed.data.turnstile_token, sessionMetaFromRequest(request).ip))) {
+    return captchaFailed(d);
   }
 
   try {
