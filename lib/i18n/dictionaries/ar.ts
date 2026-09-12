@@ -584,6 +584,30 @@ export const ar = {
       "أُنشئ في {at} · الأوقات بتوقيت {timezone}",
   },
 
+  emailCycle: {
+    subjectThreshold: "السقف الشهري عند {percent}: استُهلك {used} من أصل {cap}",
+    subjectOver: "تم تجاوز السقف الشهري: استُهلك {used} من أصل {cap}",
+    subjectPace: "في طريقك لتجاوز السقف الشهري: المتوقّع {projected} من أصل {cap}",
+    introThreshold: "بلغ الاستهلاك في دورة الفوترة هذه {percent} من السقف الشهري.",
+    introOver: "تجاوز الاستهلاك في دورة الفوترة هذه السقف الشهري.",
+    introPace:
+      "بالوتيرة الحالية ستنتهي دورة الفوترة هذه عند {projected}، وهو ما يتجاوز السقف البالغ {cap}.",
+    cycleSpan: "الدورة",
+    cycleSpanValue: "من {start} إلى {end} ({timezone})",
+    used: "المستهلك",
+    usedValue: "{used} من أصل {cap} ({percent})",
+    projected: "المتوقّع في نهاية الدورة",
+    projectedValue: "{projected} ({percent} من السقف)",
+    progress: "التقدّم",
+    progressValue: "اليوم {elapsed} من {total}، بقي {remaining}",
+    dailyAverage: "المتوسط اليومي حتى الآن",
+    budget: "الميزانية لكل يوم متبقٍ",
+    footerThreshold: "ستصلك رسالة أخرى عند العلامة التالية، ورسالة إضافية إذا تم تجاوز السقف.",
+    footerPace: "يُرسل تحذير التوقّع هذا مرة واحدة في كل دورة.",
+    dashboardLine: "لوحة التحكم: {url}",
+    openDashboard: "افتح لوحة التحكم",
+  },
+
   errors: {
     unauthorized: "لم تسجّل الدخول.",
     invalidCredentials: "اسم المستخدم أو كلمة المرور غير صحيحة.",

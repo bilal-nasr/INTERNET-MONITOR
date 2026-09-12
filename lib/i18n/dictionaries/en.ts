@@ -603,6 +603,31 @@ export const en = {
     generatedLine: "Generated {at} · times shown in {timezone}",
   },
 
+  /** The monthly-cap mails: a threshold mark reached, or the projection crossing the cap. */
+  emailCycle: {
+    subjectThreshold: "Monthly cap at {percent}: {used} of {cap} used",
+    subjectOver: "Monthly cap exceeded: {used} of {cap} used",
+    subjectPace: "On course to exceed the monthly cap: {projected} projected of {cap}",
+    introThreshold: "Usage this billing cycle has reached {percent} of the monthly cap.",
+    introOver: "Usage this billing cycle has exceeded the monthly cap.",
+    introPace:
+      "At the current pace this billing cycle will end at {projected}, which is over the {cap} cap.",
+    cycleSpan: "Cycle",
+    cycleSpanValue: "{start} to {end} ({timezone})",
+    used: "Used",
+    usedValue: "{used} of {cap} ({percent})",
+    projected: "Projected at cycle end",
+    projectedValue: "{projected} ({percent} of cap)",
+    progress: "Progress",
+    progressValue: "day {elapsed} of {total}, {remaining} left",
+    dailyAverage: "Daily average so far",
+    budget: "Budget per remaining day",
+    footerThreshold: "You will be told again at the next mark, and once more if the cap is exceeded.",
+    footerPace: "This projection warning is sent once per cycle.",
+    dashboardLine: "Dashboard: {url}",
+    openDashboard: "Open the dashboard",
+  },
+
   errors: {
     unauthorized: "You are not signed in.",
     invalidCredentials: "Wrong username or password.",
