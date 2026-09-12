@@ -4,14 +4,16 @@
  * Nothing runs when the router stops pushing, which is exactly why this check
  * cannot live on the ingest path and has to be driven by the tick. It sends
  * one mail when the silence passes the limit and one more when readings
- * resume. The alerts log is the state: the newest link_* row says whether an
- * outage is currently being reported.
+ * resume. The alerts log is the state: the newest link_* rows say whether an
+ * outage is currently being reported - see lib/cron/stale-decision.ts for the
+ * pure branch-selection logic (unit-tested there without a database).
  */
 
 import { dispatchAlert } from "@/lib/alerts/dispatch";
 import { latestAlert } from "@/lib/alerts/log";
 import { JOBS, type Job, type JobContext, type JobResult } from "@/lib/cron/jobs";
 import { isStale } from "@/lib/cron/schedule";
+import { decideStaleAction } from "@/lib/cron/stale-decision";
 import { renderLinkEmail } from "@/lib/email-link-template";
 import { alertLocale } from "@/lib/settings";
 import { getLatestReading } from "@/lib/usage";
@@ -34,26 +36,17 @@ async function run({ now, settings }: JobContext): Promise<JobResult> {
     latestAlert("link_recovered", SCOPE),
   ]);
   const lastReadingAt = latest?.recorded_at ?? null;
-
-  // An outage is "open" when the newest link row is a stale alert that was
-  // sent after the newest reading: nothing has arrived since we complained.
-  const outageOpen =
-    lastStale !== null &&
-    (lastRecovered === null || lastStale.created_at > lastRecovered.created_at) &&
-    (lastReadingAt === null || lastStale.created_at > lastReadingAt);
-
-  // True once a stale alert has gone out and no recovery mail has cleared it
-  // yet - regardless of whether a new reading has since arrived. This is what
-  // gates the recovery branch: the moment a fresh reading lands after a
-  // stale alert, outageOpen above already flips false (its third clause), but
-  // the outage is only actually over once we send the recovered mail.
-  const reportedAndNotCleared =
-    lastStale !== null && (lastRecovered === null || lastStale.created_at > lastRecovered.created_at);
-
-  const stale = isStale(lastReadingAt, now, settings.stale_after_minutes);
   const silentSeconds = lastReadingAt ? Math.round((now.getTime() - lastReadingAt.getTime()) / 1000) : 0;
 
-  if (stale && !outageOpen) {
+  const action = decideStaleAction({
+    now,
+    staleAfterMinutes: settings.stale_after_minutes,
+    lastReadingAt,
+    lastStale,
+    lastRecovered,
+  });
+
+  if (action === "send_stale") {
     const email = renderLinkEmail({
       kind: "stale",
       locale: alertLocale(settings),
@@ -73,12 +66,12 @@ async function run({ now, settings }: JobContext): Promise<JobResult> {
     return { status: status === "failed" ? "failed" : "ok", detail: `link_stale ${status}` };
   }
 
-  if (!stale && reportedAndNotCleared && lastReadingAt) {
+  if (action === "send_recovered" && lastStale && lastReadingAt) {
     // Readings are back. The silence that ended ran from the last reading
     // before the complaint to the first reading after it; the complaint's
     // payload remembers the former.
     const before =
-      typeof lastStale?.payload?.last_reading_at === "string" ? new Date(lastStale.payload.last_reading_at) : null;
+      typeof lastStale.payload?.last_reading_at === "string" ? new Date(lastStale.payload.last_reading_at) : null;
     const ended = before ? Math.round((lastReadingAt.getTime() - before.getTime()) / 1000) : 0;
     const email = renderLinkEmail({
       kind: "recovered",
@@ -99,6 +92,7 @@ async function run({ now, settings }: JobContext): Promise<JobResult> {
     return { status: status === "failed" ? "failed" : "ok", detail: `link_recovered ${status}` };
   }
 
+  const stale = isStale(lastReadingAt, now, settings.stale_after_minutes);
   return {
     status: "skipped",
     detail: stale ? "outage already reported" : `last reading ${silentSeconds}s ago`,
