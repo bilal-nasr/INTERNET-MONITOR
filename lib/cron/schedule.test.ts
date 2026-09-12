@@ -64,6 +64,15 @@ describe("digestDueAt", () => {
     );
   });
 
+  test("weekly: Monday 01:00 local (Sunday 22:00 UTC) still resolves to the local Monday", () => {
+    // Beirut is UTC+3, so this instant's UTC calendar date is Sunday 2026-09-13
+    // while its local calendar date is Monday 2026-09-14. The day-of-week used
+    // to find "this Monday" must come from the local date, not the UTC one.
+    expect(digestDueAt("weekly", beirut("2026-09-14", "01:00"), 5, TZ)).toEqual(
+      beirut("2026-09-07", "08:00"),
+    );
+  });
+
   test("cycle: the 5th at 09:00 is due on the 5th at 08:00", () => {
     expect(digestDueAt("cycle", beirut("2026-09-05", "09:00"), 5, TZ)).toEqual(
       beirut("2026-09-05", "08:00"),
@@ -86,6 +95,15 @@ describe("digestDueAt", () => {
     // February 2026 has 28 days; a cycle day of 31 starts on the 28th.
     expect(digestDueAt("cycle", new Date("2026-03-10T12:00:00+02:00"), 31, TZ)).toEqual(
       new Date("2026-02-28T08:00:00+02:00"),
+    );
+  });
+
+  test("cycle: rollover day at 01:00 local (previous day 22:00 UTC) still resolves to the local rollover day", () => {
+    // Beirut is UTC+3, so this instant's UTC calendar date is 2026-09-04 while
+    // its local calendar date is 2026-09-05, the cycle day. Which cycle "now"
+    // belongs to must be decided from the local date, not the UTC one.
+    expect(digestDueAt("cycle", beirut("2026-09-05", "01:00"), 5, TZ)).toEqual(
+      beirut("2026-08-05", "08:00"),
     );
   });
 });
