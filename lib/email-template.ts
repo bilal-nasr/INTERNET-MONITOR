@@ -382,7 +382,26 @@ export function renderAlertEmail(report: AlertReport): RenderedEmail {
   };
 }
 
-/** A warning at a mark below the quota, as opposed to a breach or a plain report. */
+/**
+ * A breach: usage already past the quota, or a mark defined to always read as
+ * one. A mark of 100 reads as "exceeded" even if the figures in hand happen to
+ * sit right on the boundary (used_bytes === quota_bytes), because reaching the
+ * 100 mark is itself the breach the mail exists to report.
+ */
+function isExceeded(report: AlertReport): boolean {
+  return report.threshold === 100 || report.today.used_bytes > report.today.quota_bytes;
+}
+
+/**
+ * A warning at a mark below the quota, as opposed to a breach or a plain report.
+ *
+ * The `used_bytes <= quota_bytes` guard is redundant at the subject/intro/eyebrow
+ * call sites below, since each already checks `isExceeded` first and only reaches
+ * this function once that is false. It is not redundant at the footer call sites
+ * in renderText/renderHtml, which ask this function directly with no such gate:
+ * it is what stops a stale below-100 mark from promising "the next mark" once
+ * usage has since climbed past the quota. So it stays.
+ */
 function isWarning(report: AlertReport): boolean {
   return report.threshold !== null && report.threshold < 100 && report.today.used_bytes <= report.today.quota_bytes;
 }
@@ -390,9 +409,8 @@ function isWarning(report: AlertReport): boolean {
 export function subjectLine(report: AlertReport): string {
   const st = styleFor(report.locale);
   const { today } = report;
-  const over = today.used_bytes > today.quota_bytes;
   const prefix = report.kind === "test" ? st.t.testPrefix : "";
-  const template = over ? st.t.subjectExceeded : isWarning(report) ? st.t.subjectThreshold : st.t.subjectReport;
+  const template = isExceeded(report) ? st.t.subjectExceeded : isWarning(report) ? st.t.subjectThreshold : st.t.subjectReport;
   return (
     prefix +
     fill(template, {
@@ -429,7 +447,7 @@ function renderText(report: AlertReport, st: Style): string {
   }
 
   lines.push(
-    today.used_bytes > today.quota_bytes
+    isExceeded(report)
       ? t.introExceeded
       : isWarning(report)
         ? fill(t.introThreshold, { percent: `${report.threshold}%` })
@@ -575,7 +593,7 @@ function renderHtml(report: AlertReport, st: Style): string {
       card(
         eyebrow(
           st,
-          over ? t.eyebrowExceeded : isWarning(report) ? fill(t.eyebrowThreshold, { percent: `${report.threshold}%` }) : t.eyebrowReport,
+          isExceeded(report) ? t.eyebrowExceeded : isWarning(report) ? fill(t.eyebrowThreshold, { percent: `${report.threshold}%` }) : t.eyebrowReport,
           headlineTone,
           headlineTone,
         ) +

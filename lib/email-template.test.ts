@@ -269,4 +269,19 @@ describe("threshold marks", () => {
     expect(subjectLine(report({ threshold: 100 }))).toContain("Internet quota exceeded");
     expect(text).toContain("This is the only alert you will receive for today.");
   });
+
+  test("a mark of 100 reads as exceeded even at the exact boundary, not just when over", () => {
+    // used_bytes === quota_bytes: not strictly "over", but the 100 mark itself
+    // is defined to always read as the breach alert.
+    const atBoundary = report({
+      threshold: 100,
+      today: { ...report().today, used_bytes: 10e9, quota_bytes: 10e9, percent: 100, over_bytes: 0 },
+    });
+    expect(subjectLine(atBoundary)).toContain("Internet quota exceeded");
+    expect(subjectLine(atBoundary)).not.toContain("Internet quota report");
+    const { text, html } = renderAlertEmail(atBoundary);
+    expect(text).toContain("Your home internet usage has exceeded the daily quota.");
+    expect(text).not.toContain("Daily quota report.");
+    expect(html).toContain("Quota exceeded");
+  });
 });
