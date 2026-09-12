@@ -99,6 +99,50 @@ minute-level charts, per-reading peak rates, and up to an hour of traffic around
 counter reset that fell inside a thinned hour. Each run handles at most 30 days,
 so a large backlog is worked off over several days.
 
+### Import
+
+`/export` also takes a file back. Choose a CSV or JSON written by the export and
+press Import: every reading is loaded unless the database already holds one at the
+same instant on the same interface, and a row the parser cannot read is listed
+rather than stopping the import. Files from before the `interface_name` column are
+accepted and labelled with the interface from `/settings`. Sessions and daily quota
+windows are not in the file: they are derived from readings as they arrive, and a
+session cannot be rebuilt from counters alone, so after restoring a database the
+Sessions page starts from the next link event.
+
+### Metrics and Home Assistant
+
+`GET /api/metrics` serves the dashboard's headline figures as Prometheus gauges
+(`quota_monitor_today_used_bytes`, `quota_monitor_cycle_percent`,
+`quota_monitor_link_up`, ...). A scraper authenticates with `METRICS_TOKEN`:
+
+```yaml
+scrape_configs:
+  - job_name: quota-monitor
+    scheme: https
+    authorization:
+      credentials: <METRICS_TOKEN>
+    static_configs:
+      - targets: ["netmonitor.bilalnasr.com"]
+    metrics_path: /api/metrics
+```
+
+Home Assistant reads the JSON feed behind the read-only share link (see "Sharing";
+this needs the share link feature) with a REST sensor:
+
+```yaml
+rest:
+  - resource: https://netmonitor.bilalnasr.com/api/share/<token>/usage
+    scan_interval: 60
+    sensor:
+      - name: "Internet used today"
+        unit_of_measurement: "GB"
+        value_template: "{{ (value_json.today.used_since_baseline / 1e9) | round(2) }}"
+      - name: "Internet cycle used"
+        unit_of_measurement: "%"
+        value_template: "{{ value_json.cycle.percent_of_cap | round(1) }}"
+```
+
 ## Setup
 
 ### 1. Database

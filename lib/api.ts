@@ -47,15 +47,19 @@ export function badRequest(message: string, details?: unknown): NextResponse {
   return NextResponse.json({ error: "bad_request", message, details }, { status: 400 });
 }
 
-/** Constant-time check of `Authorization: Bearer <CRON_SECRET>`, the shared secret the router sends. */
-export function isCronAuthorized(request: Request): boolean {
-  const secret = process.env.CRON_SECRET;
+/** Constant-time check of `Authorization: Bearer <secret>`. False when no secret is configured. */
+export function hasBearer(request: Request, secret: string | undefined): boolean {
   if (!secret) return false;
   const header = request.headers.get("authorization") ?? "";
   const expected = `Bearer ${secret}`;
   const a = Buffer.from(header);
   const b = Buffer.from(expected);
   return a.length === b.length && timingSafeEqual(a, b);
+}
+
+/** The shared secret the router sends to /api/ingest. */
+export function isCronAuthorized(request: Request): boolean {
+  return hasBearer(request, process.env.CRON_SECRET);
 }
 
 /**
