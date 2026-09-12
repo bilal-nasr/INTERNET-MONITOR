@@ -482,10 +482,14 @@ export const ar = {
       "تم تجاوز حصة الإنترنت: {used} من أصل {quota} ({percent}) بتاريخ {date}",
     subjectReport:
       "تقرير حصة الإنترنت: {used} من أصل {quota} ({percent}) بتاريخ {date}",
+    subjectThreshold:
+      "حصة الإنترنت عند {percent}: {used} من أصل {quota} بتاريخ {date}",
 
     introExceeded:
       "تجاوز استهلاك الإنترنت المنزلي الحصة اليومية.",
     introReport: "تقرير الحصة اليومية.",
+    introThreshold:
+      "بلغ استهلاك الإنترنت المنزلي {percent} من الحصة اليومية.",
     textTestBanner:
       "معاينة تجريبية - هكذا يبدو تنبيه الحصة الحقيقي.",
     sectionToday: "اليوم",
@@ -532,6 +536,7 @@ export const ar = {
       "لم تتغير أي حالة تنبيه بسبب هذه التجربة.",
     alertFooter:
       "هذا هو التنبيه الوحيد الذي ستتلقاه اليوم.",
+    thresholdFooter: "ستصلك رسالة أخرى عند العلامة التالية.",
     dashboardLine: "لوحة التحكم: {url}",
 
     testBannerLead: "معاينة تجريبية.",
@@ -539,6 +544,7 @@ export const ar = {
       " هذا بالضبط شكل تنبيه الحصة الحقيقي، ملئًا ببياناتك الفعلية. ولم يُعلَّم شيء كتنبيه مُرسَل.",
     eyebrowExceeded: "تم تجاوز الحصة",
     eyebrowReport: "تقرير الحصة اليومية",
+    eyebrowThreshold: "الحصة عند {percent}",
     ofDailyQuota: "من أصل حصة يومية {quota}",
     overQuotaBy: "تجاوز الحصة بـ",
     remainingToday: "المتبقي اليوم",

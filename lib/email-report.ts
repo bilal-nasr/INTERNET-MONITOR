@@ -36,6 +36,8 @@ export interface AlertReportInput {
   /** Usage that tripped the alert, measured over the quota window. */
   usedBytes: number;
   quotaBytes: number;
+  /** The percent mark that fired, when this is a threshold warning; null for a test, a digest, or the plain exceeded mail. */
+  threshold?: number | null;
   now?: Date;
 }
 
@@ -121,6 +123,7 @@ export async function buildAlertReport(input: AlertReportInput): Promise<AlertRe
     timezone: settings.timezone,
     window: { start: toHHMM(settings.window_start), end: toHHMM(settings.window_end) },
     app_url: appUrl(),
+    threshold: input.threshold ?? null,
 
     today: {
       used_bytes: usedBytes,
@@ -228,6 +231,7 @@ export function minimalAlertReport(input: AlertReportInput): AlertReport {
       end: toHHMM(input.settings.window_end),
     },
     app_url: appUrl(),
+    threshold: input.threshold ?? null,
     today: {
       used_bytes: input.usedBytes,
       quota_bytes: input.quotaBytes,
@@ -272,6 +276,7 @@ export function sampleAlertReport(now = new Date(), locale: Locale = DEFAULT_LOC
     timezone: "UTC",
     window: { start: "09:00", end: "23:59" },
     app_url: appUrl(),
+    threshold: null,
     today: {
       used_bytes: used,
       quota_bytes: quota,

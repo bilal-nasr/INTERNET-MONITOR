@@ -512,9 +512,11 @@ export const en = {
     testPrefix: "[Test] ",
     subjectExceeded: "Internet quota exceeded: {used} of {quota} ({percent}) on {date}",
     subjectReport: "Internet quota report: {used} of {quota} ({percent}) on {date}",
+    subjectThreshold: "Internet quota at {percent}: {used} of {quota} on {date}",
 
     introExceeded: "Your home internet usage has exceeded the daily quota.",
     introReport: "Daily quota report.",
+    introThreshold: "Your home internet usage has reached {percent} of the daily quota.",
     textTestBanner: "TEST PREVIEW - this is what a real quota alert looks like.",
     sectionToday: "TODAY",
     sectionCycle: "BILLING CYCLE",
@@ -556,6 +558,7 @@ export const en = {
     textBusiestHour: "{hour} ({bytes})",
     testFooter: "No alert state was changed by this test.",
     alertFooter: "This is the only alert you will receive for today.",
+    thresholdFooter: "You will be told again at the next mark.",
     dashboardLine: "Dashboard: {url}",
 
     testBannerLead: "Test preview.",
@@ -563,6 +566,7 @@ export const en = {
       " This is exactly what a real quota alert looks like, filled with your live data. Nothing was flagged as alerted.",
     eyebrowExceeded: "Quota exceeded",
     eyebrowReport: "Daily quota report",
+    eyebrowThreshold: "Quota at {percent}",
     ofDailyQuota: "of {quota} daily quota",
     overQuotaBy: "Over quota by",
     remainingToday: "Remaining today",

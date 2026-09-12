@@ -11,6 +11,7 @@ function report(overrides: Partial<AlertReport> = {}): AlertReport {
     timezone: "Asia/Beirut",
     window: { start: "09:00", end: "23:59" },
     app_url: null,
+    threshold: null,
     today: {
       used_bytes: 12.4e9,
       quota_bytes: 10e9,
@@ -230,5 +231,42 @@ describe("Arabic", () => {
     );
     expect(html).toContain("12.40 GB");
     expect(html).not.toContain("دورة الفوترة");
+  });
+});
+
+describe("threshold marks", () => {
+  const at80 = () =>
+    report({
+      threshold: 80,
+      today: {
+        used_bytes: 8.2e9,
+        quota_bytes: 10e9,
+        percent: 82,
+        over_bytes: 0,
+        tx_bytes: 1.1e9,
+        rx_bytes: 7.1e9,
+        peak_bytes_per_second: 20e6,
+        avg_bytes_per_second: 1.2e6,
+        peak_hour: 19,
+        peak_hour_bytes: 2.1e9,
+      },
+    });
+
+  test("subject names the mark, not a breach", () => {
+    expect(subjectLine(at80())).toBe("Internet quota at 80%: 8.20 GB of 10.00 GB on 2026-09-11");
+  });
+
+  test("intro and footer speak of a warning, and promise the next mark", () => {
+    const { text, html } = renderAlertEmail(at80());
+    expect(text).toContain("Your home internet usage has reached 80% of the daily quota.");
+    expect(text).toContain("You will be told again at the next mark.");
+    expect(html).toContain("Quota at 80%");
+    expect(text).not.toContain("This is the only alert you will receive for today.");
+  });
+
+  test("a mark of 100 reads as the exceeded alert", () => {
+    const { text } = renderAlertEmail(report({ threshold: 100 }));
+    expect(subjectLine(report({ threshold: 100 }))).toContain("Internet quota exceeded");
+    expect(text).toContain("This is the only alert you will receive for today.");
   });
 });

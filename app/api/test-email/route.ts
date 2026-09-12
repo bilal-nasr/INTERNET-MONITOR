@@ -20,6 +20,7 @@ async function liveTestReport(settings: SettingsRow, now = new Date()): Promise<
     date: today.date,
     usedBytes: today.used_since_baseline,
     quotaBytes: today.quota_bytes,
+    threshold: null,
     now,
   });
 }

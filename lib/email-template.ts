@@ -54,6 +54,8 @@ export interface AlertReport {
   window: { start: string; end: string };
   /** Dashboard link for the footer, when APP_URL is configured. */
   app_url: string | null;
+  /** The percent mark this mail announces, when it is a threshold warning below 100; null otherwise. */
+  threshold: number | null;
 
   today: {
     used_bytes: number;
@@ -380,17 +382,24 @@ export function renderAlertEmail(report: AlertReport): RenderedEmail {
   };
 }
 
+/** A warning at a mark below the quota, as opposed to a breach or a plain report. */
+function isWarning(report: AlertReport): boolean {
+  return report.threshold !== null && report.threshold < 100 && report.today.used_bytes <= report.today.quota_bytes;
+}
+
 export function subjectLine(report: AlertReport): string {
   const st = styleFor(report.locale);
   const { today } = report;
   const over = today.used_bytes > today.quota_bytes;
   const prefix = report.kind === "test" ? st.t.testPrefix : "";
+  const template = over ? st.t.subjectExceeded : isWarning(report) ? st.t.subjectThreshold : st.t.subjectReport;
   return (
     prefix +
-    fill(over ? st.t.subjectExceeded : st.t.subjectReport, {
+    fill(template, {
       used: formatBytes(today.used_bytes),
       quota: formatBytes(today.quota_bytes),
-      percent: pct(today.percent),
+      // The mark is what the reader is being told about; the exact figure follows in the body.
+      percent: isWarning(report) ? `${report.threshold}%` : pct(today.percent),
       date: report.date,
     })
   );
@@ -420,7 +429,11 @@ function renderText(report: AlertReport, st: Style): string {
   }
 
   lines.push(
-    today.used_bytes > today.quota_bytes ? t.introExceeded : t.introReport,
+    today.used_bytes > today.quota_bytes
+      ? t.introExceeded
+      : isWarning(report)
+        ? fill(t.introThreshold, { percent: `${report.threshold}%` })
+        : t.introReport,
     "",
     t.sectionToday,
     line(L.date, fill(t.textDate, { date: report.date, timezone: report.timezone })),
@@ -529,7 +542,7 @@ function renderText(report: AlertReport, st: Style): string {
   }
 
   lines.push("");
-  lines.push(report.kind === "test" ? t.testFooter : t.alertFooter);
+  lines.push(report.kind === "test" ? t.testFooter : isWarning(report) ? t.thresholdFooter : t.alertFooter);
   if (report.app_url) lines.push(fill(t.dashboardLine, { url: report.app_url }));
 
   return lines.join("\n");
@@ -560,7 +573,12 @@ function renderHtml(report: AlertReport, st: Style): string {
   sections.push(
     row(
       card(
-        eyebrow(st, over ? t.eyebrowExceeded : t.eyebrowReport, headlineTone, headlineTone) +
+        eyebrow(
+          st,
+          over ? t.eyebrowExceeded : isWarning(report) ? fill(t.eyebrowThreshold, { percent: `${report.threshold}%` }) : t.eyebrowReport,
+          headlineTone,
+          headlineTone,
+        ) +
           `<div style="font-family:${font};font-size:38px;font-weight:700;letter-spacing:${st.tracking("-.02em")};color:${C.ink};line-height:1.1;padding:10px 0 2px" class="dm-text">${esc(formatBytes(today.used_bytes))}</div>` +
           `<div style="font-family:${font};font-size:13px;color:${C.muted};line-height:1.4;padding-bottom:14px" class="dm-muted">${esc(fill(t.ofDailyQuota, { quota: formatBytes(today.quota_bytes) }))} &middot; <strong class="${toneClass(headlineTone)}" style="color:${headlineTone}">${esc(pct(today.percent))}</strong></div>` +
           meter(st, today.percent, headlineTone) +
@@ -738,7 +756,7 @@ function renderHtml(report: AlertReport, st: Style): string {
     date: report.date,
   });
 
-  const footerNote = report.kind === "test" ? t.footerTest : t.alertFooter;
+  const footerNote = report.kind === "test" ? t.footerTest : isWarning(report) ? t.thresholdFooter : t.alertFooter;
 
   return `<!DOCTYPE html>
 <html lang="${report.locale}" dir="${st.dir}">
