@@ -44,7 +44,28 @@ Quota is decimal gigabytes: 8 GB = 8,000,000,000 bytes.
 Alongside the daily window quota there is a monthly cap (`settings.monthly_quota_gb`, 600 GB by
 default) measured over a billing cycle that rolls over on `settings.billing_cycle_day`, the 5th by
 default. Unlike the daily quota the cap counts all traffic at every hour, not just traffic inside
-the window. It is reported on the dashboard and on `/stats`, and it never sends an alert.
+the window. It is reported on the dashboard and on `/stats`, and it has its own alert marks (see
+[Alerts](#alerts)).
+
+### Alerts
+
+Alerts are mails, sent through Resend to `settings.alert_email_to`, in the language chosen on
+`/settings`. Every decision to send one, whether it went out, failed or was skipped for want of an
+address, is a row in the `alerts` table and appears on `/alerts`.
+
+- **Daily marks** (`alert_thresholds`, default `50, 80, 100`): percent of the daily quota, measured
+  inside the window. A mail goes out the first time usage reaches each mark; a jump past several
+  marks in one reading sends one mail for the highest. 100 is the "exceeded" alert. The day's
+  highest mailed mark is kept in `daily_windows.notified_level`; an empty list turns daily mails
+  off.
+- **Monthly marks** (`cycle_alert_thresholds`, default `80, 100`): the same rule against the
+  monthly cap over the whole cycle, checked at most every five minutes. State is in
+  `cycle_alerts`, keyed by the cycle's start date.
+- **Projection warning** (`cycle_pace_alert`, on by default): one mail per cycle, the first time
+  the projected end-of-cycle usage exceeds the cap, from the fourth day of the cycle onwards.
+
+A mark is claimed in the database before the mail is sent, so two readings arriving together
+cannot both send it, and a failed send releases the claim so the next reading retries.
 
 ### Session accounting
 

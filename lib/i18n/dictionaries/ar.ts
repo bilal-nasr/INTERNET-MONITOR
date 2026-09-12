@@ -28,6 +28,7 @@ export const ar = {
     sessions: "الجلسات",
     settings: "الإعدادات",
     export: "التصدير",
+    alerts: "التنبيهات",
   },
 
   footer: {
@@ -403,6 +404,36 @@ export const ar = {
     startBeforeEnd: "يجب أن يكون تاريخ البداية في نفس يوم النهاية أو قبله.",
     downloadCsv: "تنزيل CSV",
     downloadJson: "تنزيل JSON",
+  },
+
+  alerts: {
+    title: "التنبيهات",
+    subtitle: "كل تنبيه قرّر المراقب إرساله، الأحدث أولاً. الأوقات بتوقيت {timezone}.",
+    empty: "لا تنبيهات بعد. يظهر الأول عندما يبلغ الاستهلاك علامة محددة في صفحة الإعدادات.",
+    columns: {
+      when: "الوقت",
+      kind: "التنبيه",
+      level: "العلامة",
+      scope: "بخصوص",
+      recipient: "أُرسل إلى",
+      status: "الحالة",
+    },
+    kinds: {
+      daily_threshold: "علامة الحصة اليومية",
+      daily_exceeded: "تجاوز الحصة اليومية",
+      cycle_threshold: "علامة السقف الشهري",
+      cycle_pace: "تحذير توقّع السقف",
+      link_stale: "الراوتر صامت",
+      link_recovered: "عاد الراوتر",
+      digest: "الملخّص",
+    },
+    statuses: {
+      sent: "أُرسل",
+      failed: "فشل",
+      skipped: "تم التخطي",
+    },
+    skippedReason: "لم يكن هناك عنوان محدد",
+    showing: "عرض آخر {count} تنبيهاً.",
   },
 
   auth: {

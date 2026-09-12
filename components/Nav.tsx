@@ -16,6 +16,7 @@ const LINKS = [
   { path: "", label: (d: Dictionary) => d.nav.dashboard },
   { path: "/stats", label: (d: Dictionary) => d.nav.statistics },
   { path: "/sessions", label: (d: Dictionary) => d.nav.sessions },
+  { path: "/alerts", label: (d: Dictionary) => d.nav.alerts },
   { path: "/settings", label: (d: Dictionary) => d.nav.settings },
   { path: "/export", label: (d: Dictionary) => d.nav.export },
 ] as const;

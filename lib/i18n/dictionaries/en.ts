@@ -47,6 +47,7 @@ export const en = {
     sessions: "Sessions",
     settings: "Settings",
     export: "Export",
+    alerts: "Alerts",
   },
 
   footer: {
@@ -427,6 +428,36 @@ export const en = {
     startBeforeEnd: "The start date must be on or before the end date.",
     downloadCsv: "Download CSV",
     downloadJson: "Download JSON",
+  },
+
+  alerts: {
+    title: "Alerts",
+    subtitle: "Every alert the monitor decided to send, newest first. Times in {timezone}.",
+    empty: "No alerts yet. The first one appears when usage reaches a mark set on the Settings page.",
+    columns: {
+      when: "When",
+      kind: "Alert",
+      level: "Mark",
+      scope: "About",
+      recipient: "Sent to",
+      status: "Status",
+    },
+    kinds: {
+      daily_threshold: "Daily quota mark",
+      daily_exceeded: "Daily quota exceeded",
+      cycle_threshold: "Monthly cap mark",
+      cycle_pace: "Cap projection warning",
+      link_stale: "Router silent",
+      link_recovered: "Router back",
+      digest: "Digest",
+    },
+    statuses: {
+      sent: "sent",
+      failed: "failed",
+      skipped: "skipped",
+    },
+    skippedReason: "no address was configured",
+    showing: "Showing the last {count} alerts.",
   },
 
   auth: {
