@@ -39,6 +39,7 @@ import { dictionaryFromRequest } from "@/lib/i18n/request";
 /** Routes that must work with no session: the router, the probe, and signing in. */
 const PUBLIC_API = new Set([
   "/api/ingest",
+  "/api/ingest/devices",
   "/api/health",
   "/api/cron/tick",
   "/api/auth/login",
