@@ -186,6 +186,24 @@ export const en = {
     body: "The dashboard could not read the {table} table. Check {variable} and run {file} against the database (see README).",
   },
 
+  setup: {
+    title: "Almost there",
+    subtitle:
+      "No reading has arrived yet. Work through the list; this page refreshes itself and turns into the dashboard on the first push.",
+    done: "done",
+    missing: "missing",
+    waiting: "waiting",
+    database: "Database reachable and seeded",
+    secret: "CRON_SECRET set on the server",
+    secretHint: "The bearer token the router sends. Set it in the environment and restart.",
+    emailKey: "RESEND_API_KEY set on the server",
+    emailKeyHint: "Without it alerts cannot be sent. Readings still work.",
+    alertAddress: "Alert email saved in Settings",
+    router: "Router script installed and pushing",
+    routerHint: "Paste the generated script from {link} into WinBox, then run it once. Interface: {iface}.",
+    settingsLink: "Settings",
+  },
+
   cycle: {
     heading: "This billing cycle",
     span: "{start} to {end}",
@@ -402,6 +420,28 @@ export const en = {
     pollingEnabled: "Polling enabled",
     pollingPaused: "Polling paused",
     pollingHint: "When paused, readings pushed by the router are discarded. History is kept.",
+    enforcementSection: "Enforcement",
+    enforcementSectionHint:
+      "When on, the reply to each router push carries throttle=true while the limit is exceeded, and the quota-push script slows the LAN down with a queue. The queue must exist on the router first: see router/throttle-setup.rsc, and paste the updated script below.",
+    throttleOnBreach: "Throttle when the daily quota is exceeded",
+    throttleOnBreachHint: "Only inside the quota window. Lifts as soon as the window closes.",
+    throttleOnCap: "Throttle when the monthly cap is exceeded",
+    throttleOnCapHint: "At any hour, until the billing cycle rolls over.",
+    scriptCardTitle: "Router script",
+    scriptCardHint:
+      "quota-push with this deployment's values filled in. Paste it into WinBox > System > Scripts as a script named quota-push, then add a scheduler that runs it every 30 seconds.",
+    scriptSecretMissing: "CRON_SECRET is not set on the server, so the script cannot be completed. Set it and restart.",
+    scriptReveal: "Reveal secret",
+    scriptHide: "Hide secret",
+    scriptCopy: "Copy script",
+    scriptCopied: "Copied",
+    scriptCopyFailed: "Copy failed, select the text instead",
+    scriptSteps: [
+      "System > Scripts, click +, name it quota-push, paste the script into Source, keep the default policies, OK.",
+      "System > Scheduler, click +: name quota-push, start time startup, interval 00:00:30, on event /system script run quota-push.",
+      "Select the script and click Run Script. Log shows a quota-push line and the dashboard shows a reading within seconds.",
+      "For throttling, run router/throttle-setup.rsc once in New Terminal, then switch enforcement on above.",
+    ],
     scheduleSection: "Scheduled checks",
     scheduleSectionHint:
       "Run by the scheduler that calls /api/cron/tick (see README, \"Scheduled jobs\"). Without a scheduler these two settings do nothing.",
@@ -429,6 +469,8 @@ export const en = {
       alert_thresholds: "Daily alert marks",
       cycle_alert_thresholds: "Monthly alert marks",
       cycle_pace_alert: "Projection warning",
+      throttle_on_breach: "Throttle on daily quota",
+      throttle_on_cap: "Throttle on monthly cap",
     },
   },
 

@@ -170,6 +170,24 @@ export const ar = {
     body: "تعذّرت قراءة جدول {table} من لوحة التحكم. تحقق من {variable} ونفّذ {file} على قاعدة البيانات (راجع ملف README).",
   },
 
+  setup: {
+    title: "أوشكنا على الانتهاء",
+    subtitle:
+      "لم تصل أي قراءة بعد. أكمل القائمة؛ تتحدّث هذه الصفحة تلقائياً وتتحوّل إلى لوحة التحكم مع أول دفعة.",
+    done: "تم",
+    missing: "ناقص",
+    waiting: "بانتظار",
+    database: "قاعدة البيانات متاحة ومهيّأة",
+    secret: "المتغير CRON_SECRET مضبوط على الخادم",
+    secretHint: "الرمز الذي يرسله الراوتر. اضبطه في البيئة وأعد التشغيل.",
+    emailKey: "المتغير RESEND_API_KEY مضبوط على الخادم",
+    emailKeyHint: "من دونه لا تُرسل التنبيهات. القراءات تعمل رغم ذلك.",
+    alertAddress: "بريد التنبيهات محفوظ في الإعدادات",
+    router: "سكربت الراوتر مثبّت ويرسل",
+    routerHint: "الصق السكربت المولَّد من {link} في WinBox، ثم شغّله مرة. الواجهة: {iface}.",
+    settingsLink: "الإعدادات",
+  },
+
   cycle: {
     heading: "دورة الفوترة الحالية",
     span: "من {start} إلى {end}",
@@ -379,6 +397,28 @@ export const ar = {
     pollingEnabled: "المراقبة مفعّلة",
     pollingPaused: "المراقبة موقوفة",
     pollingHint: "عند الإيقاف، تُهمل القراءات الواردة من الراوتر. ويُحتفظ بالسجل السابق.",
+    enforcementSection: "التطبيق الإلزامي",
+    enforcementSectionHint:
+      "عند التفعيل، يحمل الردّ على كل دفعة من الراوتر القيمة throttle=true ما دام الحد متجاوَزاً، ويبطّئ سكربت quota-push الشبكة المحلية عبر طابور. يجب أن يكون الطابور موجوداً على الراوتر أولاً: راجع router/throttle-setup.rsc، ثم الصق السكربت المحدّث أدناه.",
+    throttleOnBreach: "التبطيء عند تجاوز الحصة اليومية",
+    throttleOnBreachHint: "داخل نافذة الحصة فقط. يُرفع فور إغلاق النافذة.",
+    throttleOnCap: "التبطيء عند تجاوز السقف الشهري",
+    throttleOnCapHint: "في أي ساعة، حتى تبدأ دورة الفوترة التالية.",
+    scriptCardTitle: "سكربت الراوتر",
+    scriptCardHint:
+      "سكربت quota-push مع قيم هذا النشر مُدرجةً فيه. الصقه في WinBox > System > Scripts كسكربت باسم quota-push، ثم أضف مجدولاً يشغّله كل 30 ثانية.",
+    scriptSecretMissing: "المتغير CRON_SECRET غير مضبوط على الخادم، لذا لا يمكن إكمال السكربت. اضبطه وأعد التشغيل.",
+    scriptReveal: "إظهار السر",
+    scriptHide: "إخفاء السر",
+    scriptCopy: "نسخ السكربت",
+    scriptCopied: "تم النسخ",
+    scriptCopyFailed: "فشل النسخ، حدّد النص يدوياً",
+    scriptSteps: [
+      "System > Scripts، اضغط +، سمّه quota-push، الصق السكربت في Source، أبقِ الصلاحيات الافتراضية، ثم OK.",
+      "System > Scheduler، اضغط +: الاسم quota-push، وقت البدء startup، الفاصل 00:00:30، والحدث ‎/system script run quota-push.",
+      "حدّد السكربت واضغط Run Script. يظهر سطر quota-push في Log وتظهر قراءة في لوحة التحكم خلال ثوانٍ.",
+      "للتبطيء، شغّل router/throttle-setup.rsc مرة واحدة في New Terminal، ثم فعّل التطبيق الإلزامي أعلاه.",
+    ],
     scheduleSection: "الفحوصات المجدولة",
     scheduleSectionHint:
       "تُنفَّذ بواسطة المجدول الذي يستدعي /api/cron/tick (راجع README، قسم Scheduled jobs). من دون مجدول لا يؤثر هذان الإعدادان.",
@@ -405,6 +445,8 @@ export const ar = {
       alert_thresholds: "علامات التنبيه اليومي",
       cycle_alert_thresholds: "علامات التنبيه الشهري",
       cycle_pace_alert: "تنبيه التوقّع",
+      throttle_on_breach: "التبطيء عند الحصة اليومية",
+      throttle_on_cap: "التبطيء عند السقف الشهري",
     },
   },
 

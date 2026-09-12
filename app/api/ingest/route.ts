@@ -2,8 +2,10 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { checkCycleAlerts } from "@/lib/alerts/cycle";
 import { badRequest, errorResponse, isCronAuthorized } from "@/lib/api";
+import { getCycleUsageCached } from "@/lib/cycle-cache";
 import { db } from "@/lib/db";
 import { recordReading, storeReading } from "@/lib/readings";
+import { decidePolicy, type Policy } from "@/lib/router/policy";
 import { applySessionEvent } from "@/lib/sessions";
 import { getSettings } from "@/lib/settings";
 import { parseRouterTimestamp } from "@/lib/time";
@@ -68,7 +70,11 @@ export async function POST(request: Request) {
   try {
     const settings = await getSettings();
     if (!settings.polling_enabled) {
-      return NextResponse.json({ status: "paused", message: "polling_enabled is false; reading discarded" });
+      return NextResponse.json({
+        status: "paused",
+        message: "polling_enabled is false; reading discarded",
+        policy: { throttle: false, reason: null } satisfies Policy,
+      });
     }
 
     const now = new Date();
@@ -118,12 +124,32 @@ export async function POST(request: Request) {
 
     const result = await recordReading(settings, wanCounters, now, null, stored);
 
+    // The reply carries what the router should do about the LAN. The cycle
+    // figure is cached, and a failure to read it leaves the cap out of the
+    // decision rather than failing the push: the reading is already stored.
+    let capExceeded = false;
+    if (settings.throttle_on_cap) {
+      try {
+        capExceeded = (await getCycleUsageCached(settings, now)).over;
+      } catch (err) {
+        console.warn("[ingest] could not read the cycle total for the policy", err);
+      }
+    }
+    const policy: Policy = decidePolicy({
+      throttleOnBreach: settings.throttle_on_breach,
+      throttleOnCap: settings.throttle_on_cap,
+      windowActive: result.window.active,
+      dailyExceeded: result.quota?.exceeded ?? false,
+      capExceeded,
+    });
+
     // Never fails the push: the reading is already stored, and the check
     // reports its own outcome in the response for the router log.
     const cycleCheck = await checkCycleAlerts(settings, now);
 
     return NextResponse.json({
       ...result,
+      policy,
       reported_event: body.event ?? null,
       router_clock_skew_seconds: clockSkewSeconds,
       cycle_check: cycleCheck,

@@ -1,42 +1,25 @@
-# quota-push: report the WAN interface counters and link sessions to the app,
-# and apply the throttle policy the app answers with.
-#
-# The router pushes; the app never connects back, so nothing has to be exposed
-# on the router and CGNAT is not a problem.
-#
-# WinBox setup:
-#   1. System > Scripts > "+" : Name = quota-push, paste everything below the
-#      dashed line into Source, keep the default policies ticked, OK.
-#      Policies needed: read, write, test.
-#   2. Edit the four values at the top (interface name, app URL, secret, queue).
-#      The settings page of the app renders this script with them filled in.
-#   3. System > Scheduler > "+" : Name = quota-push, Start Time = startup,
-#      Interval = 00:00:30, On Event = /system script run quota-push, OK.
-#      A shorter interval narrows the traffic lost when the link drops, at
-#      the cost of more stored rows. 30s is the balance the README argues for.
-#   4. Test once: select the script and click "Run Script", then check
-#      Log for a "quota-push:" line and the dashboard for a new reading.
-#
-# Terminal equivalent for the scheduler:
-#   /system scheduler add name=quota-push start-time=startup interval=30s \
-#       on-event="/system script run quota-push" policy=read,write,test
-#
-# Throttling: the app's reply carries {"policy":{"throttle":true|false,...}}.
-# When it says true, the script enables the simple queue named below and
-# disables the default fasttrack rule, because fasttracked connections bypass
-# queues. When it says false it reverses both. The queue must exist first:
-# run router/throttle-setup.rsc once. If the queue does not exist, the branch
-# does nothing and logs nothing, so the script is safe without it.
-#
-# The script keeps a little state in global variables so it can tell the app
-# when a session starts and ends. Globals are cleared on reboot, which simply
-# looks like a new session to the app.
-#
-# ----------------------------------------------------------------------------
-:local iface         "pppoe-out1"
-:local url           "http://APP-HOST:3000/api/ingest"
-:local secret        "PASTE-YOUR-CRON_SECRET-HERE"
-:local throttleQueue "quota-throttle"
+/**
+ * The body of router/quota-push.rsc, with the install-specific values as
+ * {{placeholders}}. lib/router/script.test.ts reads the .rsc from disk and
+ * checks that filling this template with TEMPLATE_DEFAULTS reproduces it, so
+ * editing one without the other fails the build.
+ *
+ * Kept as a plain string rather than read from disk at runtime: the settings
+ * page renders it on Vercel, where the repository is not on the filesystem.
+ */
+import type { ScriptVars } from "@/lib/router/script";
+
+export const TEMPLATE_DEFAULTS: ScriptVars = {
+  iface: "pppoe-out1",
+  url: "http://APP-HOST:3000/api/ingest",
+  secret: "PASTE-YOUR-CRON_SECRET-HERE",
+  throttleQueue: "quota-throttle",
+};
+
+export const QUOTA_PUSH_TEMPLATE = `:local iface         "{{iface}}"
+:local url           "{{url}}"
+:local secret        "{{secret}}"
+:local throttleQueue "{{throttleQueue}}"
 
 # state carried between runs (cleared on reboot, which is handled below)
 :global qpUp
@@ -86,11 +69,11 @@
 }
 
 :if ($send) do={
-    :local body "{\"iface\":\"$iface\",\"event\":\"$event\",\"session_id\":\"$sid\",\"link_up\":\"$linkUp\",\"running\":$running,\"tx_bytes\":$outTx,\"rx_bytes\":$outRx,\"router_time\":\"$stamp\"}"
+    :local body "{\\"iface\\":\\"$iface\\",\\"event\\":\\"$event\\",\\"session_id\\":\\"$sid\\",\\"link_up\\":\\"$linkUp\\",\\"running\\":$running,\\"tx_bytes\\":$outTx,\\"rx_bytes\\":$outRx,\\"router_time\\":\\"$stamp\\"}"
 
     :do {
-        :local result [/tool fetch url=$url http-method=post http-data=$body \
-            http-header-field="Content-Type: application/json,Authorization: Bearer $secret" \
+        :local result [/tool fetch url=$url http-method=post http-data=$body \\
+            http-header-field="Content-Type: application/json,Authorization: Bearer $secret" \\
             output=user as-value]
 
         # only commit state AFTER a successful POST, so a failed
@@ -109,7 +92,7 @@
         # :find returns nothing (nil) when the needle is absent, so the type of
         # the result is the test, not its value.
         :local data ($result->"data")
-        :local throttle ([:typeof [:find $data "\"throttle\":true"]] = "num")
+        :local throttle ([:typeof [:find $data "\\"throttle\\":true"]] = "num")
         :do {
             :local qid [/queue simple find name=$throttleQueue]
             :if ([:len $qid] > 0) do={
@@ -132,3 +115,4 @@
         :log warning "quota-push: POST to $url failed"
     }
 }
+`;

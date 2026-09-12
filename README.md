@@ -28,7 +28,7 @@ The one other secret is `CRON_SECRET`, the bearer token the router sends to `/ap
 
 ## How it works
 
-Every minute the router runs a small script (`router/quota-push.rsc`) that reads the WAN interface counters and POSTs them to `/api/ingest` with `Authorization: Bearer $CRON_SECRET`. For each reading the app:
+Every 30 seconds the router runs a small script (`router/quota-push.rsc`) that reads the WAN interface counters and POSTs them to `/api/ingest` with `Authorization: Bearer $CRON_SECRET`. For each reading the app:
 
 1. Reads the single row of the `settings` table. If `polling_enabled` is false the reading is discarded.
 2. Stores the counters in `interface_readings`.
@@ -125,6 +125,10 @@ docker compose up --build
 Open `/settings` and set the timezone, daily quota and window, the monthly cap and its cycle day,
 the alert email and the WAN interface name.
 
+Until the first reading arrives the dashboard shows a setup checklist instead of charts: whether
+`CRON_SECRET` and `RESEND_API_KEY` are set, whether an alert address is saved, and a link to the
+generated router script. It turns into the dashboard on its own on the first push.
+
 The unit tests cover the pure logic: range resolution, billing-cycle arithmetic, chart series
 shaping and the quota window bounds. They need no database.
 
@@ -146,11 +150,12 @@ The alert reports the day's overage, the download and upload split, the billing 
 In WinBox:
 
 1. **System > Scripts**, click **+**. Name it `quota-push`, paste everything below the dashed line in [`router/quota-push.rsc`](router/quota-push.rsc) into **Source**, keep the default policies, click OK.
-2. Edit the three values at the top:
+2. Easiest: open `/settings` in the app. The **Router script** card shows this script with the interface name, the app's URL and the secret already filled in; click **Copy script** and paste it into **Source**. Otherwise edit the four values at the top by hand:
    - `iface` - your WAN interface name. Check **Interfaces**; with PPPoE it is usually `pppoe-out1`, not the physical port, because that is where the session counters live.
    - `url` - `http://<app-host>:3000/api/ingest`
    - `secret` - the same string as `CRON_SECRET`
-3. **System > Scheduler**, click **+**: name `quota-push`, start time `startup`, interval `00:01:00`, on event `/system script run quota-push`.
+   - `throttleQueue` - leave as `quota-throttle` unless you renamed the queue (see below)
+3. **System > Scheduler**, click **+**: name `quota-push`, start time `startup`, interval `00:00:30`, on event `/system script run quota-push`.
 4. Select the script and click **Run Script**. **Log** should show `quota-push: sent tx=... rx=...` and a reading should appear on the dashboard within seconds.
 
 Set the same interface name on `/settings` so the dashboard labels it correctly.
@@ -188,6 +193,29 @@ New-NetFirewallRule -DisplayName "Quota monitor 3000" -Direction Inbound -Action
 
 Give the app host a static address or a DHCP reservation, otherwise its IP will change and the script will point at nothing.
 
+### Throttling the house when a limit is exceeded
+
+The app never connects to the router, but the router asks the app something every 30 seconds, so enforcement rides on the answer. Every reply from `/api/ingest` carries:
+
+```json
+"policy": { "throttle": false, "reason": null }
+```
+
+`throttle` becomes `true` while the daily quota is exceeded inside its window (when **Throttle when the daily quota is exceeded** is on in `/settings`) or while the monthly cap is exceeded (**Throttle when the monthly cap is exceeded**). `reason` names which. The `quota-push` script reads the reply and, when the answer changes, enables or disables a simple queue named `quota-throttle` over the LAN.
+
+Setup, once:
+
+1. Run [`router/throttle-setup.rsc`](router/throttle-setup.rsc) in **New Terminal**. It creates the queue disabled, at 2M/2M; edit `max-limit` to taste.
+2. Make sure the installed `quota-push` script is the current version (the one on `/settings`), since older versions ignore the reply.
+3. Switch the enforcement toggles on in `/settings`.
+
+Two things to know:
+
+- The default RouterOS configuration fasttracks established connections, and fasttracked packets never reach a queue. The script therefore disables the rule with comment `defconf: fasttrack` while the queue is on, and re-enables it after. On a hEX lite this means every packet goes through the full firewall while throttled, which costs CPU, but only for as long as the throttle lasts.
+- The decision is made on the server and only re-evaluated on the next push. When the window closes or the cycle rolls over, the throttle lifts on the first push afterwards, at most 30 seconds later. The monthly figure is cached for five minutes on the server, so the cap throttle can start up to five minutes after the cap is crossed.
+
+If the queue does not exist the script does nothing about the policy and logs nothing, so the setting is harmless until the router is ready.
+
 ## Languages
 
 The interface is written in English and Arabic. The language is the first segment of every path,
@@ -218,7 +246,7 @@ so they follow the `language` column in `settings` rather than a URL. Set it on 
 
 | Method | Path | Notes |
 | --- | --- | --- |
-| `POST` | `/api/ingest` | Requires `Authorization: Bearer $CRON_SECRET`. Body `{ "tx_bytes", "rx_bytes", "iface"?, "running"?, "session_id"?, "link_up"?, "router_time"? }` as JSON or form-encoded. |
+| `POST` | `/api/ingest` | Requires `Authorization: Bearer $CRON_SECRET`. Body `{ "tx_bytes", "rx_bytes", "iface"?, "running"?, "session_id"?, "link_up"?, "router_time"? }` as JSON or form-encoded. The response carries `policy` (see [Throttling](#throttling-the-house-when-a-limit-is-exceeded)). |
 | `GET` | `/api/health` | `200` when the database is reachable, `503` otherwise. Used by the container health check. |
 | `GET` | `/api/usage/today` | Today's readings, baseline, `used_since_baseline`, quota and window state. |
 | `GET` | `/api/usage/history?days=30` | Per-day min, max, reboot-aware usage and reading count. Max 365 days. |

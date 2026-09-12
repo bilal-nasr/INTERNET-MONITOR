@@ -41,6 +41,8 @@ function patchSchema(d: Dictionary) {
       wan_interface_name: z.string().trim().min(1, e.interfaceRequired).max(100),
       polling_enabled: z.boolean(),
       language: z.enum(LOCALES, e.unknownLanguage),
+      throttle_on_breach: z.boolean(),
+      throttle_on_cap: z.boolean(),
       stale_after_minutes: z.coerce
         .number()
         .int(e.staleMinutesWhole)

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { AccountForm } from "@/components/AccountForm";
+import { RouterScriptCard } from "@/components/RouterScriptCard";
 import { SettingsForm } from "@/components/SettingsForm";
 import { requireAuth } from "@/lib/auth/server";
 import { getI18n } from "@/lib/i18n/server";
@@ -19,6 +20,7 @@ export default async function SettingsPage() {
         <p className="text-sm text-muted">{d.settings.subtitle}</p>
       </div>
       <SettingsForm initial={toPublicSettings(settings)} />
+      <RouterScriptCard interfaceName={settings.wan_interface_name} />
       <AccountForm user={auth.user} />
     </div>
   );
