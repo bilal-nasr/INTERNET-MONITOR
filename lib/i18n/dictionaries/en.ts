@@ -447,6 +447,20 @@ export const en = {
     downloadJson: "Download JSON",
   },
 
+  import: {
+    title: "Import readings",
+    subtitle:
+      "Load a CSV or JSON file written by the export above. Readings already in the database are left alone.",
+    chooseFile: "File",
+    upload: "Import",
+    uploading: "Importing...",
+    pickFile: "Choose a file first.",
+    result: "{inserted} imported, {skipped} already present, {rejected} rejected.",
+    problems: "Rows that were not imported",
+    notImported:
+      "Sessions and daily quota windows are not part of the file: they are derived from the readings as they arrive, and a session cannot be rebuilt from counters alone.",
+  },
+
   alerts: {
     title: "Alerts",
     subtitle: "Every alert the monitor decided to send, newest first. Times in {timezone}.",
