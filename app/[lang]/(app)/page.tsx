@@ -4,6 +4,7 @@ import { HistoryChart } from "@/components/HistoryChart";
 import { CycleGauge } from "@/components/stats/CycleGauge";
 import { StatusCard } from "@/components/StatusCard";
 import { UsageProgress } from "@/components/UsageProgress";
+import { latestAlert } from "@/lib/alerts/log";
 import { Interpolate } from "@/lib/i18n/react";
 import { getI18n } from "@/lib/i18n/server";
 import { getLatestSessionSummary } from "@/lib/sessions";
@@ -23,11 +24,12 @@ export default async function DashboardPage() {
     return <SetupError message={err instanceof Error ? err.message : String(err)} />;
   }
 
-  const [usage, history, session, cycle] = await Promise.all([
+  const [usage, history, session, cycle, staleAlert] = await Promise.all([
     getTodayUsage(settings),
     getDailyHistory(30, settings.timezone),
     getLatestSessionSummary(),
     getCycleUsage(settings.monthly_quota_gb, settings.billing_cycle_day, settings.timezone),
+    latestAlert("link_stale", "link").catch(() => null),
   ]);
 
   return (
@@ -47,6 +49,7 @@ export default async function DashboardPage() {
           pollingEnabled={settings.polling_enabled}
           interfaceName={settings.wan_interface_name}
           session={session}
+          staleAlertAt={staleAlert?.created_at.toISOString() ?? null}
         />
       </div>
 

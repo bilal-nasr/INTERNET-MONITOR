@@ -35,12 +35,15 @@ export async function StatusCard({
   pollingEnabled,
   interfaceName,
   session = null,
+  staleAlertAt = null,
 }: {
   usage: TodayUsage;
   pollingEnabled: boolean;
   interfaceName: string;
   /** The newest session, open or closed. */
   session?: SessionSummary | null;
+  /** When the newest "router has gone quiet" mail was sent, or null. */
+  staleAlertAt?: string | null;
 }) {
   const { d, f } = await getI18n();
   const state = linkState(session);
@@ -92,6 +95,13 @@ export async function StatusCard({
                   duration: f.duration(state.session.seconds_since_seen),
                 })}
               </dd>
+              {staleAlertAt &&
+                usage.last_reading &&
+                new Date(staleAlertAt) > new Date(usage.last_reading.recorded_at) && (
+                  <dd className="text-xs text-muted">
+                    {fill(d.router.staleAlertSent, { time: f.stamp(staleAlertAt, usage.timezone) })}
+                  </dd>
+                )}
             </>
           )}
           {state.kind === "unknown" && (

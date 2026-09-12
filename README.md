@@ -260,6 +260,48 @@ The series is grouped into minute, hour, day, week or month buckets chosen from 
 range. Pass `bucket` to override it; a combination that would produce more than 2000 points is
 rejected with `400`.
 
+## Scheduled jobs
+
+Two things cannot happen on the ingest path because they need to run when the
+router is *not* pushing: noticing that it has gone quiet, and sending a summary
+on a calendar. Both run from one endpoint:
+
+```
+GET or POST /api/cron/tick
+Authorization: Bearer $CRON_SECRET
+```
+
+It runs every job in turn, records in `job_runs` each one that did work or failed
+(skips are not recorded), and answers with what it did. Jobs are idempotent, so the endpoint can be called every minute or once a
+day:
+
+| Job | What it does | Settings |
+| --- | --- | --- |
+| `stale` | Emails when no reading has arrived for longer than the limit, and once more when readings resume. | Silence before alerting (minutes); 0 turns it off. |
+| `digest` | Sends the quota report on a schedule: Monday 08:00 (weekly) or 08:00 on the first day of a billing cycle. | Scheduled summary. |
+
+Pick a trigger:
+
+- **Vercel**: `vercel.ts` declares a cron every five minutes. Vercel sends the
+  `CRON_SECRET` environment variable as the bearer token itself. On the Hobby
+  plan crons run once a day, which is enough for the digest but not for the
+  stale alert; add the GitHub trigger below.
+- **GitHub Actions**: `.github/workflows/tick.yml` runs every five minutes. Set
+  the repository secret `CRON_SECRET` and the repository variable `TICK_URL`
+  (`https://netmonitor.bilalnasr.com/api/cron/tick`). Free, and independent of
+  where the app is hosted.
+- **Docker**: the `tick` service in `docker-compose.yml` calls the endpoint once
+  a minute from inside the compose network.
+
+Locally:
+
+```bash
+curl -X POST -H "Authorization: Bearer $CRON_SECRET" http://localhost:3000/api/cron/tick
+```
+
+The first tick after the summary is switched on sends one immediately, which
+doubles as the check that the scheduler and the mail are wired up.
+
 ## Docker
 
 The image is a multi-stage build producing the Next.js standalone server, running as a non-root user, with no secrets baked in.
@@ -324,8 +366,10 @@ lib/
   email-report.ts        the figures an alert shows, gathered from lib/stats.ts
   email-template.ts      the alert email, rendered to subject, text and HTML
   email-cycle-template.ts  the monthly-cap email, rendered the same way
+  email-link-template.ts  the router-has-gone-quiet mail
   time.ts                timezone, window and duration helpers
   i18n/                  locales, the two dictionaries, and date and number formatting
+  cron/                  the scheduler: job registry, tick runner, the stale and digest jobs, and the pure schedule arithmetic
 router/quota-push.rsc        pushes counters to the app
 router/pppoe-reconnect.rsc   cycles the WAN session (daily scheduler, watchdog)
 router/internet-watchdog.md  netwatch setup for ISP outages

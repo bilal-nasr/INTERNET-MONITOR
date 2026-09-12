@@ -154,6 +154,7 @@ export const ar = {
     noContact: "لا اتصال مع الراوتر",
     noContactExplanation:
       "لم تصل أي إشارة منذ {duration}. الراوتر مطفأ أو غير قابل للوصول أو توقف سكربته. تُعرض آخر جلسة كما تُركت.",
+    staleAlertSent: "أُرسل تنبيه بالبريد في {time}.",
     noSessionYet: "لم تُسجَّل أي جلسة بعد",
     interface: "الواجهة {name}",
     lastReading: "آخر قراءة",

@@ -170,6 +170,7 @@ export const en = {
     noContact: "No contact with the router",
     noContactExplanation:
       "Nothing heard for {duration}. The router is off, unreachable, or its script has stopped. The last session is shown as it was left.",
+    staleAlertSent: "Alert emailed at {time}.",
     noSessionYet: "No session recorded yet",
     interface: "interface {name}",
     lastReading: "Last reading",

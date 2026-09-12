@@ -35,6 +35,22 @@ services:
         condition: service_healthy
         required: false
 
+  # Calls the scheduler endpoint once a minute. Only needed when nothing else
+  # (Vercel Cron, GitHub Actions) does; harmless if both run.
+  tick:
+    image: curlimages/curl:8.10.1
+    container_name: quota-tick
+    restart: unless-stopped
+    env_file:
+      - .env.local
+    depends_on:
+      app:
+        condition: service_healthy
+    command:
+      - sh
+      - -c
+      - 'while true; do curl -fsS -H "Authorization: Bearer $$CRON_SECRET" http://app:3000/api/cron/tick >/dev/null || echo "tick failed"; sleep 60; done'
+
   db:
     profiles: ["local-db"]
     image: postgres:17-alpine

@@ -1,0 +1,22 @@
+# Calls the scheduler endpoint every five minutes. GitHub may delay a scheduled
+# run by several minutes under load; that is fine, every job on the tick is
+# idempotent. Set the repository secret CRON_SECRET (same value as on the
+# server) and the repository variable TICK_URL, e.g.
+# https://netmonitor.bilalnasr.com/api/cron/tick
+name: tick
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Call /api/cron/tick
+        run: |
+          curl -fsS --max-time 60 \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "${{ vars.TICK_URL }}"
