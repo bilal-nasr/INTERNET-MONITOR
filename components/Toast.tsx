@@ -20,6 +20,7 @@ export function Toast({ toast, onDismiss }: { toast: ToastState | null; onDismis
   if (!toast) return null;
   return (
     <div
+      data-toast
       role="status"
       aria-live="polite"
       className={`fixed bottom-5 left-1/2 z-50 max-w-md -translate-x-1/2 rounded-lg border px-4 py-2.5 text-sm shadow-lg ${

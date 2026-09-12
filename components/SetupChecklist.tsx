@@ -61,7 +61,7 @@ export async function SetupChecklist({ status }: { status: SetupStatus }) {
               template={s.routerHint}
               values={{
                 link: (
-                  <Link href={`/${locale}/settings`} className="underline">
+                  <Link href={`/${locale}/settings?tab=router`} className="underline">
                     {s.settingsLink}
                   </Link>
                 ),

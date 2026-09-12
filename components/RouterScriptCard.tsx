@@ -1,5 +1,6 @@
 import { headers } from "next/headers";
 import { RouterScriptView } from "@/components/RouterScriptView";
+import { SettingsCard } from "@/components/settings/SettingsCard";
 import { getI18n } from "@/lib/i18n/server";
 import { publicBaseUrlFromHeaders } from "@/lib/public-url";
 import { renderQuotaPushScript } from "@/lib/router/script";
@@ -32,15 +33,13 @@ export async function RouterScriptCard({ interfaceName }: { interfaceName: strin
   });
 
   return (
-    <section className="rounded-xl border border-border bg-surface p-5">
-      <h2 className="text-base font-semibold">{d.settings.scriptCardTitle}</h2>
-      <p className="mt-1 mb-4 text-sm text-muted">{d.settings.scriptCardHint}</p>
+    <SettingsCard title={d.settings.scriptCardTitle} description={d.settings.scriptCardHint}>
       <RouterScriptView script={script} secret={secret} secretMissing={secret === ""} />
-      <ol className="mt-4 list-decimal space-y-1 ps-5 text-sm text-muted">
+      <ol className="list-decimal space-y-1 ps-5 text-sm text-muted">
         {d.settings.scriptSteps.map((step) => (
           <li key={step}>{step}</li>
         ))}
       </ol>
-    </section>
+    </SettingsCard>
   );
 }

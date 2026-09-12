@@ -446,10 +446,38 @@ export const en = {
     sendTest: "Send test email",
     sending: "Sending...",
     httpError: "HTTP {status}",
-    quotaSection: "Quota",
+    unsaved: "You have unsaved changes.",
+    discard: "Discard",
+    tabsLabel: "Settings sections",
+    /** One tab per group of settings; the hint opens the tab's panel. */
+    tabs: {
+      limits: "Limits",
+      limitsHint: "How much the connection may use each day and across a billing cycle.",
+      alerts: "Alerts",
+      alertsHint: "Where alert emails go and what sends one.",
+      router: "Router",
+      routerHint: "How readings arrive, what is tracked, and what the router does once a limit is passed.",
+      data: "Data",
+      dataHint: "How long detailed readings are kept.",
+      sharing: "Sharing",
+      sharingHint: "A view of usage for people who do not sign in.",
+      account: "Account",
+      accountHint: "Your sign-in details and the browsers signed in with them.",
+    },
+    units: {
+      gb: "GB",
+      days: "days",
+      minutes: "min",
+    },
+    emailCard: "Email delivery",
+    marksCard: "When to send an alert",
+    devicesCard: "Per-device tracking",
+    retentionCard: "Retention",
+    exportLink: "Export or import readings",
+    quotaSection: "Daily quota",
     quotaSectionHint:
       "Usage inside this daily window counts against the quota. Times are in the timezone below.",
-    quotaGb: "Quota (GB)",
+    quotaGb: "Quota",
     quotaGbHint: "1 GB = 1,000,000,000 bytes",
     windowStart: "Window start",
     windowEnd: "Window end",
@@ -459,7 +487,7 @@ export const en = {
     monthlySection: "Monthly cap",
     monthlySectionHint:
       "The total allowed across one billing cycle, counting all traffic at every hour, not just the daily window above.",
-    monthlyQuotaGb: "Maximum consumption (GB)",
+    monthlyQuotaGb: "Maximum consumption",
     monthlyQuotaGbHint: "Shown as a ring on the dashboard, with a projection for the cycle.",
     billingCycleDay: "Cycle starts on day",
     billingCycleDayHint:
@@ -516,13 +544,13 @@ export const en = {
       "Stores the counters the {script} router script sends and shows the Devices page. Needs the one-time setup in {setup}, run once on the router; it leaves fasttrack enabled and changes nothing about it.",
     devicesUndo:
       "Switching this off stops storing device counters here. The router keeps the kid-control entry the setup added until you run {undo} on it.",
-    retentionDays: "Keep full detail for (days)",
+    retentionDays: "Keep full detail for",
     retentionDaysHint:
       "Older readings are thinned to one per hour. Totals and charts stay correct; only minute-level detail for old dates is dropped.",
     scheduleSection: "Scheduled checks",
     scheduleSectionHint:
       "Run by the scheduler that calls /api/cron/tick (see README, \"Scheduled jobs\"). Without a scheduler these two settings do nothing.",
-    staleAfterMinutes: "Silence before alerting (minutes)",
+    staleAfterMinutes: "Silence before alerting",
     staleAfterMinutesHint: "Email when no reading has arrived for this long. 0 turns it off.",
     digest: "Scheduled summary",
     digestOff: "Off",
@@ -662,9 +690,9 @@ export const en = {
       missingToken: "This link is missing its token. Ask for a new one.",
     },
     account: {
-      section: "Account",
+      section: "Sign-in details",
       sectionHint:
-        "Password reset links are sent to the account email. When it is empty, the alert email above is used instead.",
+        "Password reset links are sent to the account email. When it is empty, the alert email on the Alerts tab is used instead.",
       username: "Username",
       email: "Account email",
       saveEmail: "Save email",

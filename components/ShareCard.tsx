@@ -4,6 +4,7 @@ import { useCallback, useState, useSyncExternalStore } from "react";
 import { useI18n } from "@/components/I18nProvider";
 import { Toast, type ToastState } from "@/components/Toast";
 import { readApiError, secondaryButtonClass } from "@/components/auth/fields";
+import { SettingsCard } from "@/components/settings/SettingsCard";
 import { fill } from "@/lib/i18n";
 import type { Locale } from "@/lib/i18n/config";
 
@@ -77,15 +78,11 @@ export function ShareCard({ initialToken, locale }: { initialToken: string | nul
   }
 
   return (
-    <section className="space-y-4 rounded-xl border border-border bg-surface p-5">
-      <div>
-        <h2 className="text-base font-semibold">{s.section}</h2>
-        <p className="text-sm text-muted">{s.sectionHint}</p>
-      </div>
-
+    <SettingsCard title={s.linkLabel} description={s.sectionHint}>
       {token && link ? (
         <div className="space-y-3">
-          <label htmlFor="share-link" className="block text-sm font-medium">
+          {/* The card is already titled with these words; the label stays for a screen reader. */}
+          <label htmlFor="share-link" className="sr-only">
             {s.linkLabel}
           </label>
           <div className="flex flex-col gap-2 sm:flex-row">
@@ -128,6 +125,6 @@ export function ShareCard({ initialToken, locale }: { initialToken: string | nul
       )}
 
       <Toast toast={toast} onDismiss={dismiss} />
-    </section>
+    </SettingsCard>
   );
 }

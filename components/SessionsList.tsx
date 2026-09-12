@@ -4,6 +4,7 @@ import { useCallback, useState } from "react";
 import { useI18n } from "@/components/I18nProvider";
 import { Toast, type ToastState } from "@/components/Toast";
 import { readApiError, secondaryButtonClass } from "@/components/auth/fields";
+import { SettingsCard } from "@/components/settings/SettingsCard";
 import type { PublicSession } from "@/lib/auth/sessions";
 import type { UserAgentDescription } from "@/lib/auth/user-agent";
 import { fill, type Dictionary } from "@/lib/i18n";
@@ -81,12 +82,7 @@ export function SessionsList({ initial, timezone }: { initial: PublicSession[]; 
   const others = rows.filter((r) => !r.current);
 
   return (
-    <section className="space-y-4 rounded-xl border border-border bg-surface p-5">
-      <div>
-        <h2 className="text-base font-semibold">{s.section}</h2>
-        <p className="text-sm text-muted">{s.sectionHint}</p>
-      </div>
-
+    <SettingsCard title={s.section} description={s.sectionHint}>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="text-xs text-muted">
@@ -142,6 +138,6 @@ export function SessionsList({ initial, timezone }: { initial: PublicSession[]; 
       )}
 
       <Toast toast={toast} onDismiss={dismiss} />
-    </section>
+    </SettingsCard>
   );
 }

@@ -95,6 +95,19 @@ body {
 }
 
 /*
+ * The settings page's unsaved-changes bar is fixed to the foot of the screen.
+ * While it is open the page gains room below its last line so nothing ends up
+ * underneath it, and a toast raised meanwhile (sharing, account) sits above it.
+ */
+body:has([data-unsaved-bar]) {
+  padding-bottom: 5rem;
+}
+
+body:has([data-unsaved-bar]) [data-toast] {
+  bottom: 5.5rem;
+}
+
+/*
  * Arabic.
  *
  * Geist carries no Arabic glyphs, so without this the script falls through to
