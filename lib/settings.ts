@@ -137,11 +137,8 @@ async function loadSettings(): Promise<SettingsRow> {
             window_end, timezone, alert_email_to, wan_interface_name,
             polling_enabled, language, alert_thresholds, cycle_alert_thresholds,
             cycle_pace_alert, stale_after_minutes, digest,
-            throttle_on_breach, throttle_on_cap, updated_at
-            cycle_pace_alert, stale_after_minutes, digest, devices_enabled,
-            cycle_pace_alert, stale_after_minutes, digest, retention_days,
-            updated_at
-            cycle_pace_alert, stale_after_minutes, digest, share_token, updated_at
+            throttle_on_breach, throttle_on_cap, devices_enabled,
+            retention_days, share_token, updated_at
      FROM settings WHERE id = 1`,
   );
   if (!row) throw new SettingsNotSeededError();
