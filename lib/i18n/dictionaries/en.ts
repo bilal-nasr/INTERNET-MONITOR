@@ -646,6 +646,28 @@ export const en = {
     generatedLine: "Generated {at} · times shown in {timezone}",
   },
 
+  /** The "router has gone quiet" mail and its all-clear. */
+  emailLink: {
+    subjectStale: "No data from the router for {duration}",
+    subjectRecovered: "The router is reporting again",
+    headingStale: "The router has gone quiet",
+    headingRecovered: "Readings have resumed",
+    bodyStale:
+      "The last reading arrived at {time} ({timezone}). Nothing has been received for {duration}.",
+    bodyStaleNever: "No reading has ever been received from the router.",
+    bodyRecovered: "Readings resumed after {duration} of silence. The last one arrived at {time} ({timezone}).",
+    causes: "This usually means one of:",
+    causePower: "the router is off or rebooting",
+    causeLink: "the router is up but its internet link is down, so it cannot reach this app",
+    causeScript: "the quota-push scheduler on the router has stopped or its secret has changed",
+    causeApp: "this app was unreachable from the router",
+    checkHint: "On the router, Log shows a quota-push line for every attempt; \"failed\" there means the router could not reach the app.",
+    openDashboard: "Open the dashboard",
+    footerStale: "You will get one more mail when readings resume.",
+    footerRecovered: "No further mail unless the router goes quiet again.",
+    dashboardLine: "Dashboard: {url}",
+  },
+
   /** The monthly-cap mails: a threshold mark reached, or the projection crossing the cap. */
   emailCycle: {
     subjectThreshold: "Monthly cap at {percent}: {used} of {cap} used",

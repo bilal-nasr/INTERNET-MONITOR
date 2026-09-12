@@ -627,6 +627,26 @@ export const ar = {
       "أُنشئ في {at} · الأوقات بتوقيت {timezone}",
   },
 
+  emailLink: {
+    subjectStale: "لا بيانات من الراوتر منذ {duration}",
+    subjectRecovered: "عاد الراوتر إلى الإبلاغ",
+    headingStale: "توقف الراوتر عن الإبلاغ",
+    headingRecovered: "استؤنفت القراءات",
+    bodyStale: "وصلت آخر قراءة في {time} ({timezone}). لم يصل شيء منذ {duration}.",
+    bodyStaleNever: "لم تصل أي قراءة من الراوتر على الإطلاق.",
+    bodyRecovered: "استؤنفت القراءات بعد صمت دام {duration}. وصلت الأخيرة في {time} ({timezone}).",
+    causes: "يعني هذا عادةً أحد الأمور التالية:",
+    causePower: "الراوتر مطفأ أو يعيد التشغيل",
+    causeLink: "الراوتر يعمل لكن اتصاله بالإنترنت منقطع، فلا يستطيع الوصول إلى هذا التطبيق",
+    causeScript: "توقف مجدول quota-push على الراوتر أو تغيّر السر الخاص به",
+    causeApp: "تعذّر على الراوتر الوصول إلى هذا التطبيق",
+    checkHint: "على الراوتر، يُظهر السجل سطر quota-push لكل محاولة؛ ظهور failed هناك يعني أن الراوتر لم يصل إلى التطبيق.",
+    openDashboard: "فتح لوحة التحكم",
+    footerStale: "ستصلك رسالة أخرى واحدة عند استئناف القراءات.",
+    footerRecovered: "لا رسائل أخرى ما لم يتوقف الراوتر عن الإبلاغ مجدداً.",
+    dashboardLine: "لوحة التحكم: {url}",
+  },
+
   emailCycle: {
     subjectThreshold: "السقف الشهري عند {percent}: استُهلك {used} من أصل {cap}",
     subjectOver: "تم تجاوز السقف الشهري: استُهلك {used} من أصل {cap}",
