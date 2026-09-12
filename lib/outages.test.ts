@@ -1,5 +1,10 @@
 import { describe, expect, test } from "vitest";
-import { downtimeByDay, outagesFromSessions, type Outage } from "@/lib/outages";
+import {
+  downtimeByDay,
+  downtimeWindowEnd,
+  outagesFromSessions,
+  type Outage,
+} from "@/lib/outages";
 import type { SessionSummary } from "@/lib/sessions";
 
 function session(
@@ -101,10 +106,43 @@ describe("outagesFromSessions", () => {
     ).toEqual([]);
   });
 
-  test("no sessions, or one open session with no gap before it, means no outages", () => {
+  test("no sessions and nothing known before the range means no outages", () => {
     expect(outagesFromSessions([], range)).toEqual([]);
     expect(outagesFromSessions([session(1, "2026-09-10T00:00:00Z", null, 0)], range)).toEqual([]);
     expect(outagesFromSessions([session(1, "2026-09-10T00:00:00Z", null, null)], range)).toEqual([]);
+  });
+
+  test("a link already down when the range began is an outage, not silence", () => {
+    // The morning after an overnight drop, on the default "today" range: the
+    // last session ended yesterday so it is not listed, and no new one exists.
+    // Reading that as "no outages" reports the link as healthy through the one
+    // event the whole page is for.
+    const previous = session(9, "2026-09-08T08:00:00Z", "2026-09-09T22:00:00Z");
+    const outages = outagesFromSessions([], range, previous);
+    expect(outages).toEqual<Outage[]>([
+      {
+        from: "2026-09-10T00:00:00.000Z", // clipped to the start of the range
+        to: "2026-09-12T00:00:00.000Z",
+        seconds: 172_800,
+        ended_session_id: 9,
+        next_session_id: null,
+      },
+    ]);
+  });
+
+  test("the fallback only speaks for a session that closed before the range", () => {
+    // Still open: the link is up, or merely out of contact, which the page
+    // reports as "no contact" rather than as downtime.
+    expect(outagesFromSessions([], range, session(9, "2026-09-08T08:00:00Z", null))).toEqual([]);
+    // Closed after the range started: it would have been listed, so its absence
+    // says the range was asked about a time this session does not cover.
+    expect(
+      outagesFromSessions([], range, session(9, "2026-09-13T08:00:00Z", "2026-09-13T09:00:00Z")),
+    ).toEqual([]);
+    // An unbounded range has no start to have been down at.
+    expect(
+      outagesFromSessions([], { from: null, to: range.to }, session(9, "2026-09-01T00:00:00Z", "2026-09-02T00:00:00Z")),
+    ).toEqual([]);
   });
 
   test("an open-ended range still works", () => {
@@ -114,6 +152,23 @@ describe("outagesFromSessions", () => {
     );
     expect(outages).toHaveLength(1);
     expect(outages[0].seconds).toBe(600);
+  });
+});
+
+describe("downtimeWindowEnd", () => {
+  const now = new Date("2026-09-11T14:50:00Z");
+
+  test("stops at now when the range ends in the future", () => {
+    // A custom range whose end is a bare date runs to the next local midnight,
+    // which for today has not happened yet. Measuring downtime to it would
+    // report a link that dropped minutes ago as down for the rest of the day.
+    expect(downtimeWindowEnd(new Date("2026-09-11T21:00:00Z"), now)).toEqual(now);
+  });
+
+  test("leaves a range that has already ended alone", () => {
+    const past = new Date("2026-09-10T00:00:00Z");
+    expect(downtimeWindowEnd(past, now)).toEqual(past);
+    expect(downtimeWindowEnd(now, now)).toEqual(now);
   });
 });
 
@@ -171,6 +226,33 @@ describe("downtimeByDay", () => {
       { day: "2026-09-11", seconds: 86_400, outages: 1 },
       { day: "2026-09-12", seconds: 21_600, outages: 1 },
     ]);
+  });
+
+  test("splits across a midnight the local clock never strikes", () => {
+    // Asia/Beirut springs forward at 00:00 on the last Sunday of March, so
+    // 2027-03-28 00:00 does not exist and the first instant of that day is
+    // 01:00 local (22:00Z). An outage from 22:00 on the 27th to 03:00 on the
+    // 28th is four real hours, two on each side of that boundary. September
+    // has no transition, so the test above never walks this path.
+    const byDay = downtimeByDay(
+      [
+        {
+          from: "2027-03-27T20:00:00.000Z", // 22:00 local, UTC+2
+          to: "2027-03-28T00:00:00.000Z", // 03:00 local, UTC+3
+          seconds: 14_400,
+          ended_session_id: 1,
+          next_session_id: 2,
+        },
+      ],
+      "Asia/Beirut",
+    );
+    expect(byDay).toEqual([
+      { day: "2027-03-27", seconds: 7_200, outages: 1 },
+      { day: "2027-03-28", seconds: 7_200, outages: 1 },
+    ]);
+    // Every second of the outage is accounted for on some day, and the one
+    // outage is counted once per day it touches.
+    expect(byDay.reduce((sum, r) => sum + r.seconds, 0)).toBe(14_400);
   });
 
   test("no outages, no rows", () => {

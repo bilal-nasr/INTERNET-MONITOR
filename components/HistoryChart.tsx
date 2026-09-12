@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useRef, useState, type KeyboardEvent } from "react";
 import {
   Bar,
   BarChart,
@@ -80,6 +81,18 @@ export function HistoryChart({ history, quotaGb, today, days = 30, anomalies = [
   const ChartTooltip = makeTooltip(d);
   const flagged = new Set(anomalies);
 
+  // The drill-down as a control a keyboard can reach. A click on a bar is a
+  // pointer gesture and nothing else: recharts draws SVG paths, which take no
+  // focus and fire no key events, so without these buttons the hourly view
+  // below the chart has no route to it at all without a mouse. One tab stop
+  // between them all, moved along by the arrow keys, the pattern a toolbar
+  // uses; each button shows itself while it holds focus so the caret is never
+  // somewhere invisible.
+  const [dayIndex, setDayIndex] = useState(0);
+  const [focused, setFocused] = useState(false);
+  const dayRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const active = Math.min(dayIndex, Math.max(data.length - 1, 0));
+
   /**
    * A bare date on both ends is the whole local day (lib/range.ts pushes `to`
    * to the next midnight), and an hourly bucket is what a single day reads
@@ -87,6 +100,36 @@ export function HistoryChart({ history, quotaGb, today, days = 30, anomalies = [
    */
   function openDay(day: string) {
     router.push(`/${locale}/stats?range=custom&from=${day}&to=${day}&bucket=hour`);
+  }
+
+  function moveTo(next: number) {
+    const i = Math.max(0, Math.min(data.length - 1, next));
+    setDayIndex(i);
+    dayRefs.current[i]?.focus();
+  }
+
+  // The bars run oldest to newest whatever the page direction (see chrome.tsx),
+  // so the arrow keys follow the drawing, not the script.
+  function onDayKeyDown(event: KeyboardEvent<HTMLUListElement>) {
+    switch (event.key) {
+      case "ArrowRight":
+      case "ArrowDown":
+        moveTo(active + 1);
+        break;
+      case "ArrowLeft":
+      case "ArrowUp":
+        moveTo(active - 1);
+        break;
+      case "Home":
+        moveTo(0);
+        break;
+      case "End":
+        moveTo(data.length - 1);
+        break;
+      default:
+        return;
+    }
+    event.preventDefault();
   }
 
   return (
@@ -156,7 +199,41 @@ export function HistoryChart({ history, quotaGb, today, days = 30, anomalies = [
           </div>
         )}
       </div>
-      {hasData ? <p className="mt-2 text-xs text-muted">{d.dashboard.drillHint}</p> : null}
+      {hasData ? (
+        <>
+          <ul
+            aria-label={d.dashboard.drillHint}
+            className="flex flex-wrap gap-1"
+            onKeyDown={onDayKeyDown}
+          >
+            {data.map((row, i) => (
+              <li key={row.day}>
+                <button
+                  type="button"
+                  ref={(el) => {
+                    dayRefs.current[i] = el;
+                  }}
+                  tabIndex={i === active ? 0 : -1}
+                  onFocus={() => {
+                    setDayIndex(i);
+                    setFocused(true);
+                  }}
+                  onBlur={() => setFocused(false)}
+                  onClick={() => openDay(row.day)}
+                  className={
+                    focused && i === active
+                      ? "mt-2 rounded-md border border-border bg-surface px-2 py-1 text-xs tabular-nums"
+                      : "sr-only"
+                  }
+                >
+                  {row.day} · {formatBytes(row.used_bytes)}
+                </button>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-xs text-muted">{d.dashboard.drillHint}</p>
+        </>
+      ) : null}
     </section>
   );
 }

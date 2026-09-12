@@ -20,9 +20,9 @@ export interface AnomalyDay {
 export interface AnomalyFlag {
   day: string;
   used_bytes: number;
-  /** The median of the earlier measured days. */
+  /** The median of the earlier measured days. Always above zero. */
   baseline_bytes: number;
-  /** used_bytes / baseline_bytes; Infinity when the baseline is zero. */
+  /** used_bytes / baseline_bytes. */
   ratio: number;
   /** Robust z-score (0.6745 * deviation / MAD); Infinity when MAD is zero and the day is above the median. */
   z: number;
@@ -61,11 +61,19 @@ export function flagAnomalies(days: AnomalyDay[], opts: Partial<AnomalyOptions> 
     if (i < o.minDays) continue;
     const history = ordered.slice(0, i).map((d) => d.used_bytes);
     const baseline = median(history);
+    // Nothing to be out of line with. A zero median means most of the trailing
+    // days carried no traffic at all, and "x times nothing" is not a fact about
+    // today: with the ratio infinite and the MAD zero, every later day with any
+    // traffic would be flagged, so an idle fortnight turns the list into a wall
+    // of rows reading "∞× the usual 0 B". The feature falls silent instead.
+    // This is the only guard on the statistics page, whose rows carry no
+    // `readings` count for `measured` to judge them by.
+    if (baseline <= 0) continue;
     const mad = median(history.map((v) => Math.abs(v - baseline)));
     const used = ordered[i].used_bytes;
     const deviation = used - baseline;
 
-    const ratio = baseline > 0 ? used / baseline : used > 0 ? Number.POSITIVE_INFINITY : 0;
+    const ratio = used / baseline;
     const z =
       mad > 0
         ? (MAD_TO_SIGMA * deviation) / mad

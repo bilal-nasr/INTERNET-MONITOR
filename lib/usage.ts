@@ -9,6 +9,8 @@ export interface Reading {
   tx_bytes: number;
   rx_bytes: number;
   total_bytes: number;
+  /** The interface the counters were read from; deltas only mean something within one. */
+  interface_name: string | null;
 }
 
 export interface DailyWindow {
@@ -249,10 +251,14 @@ export async function getDailyHistory(days: number, timezone: string): Promise<D
  * The raw readings of the last `minutes`, oldest first. Bounded by time rather
  * than by count so a router pushing every 30 seconds and one pushing every
  * minute both yield the same span on the throughput sparkline.
+ *
+ * `interface_name` comes back with every row because the rate is a delta
+ * between two of them, and a delta across two interfaces is not a rate at all:
+ * `ratesFromReadings` needs the name to drop such a pair.
  */
 export async function getRecentReadings(minutes: number): Promise<Reading[]> {
   return db.any<Reading>(
-    `SELECT id, recorded_at, tx_bytes, rx_bytes, total_bytes
+    `SELECT id, recorded_at, tx_bytes, rx_bytes, total_bytes, interface_name
      FROM interface_readings
      WHERE recorded_at >= now() - make_interval(mins => $1)
      ORDER BY recorded_at ASC, id ASC`,

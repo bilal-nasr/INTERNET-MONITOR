@@ -19,6 +19,10 @@
 # Devices are sent in batches of 200 so a large LAN never builds one huge
 # string on a router with 64 MB of RAM.
 #
+# The app skips any single entry it cannot read and stores the rest, so a
+# device with an unusable name costs that one device, never the batch. Its
+# reply carries "skipped" when that happened.
+#
 # Note on the two functions below: a RouterOS function body ( do={...} ) sees
 # only its own arguments and the globals - never the caller's :local
 # variables. Everything $flush needs is therefore passed in as a named
@@ -31,13 +35,26 @@
 
 :local stamp ([/system clock get date] . " " . [/system clock get time])
 
-# Drops the two characters that would break a JSON string. RouterOS has no
-# replace, so this walks the string once.
+# Keeps only what is safe inside a JSON string, by whitelist: letters, digits,
+# space and the punctuation that turns up in DHCP host-names.
+#
+# It used to drop just the two characters that break a string, " and \. That
+# is not enough. A host-name is not the router's text and not yours - it is
+# whatever the device announced about itself - so it can contain a tab, a
+# newline or any other control character below 0x20, and a raw control
+# character inside a JSON string makes the whole body unparseable. RouterOS has
+# no replace and no way to ask for a character's code, so the test is
+# membership of the string below rather than a comparison against a range.
+#
+# A host-name with accented or non-Latin characters loses them here rather than
+# being escaped. That is deliberate: the label the Devices page shows is the
+# name you set there, which falls back to this only until you set one.
 :local clean do={
+    :local ok "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 -_.:,()[]+"
     :local out ""
     :for i from=0 to=([:len $1] - 1) do={
         :local c [:pick $1 $i ($i + 1)]
-        :if (($c != "\"") && ($c != "\\")) do={ :set out ($out . $c) }
+        :if ([:typeof [:find $ok $c]] != "nil") do={ :set out ($out . $c) }
     }
     :return $out
 }
@@ -80,6 +97,7 @@
             :do { :set name [/ip kid-control device get $id name] } on-error={ :set name "" }
         }
         :set name [$clean $name]
+        :set ip [$clean $ip]
 
         :local item ("{\"mac\":\"" . $mac . "\",\"ip\":\"" . $ip . "\",\"name\":\"" . $name . \
             "\",\"tx_bytes\":" . $up . ",\"rx_bytes\":" . $down . "}")

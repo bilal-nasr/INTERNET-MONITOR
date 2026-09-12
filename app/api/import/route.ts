@@ -13,6 +13,7 @@ import { badRequest, errorResponse, rejectUnauthenticated } from "@/lib/api";
 import { db, pgp } from "@/lib/db";
 import { dictionaryFromRequest } from "@/lib/i18n/request";
 import { dedupeRows, parseReadingsCsv, parseReadingsJson, type ImportRow } from "@/lib/import/parse";
+import { thinningCutoff } from "@/lib/retention";
 import { getSettings } from "@/lib/settings";
 
 export const maxDuration = 300;
@@ -96,18 +97,40 @@ export async function POST(request: Request) {
     const fallback = settings.wan_interface_name;
     const rows = dedupeRows(parsed.rows, fallback);
 
-    let inserted = 0;
+    // The thinning job and the import feature pull in opposite directions: a
+    // restored archive older than the retention cutoff is collapsed to one row
+    // per hour by the next nightly run, within a day of the upload. Nothing can
+    // stop that here -- retention is a setting, not an import option -- but the
+    // response says exactly how many of the rows just written are in that
+    // position, so the caller can raise Retention before the job runs rather
+    // than discover the loss afterwards. The two groups are inserted
+    // separately only so the count is the real inserted figure and not an
+    // estimate over the file: rows already present are not counted.
+    const cutoff = thinningCutoff(new Date(), settings.retention_days);
+    const older = rows.filter((r) => r.recorded_at < cutoff);
+    const newer = rows.filter((r) => r.recorded_at >= cutoff);
+
+    let insertedBeforeCutoff = 0;
+    let insertedAfterCutoff = 0;
     await db.tx(async (t) => {
-      for (let i = 0; i < rows.length; i += BATCH) {
-        inserted += await insertBatch(t, rows.slice(i, i + BATCH), fallback);
+      for (let i = 0; i < older.length; i += BATCH) {
+        insertedBeforeCutoff += await insertBatch(t, older.slice(i, i + BATCH), fallback);
+      }
+      for (let i = 0; i < newer.length; i += BATCH) {
+        insertedAfterCutoff += await insertBatch(t, newer.slice(i, i + BATCH), fallback);
       }
     });
+    const inserted = insertedBeforeCutoff + insertedAfterCutoff;
 
     return NextResponse.json({
       inserted,
       skipped: parsed.rows.length - inserted,
       rejected: parsed.rejected,
       errors: parsed.errors,
+      /** Imported rows the nightly thinning job will collapse to one per hour. */
+      inserted_before_cutoff: insertedBeforeCutoff,
+      thinning_cutoff: cutoff.toISOString(),
+      retention_days: settings.retention_days,
     });
   } catch (err) {
     return errorResponse(err, d);

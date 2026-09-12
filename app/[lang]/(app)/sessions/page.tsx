@@ -7,9 +7,9 @@ import { RangePicker } from "@/components/RangePicker";
 import { SessionsTable, SessionTotalsCards } from "@/components/SessionsTable";
 import { fill } from "@/lib/i18n";
 import { getI18n } from "@/lib/i18n/server";
-import { downtimeByDay, outagesFromSessions } from "@/lib/outages";
+import { downtimeByDay, downtimeWindowEnd, outagesFromSessions } from "@/lib/outages";
 import { DEFAULT_PRESET, InvalidRangeError, rangeErrorMessage, resolveRange } from "@/lib/range";
-import { getSessions, getSessionTotals } from "@/lib/sessions";
+import { getLatestSessionSummary, getSessions, getSessionTotals } from "@/lib/sessions";
 import { getSettings } from "@/lib/settings";
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -48,18 +48,27 @@ export default async function SessionsPage({ searchParams }: { searchParams: Pro
   }
 
   const window = { from: range.from, to: range.to };
-  const [sessions, totals] = await Promise.all([
+  const [sessions, totals, latest] = await Promise.all([
     getSessions(window, LIMIT),
     getSessionTotals(window),
+    // The newest session of all. It only matters when none overlaps the range,
+    // which is exactly the case of a link that went down before the range began
+    // and has not come back: there is no session to read the outage from, and
+    // without this the report would say the link was up the whole time.
+    getLatestSessionSummary(),
   ]);
+
+  // Downtime, and the share of the range it takes up, are measured up to now
+  // and no further: a range may legitimately end in the future.
+  const until = downtimeWindowEnd(range.to);
 
   // Derived from the sessions already fetched, so the report costs no extra
   // round trip. It is bounded by LIMIT like the table: on a range with more
   // than LIMIT sessions the oldest gaps are not shown, which the footnote says.
-  const outages = outagesFromSessions(sessions, window);
+  const outages = outagesFromSessions(sessions, { from: range.from, to: until }, latest);
   const byDay = downtimeByDay(outages, settings.timezone);
   const rangeSeconds = range.from
-    ? Math.round((range.to.getTime() - range.from.getTime()) / 1000)
+    ? Math.max(0, Math.round((until.getTime() - range.from.getTime()) / 1000))
     : null;
 
   return (
@@ -85,8 +94,13 @@ export default async function SessionsPage({ searchParams }: { searchParams: Pro
       <SessionTotalsCards totals={totals} />
 
       <h2 className="pt-2 text-sm font-semibold tracking-tight">{d.sessions.downtimeHeading}</h2>
-      <OutageSummary outages={outages} rangeSeconds={rangeSeconds} timezone={settings.timezone} />
-      <OutageCalendar byDay={byDay} from={range.from} to={range.to} timezone={settings.timezone} />
+      <OutageSummary
+        outages={outages}
+        betweenSessionsSeconds={totals.downtime_seconds}
+        rangeSeconds={rangeSeconds}
+        timezone={settings.timezone}
+      />
+      <OutageCalendar byDay={byDay} from={range.from} to={until} timezone={settings.timezone} />
 
       <SessionsTable sessions={sessions} timezone={settings.timezone} />
 

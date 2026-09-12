@@ -59,14 +59,33 @@ function toOutage(
 export function outagesFromSessions(
   sessions: SessionSummary[],
   range: { from: Date | null; to: Date },
+  /**
+   * The newest session of all, used only when none overlaps the range. A link
+   * that has been down since before the range starts has no session inside it,
+   * so without this the report reads "no outages" during the one event it
+   * exists to describe.
+   */
+  previous: SessionSummary | null = null,
 ): Outage[] {
   const ordered = [...sessions].sort((a, b) => {
     const byStart = a.started_at < b.started_at ? -1 : a.started_at > b.started_at ? 1 : 0;
     return byStart !== 0 ? byStart : a.id - b.id;
   });
-  if (ordered.length === 0) return [];
 
   const out: Outage[] = [];
+
+  if (ordered.length === 0) {
+    // Only a closed session tells us the link was down: an open one that is
+    // merely out of contact is a different state, reported as "no contact".
+    if (previous?.ended_at && range.from) {
+      const endedAt = new Date(previous.ended_at).getTime();
+      if (endedAt <= range.from.getTime()) {
+        const span = clip(endedAt, range.to.getTime(), range);
+        if (span) out.push(toOutage(span, previous.id, null));
+      }
+    }
+    return out;
+  }
 
   // The gap before the first listed session: its predecessor is not in the list.
   const first = ordered[0];
@@ -94,8 +113,24 @@ export function outagesFromSessions(
   return out;
 }
 
+/**
+ * The end of the window downtime is measured over: the end of the range, or
+ * now, whichever comes first.
+ *
+ * A custom range ending on a bare date runs to the *next* local midnight, so
+ * that its last day is included in full (lib/range.ts). For a range ending
+ * today that instant is hours away, and the trailing-outage rule would clip a
+ * link that dropped at 14:50 to it and report nine hours of downtime that have
+ * not happened yet. Nothing is known about the future, so the report stops here.
+ */
+export function downtimeWindowEnd(to: Date, now = new Date()): Date {
+  return to.getTime() <= now.getTime() ? to : now;
+}
+
 /** Guard against a pathological range: nothing on these pages spans years. */
-const MAX_DAYS_PER_OUTAGE = 400;
+const MAX_SLICES_PER_OUTAGE = 400;
+
+const HOUR_MS = 3_600_000;
 
 export function downtimeByDay(outages: Outage[], timezone: string): DayDowntime[] {
   const byDay = new Map<string, DayDowntime>();
@@ -103,22 +138,31 @@ export function downtimeByDay(outages: Outage[], timezone: string): DayDowntime[
   for (const outage of outages) {
     let cursor = new Date(outage.from).getTime();
     const end = new Date(outage.to).getTime();
+    // One outage counts once per day however many slices it takes to cross it.
+    const counted = new Set<string>();
     let guard = 0;
 
-    while (cursor < end && guard++ < MAX_DAYS_PER_OUTAGE) {
+    while (cursor < end && guard++ < MAX_SLICES_PER_OUTAGE) {
       const day = localParts(new Date(cursor), timezone).date;
       // Local midnight after `day`; localTimeInstant shifts the calendar day
       // by the minute offset, so 1440 lands on the next day's 00:00.
       const nextMidnight = localTimeInstant(day, "00:00", timezone, 1440);
-      const sliceEnd = Math.min(end, nextMidnight ? nextMidnight.getTime() : end);
+      const boundary = nextMidnight ? nextMidnight.getTime() : end;
+      // A boundary that is not after the cursor cannot end this slice. That is
+      // a timezone the helper could not place; stepping an hour and re-deriving
+      // the day walks out of it, where stopping here would silently drop the
+      // rest of the outage.
+      const sliceEnd = Math.min(end, boundary > cursor ? boundary : cursor + HOUR_MS);
       const seconds = Math.round((sliceEnd - cursor) / 1000);
 
       const row = byDay.get(day) ?? { day, seconds: 0, outages: 0 };
       row.seconds += seconds;
-      row.outages += 1;
+      if (!counted.has(day)) {
+        row.outages += 1;
+        counted.add(day);
+      }
       byDay.set(day, row);
 
-      if (sliceEnd <= cursor) break;
       cursor = sliceEnd;
     }
   }

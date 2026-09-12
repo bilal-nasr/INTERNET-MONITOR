@@ -1,5 +1,11 @@
 import { describe, expect, test } from "vitest";
-import { MAX_DEVICES_PER_PUSH, normaliseMac, parseDevicePush } from "@/lib/devices/parse";
+import {
+  MAX_DEVICES_PER_PUSH,
+  MAX_REPORTED_ERRORS,
+  normaliseIp,
+  normaliseMac,
+  parseDevicePush,
+} from "@/lib/devices/parse";
 
 describe("normaliseMac", () => {
   test("accepts colon, dash and bare forms and upper-cases", () => {
@@ -13,6 +19,17 @@ describe("normaliseMac", () => {
     expect(normaliseMac("aa:bb:cc:dd:ee")).toBeNull();
     expect(normaliseMac("zz:bb:cc:dd:ee:ff")).toBeNull();
     expect(normaliseMac("")).toBeNull();
+  });
+});
+
+describe("normaliseIp", () => {
+  test("passes IPv4 and IPv6 through and rejects everything else", () => {
+    expect(normaliseIp("192.168.88.1")).toBe("192.168.88.1");
+    expect(normaliseIp("2001:db8::1")).toBe("2001:db8::1");
+    expect(normaliseIp("999.1.1.1")).toBeNull();
+    expect(normaliseIp("192.168.88.1; DROP")).toBeNull();
+    expect(normaliseIp(null)).toBeNull();
+    expect(normaliseIp("x".repeat(46))).toBeNull();
   });
 });
 
@@ -45,11 +62,56 @@ describe("parseDevicePush", () => {
     expect(result.data.devices[0].name).toHaveLength(100);
   });
 
-  test("rejects a bad mac with the index in the error key", () => {
+  test("skips a bad entry, keeps the rest, and says which one went", () => {
     const result = parseDevicePush({ devices: [sample, { ...sample, mac: "nope" }] });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.devices).toHaveLength(1);
+    expect(result.skipped).toBe(1);
+    expect(Object.keys(result.errors)).toContain("devices.1.mac");
+  });
+
+  test("one unusable entry never costs the whole push", () => {
+    const devices = [sample, { mac: "" }, { ...sample, mac: "aa:bb:cc:dd:ee:01" }, null];
+    const result = parseDevicePush({ devices });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.devices.map((d) => d.mac)).toEqual(["34:5A:60:70:A4:33", "AA:BB:CC:DD:EE:01"]);
+    expect(result.skipped).toBe(2);
+  });
+
+  test("a push with nothing usable in it is rejected", () => {
+    const result = parseDevicePush({ devices: [{ mac: "nope" }, { mac: "also nope" }] });
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(Object.keys(result.errors)).toContain("devices.1.mac");
+    expect(Object.keys(result.errors)).toContain("devices.0.mac");
+  });
+
+  test("a flood of bad entries reports a bounded number of reasons", () => {
+    const devices = Array.from({ length: 200 }, () => ({ mac: "nope" })).concat([sample as never]);
+    const result = parseDevicePush({ devices });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.skipped).toBe(200);
+    expect(Object.keys(result.errors).length).toBeLessThanOrEqual(MAX_REPORTED_ERRORS);
+  });
+
+  test("keeps only real IP addresses", () => {
+    const cases = [
+      ["192.168.88.254", "192.168.88.254"],
+      ["  10.0.0.1  ", "10.0.0.1"],
+      ["fe80::1", "fe80::1"],
+      ["", null],
+      ["not an ip", null],
+      ["192.168.88.999", null],
+      ["<script>", null],
+    ] as const;
+    for (const [given, expected] of cases) {
+      const result = parseDevicePush({ devices: [{ ...sample, ip: given }] });
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.data.devices[0].ip).toBe(expected);
+    }
   });
 
   test("rejects negative and non-integer counters", () => {

@@ -9,10 +9,17 @@ import type { Reading } from "@/lib/usage";
  * pair would be meaningless, so the pair is skipped. A gap longer than
  * `maxGapSeconds` is an outage rather than a measurement interval and is
  * skipped for the same reason.
+ *
+ * Deltas are taken within one interface only, like every other counter query
+ * in the application. Two interfaces carry unrelated counter streams, so a pair
+ * straddling a change of WAN interface reads as one enormous transfer over a
+ * few seconds -- which here would become the headline "live throughput".
  */
 export interface RatePoint {
   /** ISO instant of the later reading of the pair. */
   at: string;
+  /** Seconds the pair spans, so a caller can tell which points are adjacent in time. */
+  seconds: number;
   bytes_per_second: number;
   tx_per_second: number;
   rx_per_second: number;
@@ -23,6 +30,7 @@ export function ratesFromReadings(readings: Reading[], maxGapSeconds = 300): Rat
   for (let i = 1; i < readings.length; i++) {
     const prev = readings[i - 1];
     const cur = readings[i];
+    if (cur.interface_name !== prev.interface_name) continue;
     const gap = (cur.recorded_at.getTime() - prev.recorded_at.getTime()) / 1000;
     if (gap <= 0 || gap > maxGapSeconds) continue;
     if (cur.tx_bytes < prev.tx_bytes || cur.rx_bytes < prev.rx_bytes) continue;
@@ -30,6 +38,7 @@ export function ratesFromReadings(readings: Reading[], maxGapSeconds = 300): Rat
     const rx = (cur.rx_bytes - prev.rx_bytes) / gap;
     out.push({
       at: cur.recorded_at.toISOString(),
+      seconds: gap,
       bytes_per_second: tx + rx,
       tx_per_second: tx,
       rx_per_second: rx,

@@ -6,7 +6,7 @@ import { DeviceTable } from "@/components/DeviceTable";
 import { RangePicker } from "@/components/RangePicker";
 import { StatTiles, type Tile } from "@/components/stats/chrome";
 import { stackDeviceSeries, TOP_DEVICES } from "@/lib/devices/chart";
-import { getDeviceSeries, getDeviceUsage } from "@/lib/devices/usage";
+import { getDeviceRangeTotals, getDeviceSeries, getDeviceUsage } from "@/lib/devices/usage";
 import { formatBytes } from "@/lib/format";
 import { fill, plural } from "@/lib/i18n";
 import { Interpolate } from "@/lib/i18n/react";
@@ -67,7 +67,14 @@ export default async function DevicesPage({ searchParams }: { searchParams: Prom
   }
 
   const window = { from: range.from, to: range.to };
-  const devices = await getDeviceUsage(window, LIMIT);
+  // The tiles state figures for the whole range, so they come from an
+  // aggregate over every device: the table below stops at LIMIT, and summing
+  // its rows would quietly understate the total, and overstate the busiest
+  // device's share of it, on any LAN with a longer tail than one page.
+  const [devices, totals] = await Promise.all([
+    getDeviceUsage(window, LIMIT),
+    getDeviceRangeTotals(window),
+  ]);
   // A minute-level bucket over a whole day is 1,440 stacks of eight; hours are
   // the finest the chart draws, whatever the range picker chose.
   const bucket = range.bucket === "minute" ? "hour" : range.bucket;
@@ -82,12 +89,12 @@ export default async function DevicesPage({ searchParams }: { searchParams: Prom
     series,
     top.map((device) => device.mac),
   );
-  const total = devices.reduce((sum, device) => sum + device.total_bytes, 0);
+  const total = totals.total_bytes;
   const busiest = devices[0] ?? null;
 
   const tiles: Tile[] = [
     { label: d.devices.tiles.total, value: formatBytes(total) },
-    { label: d.devices.tiles.devices, value: plural(locale, d.devices.devicesCount, devices.length) },
+    { label: d.devices.tiles.devices, value: plural(locale, d.devices.devicesCount, totals.devices) },
     {
       label: d.devices.tiles.busiest,
       value: busiest ? busiest.label : d.common.empty,

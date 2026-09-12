@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { errorResponse, hasBearer, rejectUnauthenticated } from "@/lib/api";
+import { getCycleUsageCached } from "@/lib/cycle-cache";
 import { renderPrometheus, type MetricsSample } from "@/lib/metrics";
 import { getLatestSessionSummary } from "@/lib/sessions";
 import { getSettings } from "@/lib/settings";
-import { getCycleUsage } from "@/lib/stats";
 import { getTodayUsage } from "@/lib/usage";
 
 export const maxDuration = 30;
@@ -15,6 +15,12 @@ const SILENT_AFTER_SECONDS = 300;
  * Prometheus scrape target. A scraper has no browser session, so it presents
  * METRICS_TOKEN instead; a person opening the URL signed in sees the same text.
  * With no token configured only the session works.
+ *
+ * The cycle figure comes from the same five-minute cache the ingest push uses.
+ * It is one delta aggregate over a whole billing cycle -- tens of thousands of
+ * rows by the end of a month -- and a scraper asks for it far more often than
+ * it can change, so re-running it on every scrape is exactly the cost the
+ * cache exists to avoid.
  */
 export async function GET(request: Request) {
   if (!hasBearer(request, process.env.METRICS_TOKEN)) {
@@ -27,7 +33,7 @@ export async function GET(request: Request) {
     const settings = await getSettings();
     const [usage, cycle, session] = await Promise.all([
       getTodayUsage(settings, now),
-      getCycleUsage(settings.monthly_quota_gb, settings.billing_cycle_day, settings.timezone, now),
+      getCycleUsageCached(settings, now),
       getLatestSessionSummary(),
     ]);
 

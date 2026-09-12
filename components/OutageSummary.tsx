@@ -10,10 +10,17 @@ import type { Outage } from "@/lib/outages";
  */
 export async function OutageSummary({
   outages,
+  betweenSessionsSeconds,
   rangeSeconds,
   timezone,
 }: {
   outages: Outage[];
+  /**
+   * Downtime between sessions over the range, counted in the database. The same
+   * figure the "offline" hint on the totals cards above is drawn from, so the
+   * two cannot disagree.
+   */
+  betweenSessionsSeconds: number;
   /** Length of the range being shown, for the share figure; null for all time. */
   rangeSeconds: number | null;
   timezone: string;
@@ -21,21 +28,32 @@ export async function OutageSummary({
   const { locale, d, f } = await getI18n();
   const s = d.sessions;
 
-  const total = outages.reduce((sum, o) => sum + o.seconds, 0);
+  // One definition of downtime for the whole page. The database counts every
+  // gap between two sessions, including the ones past the row limit this list
+  // is truncated at; what it cannot see is a link that has not come back, which
+  // has no following session and therefore no gap. That trailing stretch is
+  // added here as its own term and named in the hint, so the figure beside it
+  // is this one minus something the reader can see.
+  const ongoing = outages.find((o) => o.next_session_id === null) ?? null;
+  const total = betweenSessionsSeconds + (ongoing?.seconds ?? 0);
   const longest = outages.reduce<Outage | null>(
     (best, o) => (best && best.seconds >= o.seconds ? best : o),
     null,
   );
   const share = rangeSeconds && rangeSeconds > 0 ? (total / rangeSeconds) * 100 : null;
 
+  const hints = [
+    share !== null ? fill(s.downtimeShare, { percent: share.toFixed(share >= 10 ? 0 : 1) }) : null,
+    // Placeholder: wants its own key, sessions.includingStillDown,
+    // "including {duration} still down".
+    ongoing ? fill(d.common.offlineFor, { duration: f.duration(ongoing.seconds) }) : null,
+  ].filter((part): part is string => part !== null);
+
   const tiles: Tile[] = [
     {
       label: s.totalDowntime,
       value: f.duration(total),
-      hint:
-        share !== null
-          ? fill(s.downtimeShare, { percent: share.toFixed(share >= 10 ? 0 : 1) })
-          : undefined,
+      hint: hints.length > 0 ? hints.join(" · ") : undefined,
       tone: total === 0 ? "good" : share !== null && share >= 5 ? "critical" : "warning",
     },
     {
@@ -48,7 +66,10 @@ export async function OutageSummary({
         : s.noOutages,
     },
     {
-      label: s.downtimeHeading,
+      // Placeholder: this tile wants its own key, sessions.outagesLabel
+      // ("Outages"). s.downtimeHeading names the section this tile sits inside,
+      // so using it here labels the section and one of its tiles identically.
+      label: d.stats.tiles.drops,
       value: plural(locale, s.outagesCount, outages.length),
       hint: s.outagesHint,
     },

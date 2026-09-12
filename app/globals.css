@@ -8,6 +8,11 @@
  *
  * The heatmap uses a single-hue sequential ramp. Light mode runs pale to deep,
  * dark mode deep to pale, so in both the near-zero end recedes into the surface.
+ *
+ * Every series slot is a saturated hue, slot 8 included. It used to be a slate
+ * grey, which put it right next to the neutral the device chart paints its
+ * "Others" band with: the two least separable colours in that stack were the
+ * two stacked against each other.
  */
 :root {
   --background: #fafaf9;
@@ -23,7 +28,7 @@
   --series-5: #d6409f;
   --series-6: #0f9bb5;
   --series-7: #b7791f;
-  --series-8: #64748b;
+  --series-8: #c8304a;
 
   --status-good: #0ca30c;
   --status-warning: #fab219;
@@ -73,7 +78,7 @@
     --series-5: #e26ab8;
     --series-6: #2bb8d3;
     --series-7: #d3963a;
-    --series-8: #94a3b8;
+    --series-8: #ef5e75;
 
     --scale-1: #0d366b;
     --scale-2: #104281;

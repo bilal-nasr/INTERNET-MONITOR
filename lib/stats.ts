@@ -17,6 +17,7 @@ import { db } from "@/lib/db";
 import { quotaBytes } from "@/lib/format";
 import type { Dictionary } from "@/lib/i18n";
 import type { BucketUnit } from "@/lib/range";
+import { THINNED_SAMPLE_GAP_SECONDS } from "@/lib/retention";
 import { windowSeconds } from "@/lib/time";
 
 /**
@@ -29,8 +30,19 @@ const LOOKBACK = "INTERVAL '1 hour'";
  * A gap longer than this is an outage, not a measurement interval. It is left
  * out of the time base for average throughput, which would otherwise collapse
  * towards zero after every disconnection.
+ *
+ * It has to sit clear of the thinning granularity. Once a stretch older than
+ * the retention cutoff has been thinned, the survivors are one per hour, so
+ * consecutive gaps are THINNED_SAMPLE_GAP_SECONDS give or take the 30-second
+ * push cadence -- some just under an exact hour, some just over. With the cut
+ * AT one hour those near-identical gaps fell on opposite sides of it: half the
+ * hours counted their 3600 seconds, half contributed none while their bytes
+ * still counted in total_bytes, so avg_bytes_per_second and coverage swung by
+ * up to a factor of two for any range reaching past the cutoff. Doubling it
+ * puts every thinned gap safely inside the measured base and still excludes a
+ * real outage, which on a home link means hours, not minutes.
  */
-const MAX_SAMPLE_GAP_SECONDS = 3600;
+export const MAX_SAMPLE_GAP_SECONDS = 2 * THINNED_SAMPLE_GAP_SECONDS;
 
 export interface RangeParams {
   from: Date | null;

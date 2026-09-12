@@ -72,6 +72,29 @@ export async function getDeviceUsage(range: RangeParams, limit = 50): Promise<De
   return rows.map((r) => ({ ...r, last_seen: r.last_seen.toISOString() }));
 }
 
+export interface DeviceRangeTotals {
+  /** Every device with a reading in the range, not just the page shown. */
+  devices: number;
+  total_bytes: number;
+}
+
+/**
+ * The totals the page's tiles state. Deliberately not derived from the rows of
+ * getDeviceUsage: those stop at the limit, so on a LAN with more devices than
+ * one page holds, summing them understates the total and inflates the busiest
+ * device's share of it, while both are presented as figures for the whole
+ * range. This is the same aggregate without the LIMIT.
+ */
+export function getDeviceRangeTotals(range: RangeParams): Promise<DeviceRangeTotals> {
+  return db.one<DeviceRangeTotals>(
+    `WITH ${DEVICE_DELTAS}
+     SELECT COUNT(DISTINCT mac)::int                     AS devices,
+            COALESCE(SUM(tx_delta + rx_delta), 0)::bigint AS total_bytes
+     FROM d`,
+    { from: range.from, to: range.to },
+  );
+}
+
 export interface DeviceSeriesPoint {
   mac: string;
   /** Start of the bucket as local wall-clock time, "YYYY-MM-DDTHH:MM:SS". */
@@ -114,10 +137,6 @@ export interface DeviceRow {
   ip: string | null;
   first_seen: Date;
   last_seen: Date;
-}
-
-export function listDevices(): Promise<DeviceRow[]> {
-  return db.any<DeviceRow>("SELECT * FROM devices ORDER BY last_seen DESC");
 }
 
 /** Null when no such device exists. An empty name clears the label. */

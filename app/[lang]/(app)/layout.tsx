@@ -14,10 +14,16 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     getI18n(),
     requireAuth(),
     // The dashboard explains a missing settings row itself; the header must
-    // not be the thing that breaks first.
+    // not be the thing that breaks first. Hiding the Devices link is the right
+    // fallback, but it looks identical to the owner having switched per-device
+    // tracking off, so the reason is logged: a database outage that quietly
+    // removes a navigation item is otherwise indistinguishable from a setting.
     getSettings().then(
       (s) => s.devices_enabled,
-      () => false,
+      (err) => {
+        console.warn("[layout] could not read settings; hiding the Devices link", err);
+        return false;
+      },
     ),
   ]);
 

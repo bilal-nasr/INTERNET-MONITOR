@@ -16,13 +16,50 @@ import { fill } from "@/lib/i18n";
 import type { Formatters } from "@/lib/i18n/format";
 import type { RatePoint } from "@/lib/throughput";
 
-interface Row extends RatePoint {
-  /** Megabits per second, the unit the axis is drawn in. */
-  mbit: number;
+interface Row {
+  /** Epoch milliseconds. The axis is a time scale, so gaps keep their width. */
+  t: number;
+  /** Megabits per second, the unit the marks are drawn in; null breaks the line. */
+  rx_mbit: number | null;
+  tx_mbit: number | null;
+  /** The measurement this row draws, or null on an inserted break. */
+  point: RatePoint | null;
 }
 
+const MBIT = 8 / 1e6;
+
+/** A tolerance below one push interval, so ordinary jitter is not read as a gap. */
+const ADJACENT_MS = 1_000;
+
+/**
+ * The rates as chart rows, with a null row wherever nothing was measured.
+ *
+ * Each point covers the interval `[at - seconds, at]`. When one point's
+ * interval starts after the previous point ended, the time between them was
+ * never measured: `ratesFromReadings` dropped the pair as an outage, a counter
+ * reset or a change of interface. On a categorical axis those two points sit
+ * side by side and a ten-minute outage is drawn as an unbroken line, so the
+ * axis is a time scale and the unmeasured stretch gets a null row to break on.
+ */
 function toRows(rates: RatePoint[]): Row[] {
-  return rates.map((r) => ({ ...r, mbit: (r.bytes_per_second * 8) / 1e6 }));
+  const rows: Row[] = [];
+  let measuredTo: number | null = null;
+
+  for (const r of rates) {
+    const at = new Date(r.at).getTime();
+    const start = at - r.seconds * 1000;
+    if (measuredTo !== null && start > measuredTo + ADJACENT_MS) {
+      rows.push({ t: (measuredTo + start) / 2, rx_mbit: null, tx_mbit: null, point: null });
+    }
+    rows.push({
+      t: at,
+      rx_mbit: r.rx_per_second * MBIT,
+      tx_mbit: r.tx_per_second * MBIT,
+      point: r,
+    });
+    measuredTo = at;
+  }
+  return rows;
 }
 
 function makeTooltip(
@@ -33,11 +70,14 @@ function makeTooltip(
   return function ChartTooltip({ active, payload }: TooltipContentProps) {
     if (!active || !payload?.length) return null;
     const row = payload[0].payload as Row;
+    // A break row stands for an interval nothing was measured over.
+    if (!row?.point) return null;
+    const p = row.point;
     return (
-      <TooltipShell title={f.clockWithSeconds(row.at, timezone)}>
-        <TooltipRow label={labels.download} value={formatRate(row.rx_per_second)} color="var(--series-1)" />
-        <TooltipRow label={labels.upload} value={formatRate(row.tx_per_second)} color="var(--series-2)" />
-        <TooltipRow label={labels.total} value={formatRate(row.bytes_per_second)} />
+      <TooltipShell title={f.clockWithSeconds(p.at, timezone)}>
+        <TooltipRow label={labels.download} value={formatRate(p.rx_per_second)} color="var(--series-1)" />
+        <TooltipRow label={labels.upload} value={formatRate(p.tx_per_second)} color="var(--series-2)" />
+        <TooltipRow label={labels.total} value={formatRate(p.bytes_per_second)} />
       </TooltipShell>
     );
   };
@@ -60,7 +100,7 @@ export function ThroughputCard({
 }) {
   const { d, f, dir } = useI18n();
   const rows = toRows(rates);
-  const latest = rows.length ? rows[rows.length - 1] : null;
+  const latest = rates.length ? rates[rates.length - 1] : null;
   const ChartTooltip = makeTooltip(f, timezone, {
     download: d.common.download,
     upload: d.common.upload,
@@ -88,7 +128,10 @@ export function ThroughputCard({
           <div className="mt-3 h-24 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={rows} margin={chartMargin(dir)}>
-                <XAxis dataKey="at" hide />
+                {/* A time scale, not a category per point: skipped intervals
+                    have to keep their width or an outage inside the window is
+                    drawn as an unbroken line between the readings around it. */}
+                <XAxis dataKey="t" type="number" scale="time" domain={["dataMin", "dataMax"]} hide />
                 <YAxis
                   hide
                   orientation={valueAxisSide(dir)}
@@ -97,7 +140,8 @@ export function ThroughputCard({
                 <Tooltip content={ChartTooltip} cursor={{ stroke: "var(--border)" }} />
                 <Area
                   type="monotone"
-                  dataKey={(row: Row) => (row.rx_per_second * 8) / 1e6}
+                  dataKey="rx_mbit"
+                  connectNulls={false}
                   stroke="var(--series-1)"
                   fill="var(--series-1)"
                   fillOpacity={0.15}
@@ -106,7 +150,8 @@ export function ThroughputCard({
                 />
                 <Area
                   type="monotone"
-                  dataKey={(row: Row) => (row.tx_per_second * 8) / 1e6}
+                  dataKey="tx_mbit"
+                  connectNulls={false}
                   stroke="var(--series-2)"
                   fill="none"
                   strokeWidth={1.5}

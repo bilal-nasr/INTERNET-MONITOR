@@ -46,6 +46,32 @@ describe("flagAnomalies", () => {
     expect(flags[0].baseline_bytes).toBe(5e9);
   });
 
+  test("says nothing at all when the trailing days carried no traffic", () => {
+    // Rows that count as measured but carry zero bytes -- which is every row on
+    // the statistics page, where a day has no reading count to be judged by.
+    // With a zero median the ratio is infinite and the MAD is zero, so every
+    // later day used to be flagged: an idle fortnight followed by ordinary use
+    // produced a flag per day, each reading "∞x the usual 0 B".
+    const idle = Array.from({ length: 12 }, (_, i) => ({
+      day: `2026-09-${String(i + 1).padStart(2, "0")}`,
+      used_bytes: 0,
+    }));
+    const normal = [4e9, 5e9, 4.5e9, 6e9].map((used, i) => ({
+      day: `2026-09-${String(13 + i).padStart(2, "0")}`,
+      used_bytes: used,
+    }));
+    expect(flagAnomalies([...idle, ...normal])).toEqual([]);
+  });
+
+  test("judges again once the baseline is above zero", () => {
+    // The guard is silence on a zero baseline, not silence forever after one.
+    const days = series([0, 0, 5e9, 5e9, 5e9, 5e9, 5e9, 5e9, 5e9, 20e9]).map((d) => ({
+      day: d.day,
+      used_bytes: d.used_bytes,
+    }));
+    expect(flagAnomalies(days).map((f) => f.day)).toEqual(["2026-09-10"]);
+  });
+
   test("uses only the days before the one being judged", () => {
     // The spike must not be part of its own baseline.
     const days = series([5e9, 5e9, 5e9, 5e9, 5e9, 5e9, 5e9, 20e9, 5e9]);

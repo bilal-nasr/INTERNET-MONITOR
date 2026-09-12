@@ -112,7 +112,28 @@ function tzOffsetMinutes(utcMs: number, timeZone: string): number {
   return (asUtc - utcMs) / 60000;
 }
 
-/** Wall-clock time in `timeZone` to an absolute instant. Handles DST via a fixpoint. */
+/**
+ * Wall-clock time in `timeZone` to an absolute instant.
+ *
+ * Two candidates are tried: the offset read at the naive instant, and the
+ * offset read at the instant that produced. When the two agree the wall-clock
+ * time exists exactly once and that is the answer. When they disagree the time
+ * sits on a DST change, and which candidate to take depends on which kind:
+ *
+ * - The time happens twice (clocks went back). Both candidates are real, and
+ *   the earlier one is taken: the first moment the clock reads that value.
+ * - The time never happens (clocks went forward). Neither candidate is real,
+ *   and the *later* one is taken, which is the first instant after the skipped
+ *   hour. The earlier one lies before the requested time, which is the worse
+ *   answer everywhere and a wrong one for a day boundary: Asia/Beirut springs
+ *   forward at 00:00, so resolving its non-existent midnight to the earlier
+ *   candidate puts the start of a day at 23:00 the evening before, and any
+ *   range or per-day split built on it moves backwards over that night.
+ *
+ * An earlier version iterated towards a fixpoint, which never settles on a
+ * non-existent time: it oscillates between the two candidates and returns
+ * whichever the last iteration happened to land on (the earlier one).
+ */
 export function zonedTimeToUtc(
   year: number,
   month: number,
@@ -123,13 +144,18 @@ export function zonedTimeToUtc(
   timeZone: string,
 ): Date {
   const naive = Date.UTC(year, month - 1, day, hour, minute, second);
-  let ts = naive;
-  for (let i = 0; i < 3; i++) {
-    const next = naive - tzOffsetMinutes(ts, timeZone) * 60000;
-    if (next === ts) break;
-    ts = next;
-  }
-  return new Date(ts);
+  const a = naive - tzOffsetMinutes(naive, timeZone) * 60000;
+  const b = naive - tzOffsetMinutes(a, timeZone) * 60000;
+  if (a === b) return new Date(a);
+
+  // A candidate is real only when reading the clock back at it gives the
+  // wall-clock time that was asked for.
+  const real = (ts: number) => naive - ts === tzOffsetMinutes(ts, timeZone) * 60000;
+  const aReal = real(a);
+  const bReal = real(b);
+  if (aReal && !bReal) return new Date(a);
+  if (bReal && !aReal) return new Date(b);
+  return new Date(aReal ? Math.min(a, b) : Math.max(a, b));
 }
 
 const MONTHS: Record<string, number> = {

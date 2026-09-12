@@ -21,6 +21,19 @@ function level(seconds: number): number {
   return 6;
 }
 
+/**
+ * The colour the day number is written in over step `lvl`.
+ *
+ * The ramp runs pale to deep in light mode and deep to pale in dark, so the
+ * dark steps are the top of it in one theme and the middle of it in the other.
+ * Both tokens follow the theme, so `--foreground` is the readable ink on the
+ * steps that are pale in the current theme and `--background` on the deep ones;
+ * every combination clears 4.5:1, which the inherited muted grey did not.
+ */
+function ink(lvl: number): string {
+  return lvl <= 4 ? "var(--foreground)" : "var(--background)";
+}
+
 /** Every local date from `from` up to but not including the day after `to`. */
 function daysBetween(from: Date, to: Date, timezone: string): string[] {
   const out: string[] = [];
@@ -77,12 +90,22 @@ export async function OutageCalendar({
                 ? fill(s.calendarCell, { day, duration: f.duration(seconds) })
                 : fill(s.calendarCellNone, { day });
             return (
+              // The sentence is carried once, by the hidden span: an aria-label
+              // as well would have a screen reader read the cell out twice.
+              // `title` stays for the pointer, where nothing else says it.
               <li
                 key={day}
                 title={title}
-                aria-label={title}
-                className="aspect-square rounded-[3px] border border-border text-[9px] leading-none text-muted"
-                style={{ background: lvl === 0 ? "var(--surface)" : `var(--scale-${lvl})` }}
+                className="aspect-square rounded-[3px] border border-border text-[9px] leading-none"
+                style={{
+                  background: lvl === 0 ? "var(--surface)" : `var(--scale-${lvl})`,
+                  // The ramp inverts between themes -- pale to deep in light,
+                  // deep to pale in dark -- so the number cannot be one fixed
+                  // colour. The ink is the page's own, and the page's ground on
+                  // the steps that are dark in the current theme, which is the
+                  // top of the ramp in light mode and its middle in dark mode.
+                  color: lvl === 0 ? "var(--muted)" : ink(lvl),
+                }}
               >
                 <span className="sr-only">{title}</span>
                 <span aria-hidden className="block p-0.5 tabular-nums">
