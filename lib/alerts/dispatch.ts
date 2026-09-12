@@ -38,14 +38,23 @@ export interface DispatchInput {
 
 export interface DispatchResult {
   status: AlertStatus;
-  row: AlertLogRow;
+  /**
+   * The written log row, or null in exactly one case: the mail was sent
+   * successfully but the `alerts` INSERT that records it then failed. That
+   * failure is swallowed (logged loudly, not thrown) so the caller keeps its
+   * claim instead of releasing it and re-sending the same real email on the
+   * next push - see the note on the "sent" path below. Every other status
+   * ("failed", "skipped") always carries a real row.
+   */
+  row: AlertLogRow | null;
 }
 
 /**
  * Send one message and record the outcome. A send failure is not an exception
  * here: it is the row's status, so the caller can release whatever claim it
  * made and the history page can show what went wrong. Only a failure to write
- * the log row itself throws.
+ * the log row itself throws - except when the mail has already been sent: see
+ * below.
  */
 export async function dispatchAlert(input: DispatchInput): Promise<DispatchResult> {
   const base = {
@@ -65,8 +74,21 @@ export async function dispatchAlert(input: DispatchInput): Promise<DispatchResul
 
   try {
     const id = await sendRendered(input.to, input.email);
-    const row = await recordAlert({ ...base, status: "sent", payload: { ...base.payload, provider_id: id } });
-    return { status: "sent", row };
+    // The mail is now out. From here a failure to log it must never look like
+    // a failure to send: the caller's catch block releases its claim on any
+    // throw, and a released claim is re-claimed and re-mailed on the next
+    // push. Losing this log row is preferable to mailing a real person twice,
+    // so the write is attempted but its failure is contained here.
+    try {
+      const row = await recordAlert({ ...base, status: "sent", payload: { ...base.payload, provider_id: id } });
+      return { status: "sent", row };
+    } catch (logErr) {
+      const message = logErr instanceof Error ? logErr.message : String(logErr);
+      console.error(
+        `[alerts] ${input.kind} for ${input.scopeKey} sent but the log write failed (row lost): ${message}`,
+      );
+      return { status: "sent", row: null };
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error(`[alerts] ${input.kind} for ${input.scopeKey} failed: ${message}`);
