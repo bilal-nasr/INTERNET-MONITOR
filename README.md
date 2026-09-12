@@ -288,26 +288,34 @@ with a stacked chart of the top eight and a rename box for each device.
 Preconditions, all verified on a hEX lite running RouterOS 7.24.2:
 
 - The counters come from `/ip kid-control device`, which RouterOS only fills once at
-  least one kid-control entry exists. `router/devices-setup.rsc` adds a placeholder
-  entry named `all-devices` that restricts nothing.
-- Kid-control counts inside the firewall, and the default fasttrack rule lets
-  established connections skip the firewall, so the per-device counters may stay near
-  zero with fasttrack on. That is the common report but it was not verified on this
-  hardware, and turning fasttrack off needlessly costs real CPU on a hEX lite. So the
-  setup script does **not** disable it for you: it has a `disableFasttrack` switch at
-  the top, defaulting to `"no"`. Run the script, use the internet for a few minutes,
-  then look at **IP > Kid Control > Devices** (`/ip kid-control device print detail`).
-  If Bytes Up/Down are rising, leave fasttrack alone. If they are stuck at zero while
-  the WAN counters climb, set `disableFasttrack` to `"yes"`, run the script again and
-  check once more. To go back, run the two undo lines at the bottom of the setup script
-  and turn the setting off.
+  least one kid-control **user** exists. `router/devices-setup.rsc` adds one placeholder
+  user named `all-devices`. No per-device configuration is needed: with a single user
+  present RouterOS tracks every LAN device by itself, as `dynamic` entries carrying
+  per-MAC `bytes-up`/`bytes-down`. Remove the user and every dynamic entry disappears
+  within about 45 seconds.
+- **Fasttrack is left enabled, and must be.** The widely repeated claim that fasttracked
+  traffic escapes kid-control accounting is wrong on this build: measured on the router,
+  with `defconf: fasttrack` enabled and untouched, a ~20 MB download raised that device's
+  `bytes-down` by 22,596,238 bytes. Disabling fasttrack would cost the hEX lite real CPU
+  and buy nothing. If you ran an earlier version of the setup script that disabled it,
+  put it back with `/ip firewall filter enable [find comment="defconf: fasttrack"]`.
+  (This is unrelated to throttling, where fasttrack genuinely does bypass simple queues
+  and `quota-push` genuinely does have to toggle the rule.)
+- **A kid-control user defaults to a working-hours schedule, and blocks its devices
+  outside it** - `mon 7h-21h`, `sat 6h-22h` and so on, as created on this router. A
+  placeholder added the naive way would knock the LAN offline every night. The setup
+  script therefore creates the user with every day allowed around the clock and then
+  logs the seven schedule lines it actually set. Read them in **Log** after running it;
+  if any shows a working-hours range, fix it under **IP > Kid Control** before walking
+  away.
 - A downstream router in NAT mode (an Archer AX55 Pro on this network) hides its clients
   behind one MAC. Only devices the MikroTik hands addresses to appear separately. In
   access-point mode every client shows up on its own.
 
 Setup:
 
-1. Run `router/devices-setup.rsc` once.
+1. Run `router/devices-setup.rsc` once, then read the `devices-setup: schedule …` lines it
+   writes to **Log** and confirm all seven cover the whole day.
 2. Add `router/devices-push.rsc` as a script with policies `read, test`, fill in `url`
    (`.../api/ingest/devices`) and `secret` (the same `CRON_SECRET`), and schedule it every
    minute. The log line `devices-push: sent N devices` confirms it.
