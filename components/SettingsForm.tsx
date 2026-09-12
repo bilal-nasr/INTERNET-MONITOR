@@ -19,6 +19,7 @@ interface FormState {
   wan_interface_name: string;
   polling_enabled: boolean;
   language: string;
+  devices_enabled: boolean;
   stale_after_minutes: string;
   digest: string;
   alert_thresholds: string;
@@ -40,6 +41,7 @@ function toForm(s: PublicSettings): FormState {
     wan_interface_name: s.wan_interface_name,
     polling_enabled: s.polling_enabled,
     language: s.language,
+    devices_enabled: s.devices_enabled,
     stale_after_minutes: String(s.stale_after_minutes),
     digest: s.digest,
     alert_thresholds: s.alert_thresholds.join(", "),
@@ -119,6 +121,7 @@ export function SettingsForm({ initial }: { initial: PublicSettings }) {
         wan_interface_name: form.wan_interface_name,
         polling_enabled: form.polling_enabled,
         language: form.language,
+        devices_enabled: form.devices_enabled,
         stale_after_minutes: Number(form.stale_after_minutes),
         digest: form.digest,
         alert_thresholds: parseMarks(form.alert_thresholds),
@@ -388,6 +391,36 @@ export function SettingsForm({ initial }: { initial: PublicSettings }) {
             />
           </p>
         </div>
+
+        <label className="mt-4 flex cursor-pointer items-center gap-3">
+          <button
+            type="button"
+            role="switch"
+            aria-checked={form.devices_enabled}
+            onClick={() => update("devices_enabled", !form.devices_enabled)}
+            className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
+              form.devices_enabled ? "bg-series-1" : "bg-border"
+            }`}
+          >
+            <span
+              className={`absolute top-0.5 start-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                form.devices_enabled ? "translate-x-5 rtl:-translate-x-5" : ""
+              }`}
+            />
+          </button>
+          <span className="text-sm">
+            {form.devices_enabled ? d.settings.devicesEnabled : d.settings.devicesDisabled}
+            <span className="block text-xs text-muted">
+              <Interpolate
+                template={d.settings.devicesHint}
+                values={{
+                  script: <code>devices-push</code>,
+                  setup: <code>router/devices-setup.rsc</code>,
+                }}
+              />
+            </span>
+          </span>
+        </label>
       </Section>
 
       <Section title={d.settings.enforcementSection} description={d.settings.enforcementSectionHint}>

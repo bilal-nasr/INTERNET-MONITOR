@@ -26,6 +26,7 @@ export const ar = {
     dashboard: "لوحة التحكم",
     statistics: "الإحصائيات",
     sessions: "الجلسات",
+    devices: "الأجهزة",
     settings: "الإعدادات",
     export: "التصدير",
     alerts: "التنبيهات",
@@ -377,6 +378,40 @@ export const ar = {
     calendarTooLong: "اختر مدة {max} يوماً أو أقل لعرض التقويم.",
   },
 
+  devices: {
+    title: "الأجهزة",
+    subtitle: "الاستهلاك لكل جهاز على الشبكة المحلية كما عدّه الراوتر. الأوقات بتوقيت {timezone}.",
+    disabledTitle: "تتبع الأجهزة متوقف",
+    disabledBody:
+      "فعّله من الإعدادات > الراوتر، ثم شغّل {setup} مرة واحدة على الراوتر وأضف سكربت {script} مع مجدول كل دقيقة. الملفان في مجلد router في المستودع.",
+    empty: "لا قراءات للأجهزة في هذه الفترة. تظهر بعد دقيقة من أول تشغيل لسكربت devices-push.",
+    device: "الجهاز",
+    lastSeen: "آخر ظهور",
+    rename: "إعادة تسمية",
+    saveName: "حفظ",
+    cancel: "إلغاء",
+    namePlaceholder: "الاسم الذي يظهر لهذا الجهاز",
+    renamed: "تمت إعادة تسمية الجهاز.",
+    renameFailed: "فشلت إعادة التسمية: {reason}",
+    devicesCount: {
+      zero: "لا أجهزة",
+      one: "جهاز واحد",
+      two: "جهازان",
+      few: "{count} أجهزة",
+      many: "{count} جهازاً",
+      other: "{count} جهاز",
+    },
+    topDevices: "أكثر {count} أجهزة استهلاكاً عبر الوقت",
+    others: "أخرى",
+    chartHint: "التنزيل والرفع معاً، بالجيجابايت",
+    tiles: {
+      total: "الإجمالي عبر الأجهزة",
+      devices: "الأجهزة المرصودة",
+      busiest: "الجهاز الأكثر استهلاكاً",
+      share: "من الإجمالي",
+    },
+  },
+
   settings: {
     title: "الإعدادات",
     subtitle: "تسري التغييرات مع القراءة التالية. لا حاجة لإعادة النشر.",
@@ -451,6 +486,10 @@ export const ar = {
       "حدّد السكربت واضغط Run Script. يظهر سطر quota-push في Log وتظهر قراءة في لوحة التحكم خلال ثوانٍ.",
       "للتبطيء، شغّل router/throttle-setup.rsc مرة واحدة في New Terminal، ثم فعّل التطبيق الإلزامي أعلاه.",
     ],
+    devicesEnabled: "تتبع الأجهزة مفعّل",
+    devicesDisabled: "تتبع الأجهزة متوقف",
+    devicesHint:
+      "يخزّن العدادات التي يرسلها سكربت {script} على الراوتر ويعرض صفحة الأجهزة. يحتاج الإعداد لمرة واحدة في {setup}، وهو يعطّل fasttrack على الراوتر ويستهلك المعالج.",
     scheduleSection: "الفحوصات المجدولة",
     scheduleSectionHint:
       "تُنفَّذ بواسطة المجدول الذي يستدعي /api/cron/tick (راجع README، قسم Scheduled jobs). من دون مجدول لا يؤثر هذان الإعدادان.",
@@ -471,6 +510,7 @@ export const ar = {
       alert_email_to: "بريد التنبيهات",
       wan_interface_name: "اسم واجهة WAN",
       polling_enabled: "المراقبة",
+      devices_enabled: "تتبع الأجهزة",
       language: "لغة التنبيهات",
       stale_after_minutes: "مدة الصمت قبل التنبيه",
       digest: "الملخص المجدول",
@@ -786,6 +826,9 @@ export const ar = {
     daysRange: "يجب أن يكون عدد الأيام عدداً صحيحاً بين 1 و{max}.",
     tooManyIds: "يمكن تحديد {max} جلسة كحد أقصى في المرة الواحدة.",
     notASessionId: "{value} ليس معرّف جلسة.",
+    notAMac: "هذا ليس عنوان MAC.",
+    deviceNameTooLong: "يجب ألا يتجاوز اسم الجهاز 100 حرف.",
+    deviceNotFound: "لم يُبلَّغ عن أي جهاز بهذا العنوان.",
     settingsNotSeeded:
       "لا يوجد أي صف في جدول الإعدادات بعد. نفّذ ملف schema.sql على قاعدة البيانات لتهيئته.",
     emailFailed: "تعذّر إرسال بريد التنبيه.",

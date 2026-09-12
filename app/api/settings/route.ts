@@ -43,6 +43,7 @@ function patchSchema(d: Dictionary) {
       language: z.enum(LOCALES, e.unknownLanguage),
       throttle_on_breach: z.boolean(),
       throttle_on_cap: z.boolean(),
+      devices_enabled: z.boolean(),
       stale_after_minutes: z.coerce
         .number()
         .int(e.staleMinutesWhole)

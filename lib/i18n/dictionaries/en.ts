@@ -45,6 +45,7 @@ export const en = {
     dashboard: "Dashboard",
     statistics: "Statistics",
     sessions: "Sessions",
+    devices: "Devices",
     settings: "Settings",
     export: "Export",
     alerts: "Alerts",
@@ -396,6 +397,33 @@ export const en = {
     calendarTooLong: "Choose a range of {max} days or fewer to see the calendar.",
   },
 
+  devices: {
+    title: "Devices",
+    subtitle: "Traffic per LAN device as the router counted it. Times in {timezone}.",
+    disabledTitle: "Per-device tracking is off",
+    disabledBody:
+      "Turn it on under Settings > Router, then run {setup} once on the router and add the {script} script with a one-minute scheduler. Both files are in the repository's router folder.",
+    empty: "No device readings in this range. They appear a minute after the devices-push script first runs.",
+    device: "Device",
+    lastSeen: "Last seen",
+    rename: "Rename",
+    saveName: "Save",
+    cancel: "Cancel",
+    namePlaceholder: "Name shown for this device",
+    renamed: "Device renamed.",
+    renameFailed: "Rename failed: {reason}",
+    devicesCount: plural({ one: "{count} device", other: "{count} devices" }),
+    topDevices: "Top {count} devices over time",
+    others: "Others",
+    chartHint: "download and upload combined, in GB",
+    tiles: {
+      total: "Total across devices",
+      devices: "Devices seen",
+      busiest: "Busiest device",
+      share: "of the total",
+    },
+  },
+
   settings: {
     title: "Settings",
     subtitle: "Changes take effect on the next poll. No redeploy needed.",
@@ -470,6 +498,10 @@ export const en = {
       "Select the script and click Run Script. Log shows a quota-push line and the dashboard shows a reading within seconds.",
       "For throttling, run router/throttle-setup.rsc once in New Terminal, then switch enforcement on above.",
     ],
+    devicesEnabled: "Per-device tracking on",
+    devicesDisabled: "Per-device tracking off",
+    devicesHint:
+      "Stores the counters the {script} router script sends and shows the Devices page. Needs the one-time setup in {setup}, which disables fasttrack on the router and costs CPU.",
     scheduleSection: "Scheduled checks",
     scheduleSectionHint:
       "Run by the scheduler that calls /api/cron/tick (see README, \"Scheduled jobs\"). Without a scheduler these two settings do nothing.",
@@ -491,6 +523,7 @@ export const en = {
       alert_email_to: "Alert email",
       wan_interface_name: "WAN interface name",
       polling_enabled: "Polling",
+      devices_enabled: "Per-device tracking",
       language: "Alert language",
       stale_after_minutes: "Silence before alerting",
       digest: "Scheduled summary",
@@ -804,6 +837,9 @@ export const en = {
     daysRange: "The days must be a whole number between 1 and {max}.",
     tooManyIds: "At most {max} sessions may be selected at once.",
     notASessionId: "{value} is not a session id.",
+    notAMac: "That is not a MAC address.",
+    deviceNameTooLong: "The device name must be 100 characters or fewer.",
+    deviceNotFound: "No device with that address has been reported.",
     settingsNotSeeded:
       "The settings table has no row yet. Run schema.sql against the database to seed it.",
     emailFailed: "The alert email could not be sent.",

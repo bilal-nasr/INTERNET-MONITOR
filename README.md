@@ -215,6 +215,37 @@ Two things to know:
 - The decision is made on the server and only re-evaluated on the next push. When the window closes or the cycle rolls over, the throttle lifts on the first push afterwards, at most 30 seconds later. The monthly figure is cached for five minutes on the server, so the cap throttle can start up to five minutes after the cap is crossed.
 
 If the queue does not exist the script does nothing about the policy and logs nothing, so the setting is harmless until the router is ready.
+### Per-device usage
+
+Off by default. When enabled on `/settings` (Router section), a second router script
+reports every LAN device's counters once a minute and `/devices` shows who used what,
+with a stacked chart of the top eight and a rename box for each device.
+
+Preconditions, all verified on a hEX lite running RouterOS 7.24.2:
+
+- The counters come from `/ip kid-control device`, which RouterOS only fills once at
+  least one kid-control entry exists. `router/devices-setup.rsc` adds a placeholder
+  entry named `all-devices` that restricts nothing.
+- Kid-control counts inside the firewall, and the default fasttrack rule lets
+  established connections skip the firewall. The setup script therefore disables the
+  `defconf: fasttrack` rule. On a hEX lite this raises CPU load noticeably under heavy
+  traffic; it is the price of per-device figures. To go back, run the two undo lines at
+  the bottom of the setup script and turn the setting off.
+- A downstream router in NAT mode (an Archer AX55 Pro on this network) hides its clients
+  behind one MAC. Only devices the MikroTik hands addresses to appear separately. In
+  access-point mode every client shows up on its own.
+
+Setup:
+
+1. Run `router/devices-setup.rsc` once.
+2. Add `router/devices-push.rsc` as a script with policies `read, test`, fill in `url`
+   (`.../api/ingest/devices`) and `secret` (the same `CRON_SECRET`), and schedule it every
+   minute. The log line `devices-push: sent N devices` confirms it.
+3. Turn on per-device tracking on `/settings`. The Devices link appears in the header.
+
+Names come from the DHCP lease's host-name; rename any device on the page. Usage is the
+growth of each device's counter between pushes, so a router reboot loses at most one
+minute. Pushes are batched at 200 devices.
 
 ## Languages
 
