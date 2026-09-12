@@ -2,12 +2,23 @@ import type { Metadata } from "next";
 import { connection } from "next/server";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { OutageCalendar } from "@/components/OutageCalendar";
+import { MonitoringGaps } from "@/components/MonitoringGaps";
 import { OutageSummary } from "@/components/OutageSummary";
 import { RangePicker } from "@/components/RangePicker";
 import { SessionsTable, SessionTotalsCards } from "@/components/SessionsTable";
 import { fill } from "@/lib/i18n";
 import { getI18n } from "@/lib/i18n/server";
-import { downtimeByDay, downtimeWindowEnd, outagesFromSessions } from "@/lib/outages";
+import type { CauseSegment } from "@/lib/outage-cause";
+import { getSilences } from "@/lib/outage-cause-store";
+import {
+  attachCauses,
+  downtimeByDay,
+  downtimeSplitByDay,
+  downtimeWindowEnd,
+  monitoringGaps,
+  outagesFromSessions,
+  type StoredSilence,
+} from "@/lib/outages";
 import { DEFAULT_PRESET, InvalidRangeError, rangeErrorMessage, resolveRange } from "@/lib/range";
 import { getLatestSessionSummary, getSessions, getSessionTotals } from "@/lib/sessions";
 import { getSettings } from "@/lib/settings";
@@ -48,7 +59,7 @@ export default async function SessionsPage({ searchParams }: { searchParams: Pro
   }
 
   const window = { from: range.from, to: range.to };
-  const [sessions, totals, latest] = await Promise.all([
+  const [sessions, totals, latest, silences] = await Promise.all([
     getSessions(window, LIMIT),
     getSessionTotals(window),
     // The newest session of all. It only matters when none overlaps the range,
@@ -56,6 +67,14 @@ export default async function SessionsPage({ searchParams }: { searchParams: Pro
     // and has not come back: there is no session to read the outage from, and
     // without this the report would say the link was up the whole time.
     getLatestSessionSummary(),
+    // What the router said about each silence in the range (lib/outage-cause.ts).
+    // Labels are an addition on top of the sessions the page already shows: if
+    // outage_causes has not been migrated in yet, the page must still work,
+    // just without them.
+    getSilences(window).catch((err): StoredSilence[] => {
+      console.warn("[sessions] could not read outage causes", err);
+      return [];
+    }),
   ]);
 
   // Downtime, and the share of the range it takes up, are measured up to now
@@ -65,8 +84,23 @@ export default async function SessionsPage({ searchParams }: { searchParams: Pro
   // Derived from the sessions already fetched, so the report costs no extra
   // round trip. It is bounded by LIMIT like the table: on a range with more
   // than LIMIT sessions the oldest gaps are not shown, which the footnote says.
-  const outages = outagesFromSessions(sessions, { from: range.from, to: until }, latest);
+  const outages = attachCauses(outagesFromSessions(sessions, { from: range.from, to: until }, latest), silences);
   const byDay = downtimeByDay(outages, settings.timezone);
+  const splitByDay = downtimeSplitByDay(outages, settings.timezone);
+  // On a range with more sessions than LIMIT, the oldest ones are not listed
+  // (see the footnote), so a silence from before the oldest listed session
+  // cannot be told apart from a real monitoring gap; drop it from the gaps
+  // input only. attachCauses above still saw every silence.
+  const gapsInput =
+    sessions.length >= LIMIT
+      ? silences.filter((silence) => silence.silence_from >= sessions[sessions.length - 1].started_at)
+      : silences;
+  const gaps = monitoringGaps(gapsInput, outages);
+  // Each outage ends where the next session begins, so that session's row shows it.
+  const causesBySession: Record<number, CauseSegment[]> = {};
+  for (const outage of outages) {
+    if (outage.next_session_id !== null) causesBySession[outage.next_session_id] = outage.causes;
+  }
   const rangeSeconds = range.from
     ? Math.max(0, Math.round((until.getTime() - range.from.getTime()) / 1000))
     : null;
@@ -100,9 +134,16 @@ export default async function SessionsPage({ searchParams }: { searchParams: Pro
         rangeSeconds={rangeSeconds}
         timezone={settings.timezone}
       />
-      <OutageCalendar byDay={byDay} from={range.from} to={until} timezone={settings.timezone} />
+      <OutageCalendar
+        byDay={byDay}
+        splitByDay={splitByDay}
+        from={range.from}
+        to={until}
+        timezone={settings.timezone}
+      />
+      <MonitoringGaps gaps={gaps} timezone={settings.timezone} />
 
-      <SessionsTable sessions={sessions} timezone={settings.timezone} />
+      <SessionsTable sessions={sessions} timezone={settings.timezone} causesBySession={causesBySession} />
 
       <p className="text-xs text-muted">{fill(d.sessions.footnote, { limit: LIMIT })}</p>
     </div>

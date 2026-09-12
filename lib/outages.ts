@@ -1,3 +1,5 @@
+import { fill } from "@/lib/i18n";
+import { appendSegment, CAUSE_SIDES, causeSide, type CauseSegment, type CauseSide } from "@/lib/outage-cause";
 import type { SessionSummary } from "@/lib/sessions";
 import { localParts, localTimeInstant } from "@/lib/time";
 
@@ -168,4 +170,132 @@ export function downtimeByDay(outages: Outage[], timezone: string): DayDowntime[
   }
 
   return [...byDay.values()].sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : 0));
+}
+
+/** A silence as stored in outage_causes, trimmed to what the pages show. */
+export interface StoredSilence {
+  silence_from: string;
+  silence_to: string;
+  segments: CauseSegment[];
+}
+
+export interface OutageWithCauses extends Outage {
+  /** Ordered, touching and covering the outage exactly; "unknown" where the router said nothing. */
+  causes: CauseSegment[];
+}
+
+/**
+ * Give each outage the causes the router reported for the time it covers.
+ *
+ * The outage itself is left as it is: its span and its seconds come from the
+ * sessions, which is what the downtime totals are measured from, so labelling
+ * an outage never changes how long it was.
+ */
+export function attachCauses(outages: Outage[], silences: StoredSilence[]): OutageWithCauses[] {
+  const segments = silences
+    .flatMap((silence) => silence.segments)
+    .sort((a, b) => Date.parse(a.from) - Date.parse(b.from));
+
+  return outages.map((outage) => {
+    const lo = Date.parse(outage.from);
+    const hi = Date.parse(outage.to);
+    const causes: CauseSegment[] = [];
+    let cursor = lo;
+    for (const segment of segments) {
+      const start = Math.max(Date.parse(segment.from), cursor);
+      const end = Math.min(Date.parse(segment.to), hi);
+      if (end <= start) continue;
+      appendSegment(causes, cursor, start, "unknown");
+      appendSegment(causes, start, end, segment.cause);
+      cursor = end;
+    }
+    appendSegment(causes, cursor, hi, "unknown");
+    return { ...outage, causes };
+  });
+}
+
+/**
+ * Silences that are not downtime: the router went quiet but no session outage
+ * lies behind it (a short blip where PPPoE never dropped), or the only thing
+ * wrong was reaching the app.
+ */
+export function monitoringGaps(silences: StoredSilence[], outages: Outage[]): StoredSilence[] {
+  return silences.filter((silence) => {
+    const lo = Date.parse(silence.silence_from);
+    const hi = Date.parse(silence.silence_to);
+    const overlaps = outages.some((o) => Date.parse(o.from) < hi && lo < Date.parse(o.to));
+    return !overlaps || silence.segments.every((segment) => segment.cause === "app_unreachable");
+  });
+}
+
+export type DowntimeSplit = Record<CauseSide, number>;
+
+function emptySplit(): DowntimeSplit {
+  return { yours: 0, isp: 0, neutral: 0, unknown: 0 };
+}
+
+/**
+ * Seconds of downtime by side, over the outages listed. Bounded by the same row
+ * limit as the list, so on a very long range it can fall short of the total
+ * counted in the database; it is shown as a hint beside that total, not as one.
+ */
+export function downtimeSplit(outages: OutageWithCauses[]): DowntimeSplit {
+  const split = emptySplit();
+  for (const outage of outages) {
+    for (const segment of outage.causes) {
+      split[causeSide(segment.cause)] += Math.round((Date.parse(segment.to) - Date.parse(segment.from)) / 1000);
+    }
+  }
+  return split;
+}
+
+/** The same split for each local day, sliced at midnight the way downtimeByDay slices outages. */
+export function downtimeSplitByDay(outages: OutageWithCauses[], timezone: string): Map<string, DowntimeSplit> {
+  const byDay = new Map<string, DowntimeSplit>();
+  for (const side of CAUSE_SIDES) {
+    const spans: Outage[] = outages.flatMap((outage) =>
+      outage.causes
+        .filter((segment) => causeSide(segment.cause) === side)
+        .map((segment) => ({
+          from: segment.from,
+          to: segment.to,
+          seconds: 0,
+          ended_session_id: null,
+          next_session_id: null,
+        })),
+    );
+    for (const row of downtimeByDay(spans, timezone)) {
+      const split = byDay.get(row.day) ?? emptySplit();
+      split[side] += row.seconds;
+      byDay.set(row.day, split);
+    }
+  }
+  return byDay;
+}
+
+export interface SplitWords {
+  splitYours: string;
+  splitIsp: string;
+  splitNeutral: string;
+  splitUnknown: string;
+}
+
+/**
+ * The split as short phrases, each side with time, in a fixed order. Nothing
+ * when no second has a known cause: a range from before the router sent
+ * evidence would otherwise say "cause unknown" beside every figure.
+ */
+export function describeSplit(
+  split: DowntimeSplit,
+  words: SplitWords,
+  duration: (seconds: number) => string,
+): string[] {
+  if (split.yours + split.isp + split.neutral === 0) return [];
+  const parts: [number, string][] = [
+    [split.yours, words.splitYours],
+    [split.isp, words.splitIsp],
+    [split.neutral, words.splitNeutral],
+    [split.unknown, words.splitUnknown],
+  ];
+  return parts.filter(([seconds]) => seconds > 0).map(([seconds, text]) => fill(text, { duration: duration(seconds) }));
 }

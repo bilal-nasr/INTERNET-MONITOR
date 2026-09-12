@@ -178,6 +178,7 @@ export const en = {
     noContactExplanation:
       "Nothing heard for {duration}. The router is off, unreachable, or its script has stopped. The last session is shown as it was left.",
     staleAlertSent: "Alert emailed at {time}.",
+    causeAfterReconnect: "Whether this is on your side or the ISP's shows once the router reconnects.",
     noSessionYet: "No session recorded yet",
     interface: "interface {name}",
     lastReading: "Last reading",
@@ -410,6 +411,25 @@ export const en = {
     calendarCell: "{day}: offline {duration}",
     calendarCellNone: "{day}: no outages",
     calendarTooLong: "Choose a range of {max} days or fewer to see the calendar.",
+    /** One label per cause in lib/outage-cause.ts. */
+    causes: {
+      router_off: "Router off",
+      roof_link_down: "Roof link down",
+      no_internet: "No internet from the ISP",
+      scheduled_reconnect: "Scheduled reconnect",
+      pppoe_down: "ISP dropped PPPoE",
+      app_unreachable: "App unreachable",
+      unknown: "Cause unknown",
+    },
+    causeSegment: "{cause} {duration}",
+    splitYours: "your side {duration}",
+    splitIsp: "ISP {duration}",
+    splitNeutral: "scheduled {duration}",
+    splitUnknown: "cause unknown {duration}",
+    calendarCellSplit: "{day}: offline {duration} ({split})",
+    gapsHeading: "Monitoring gaps",
+    gapsHint: "the router went quiet but the link did not drop; not counted as downtime",
+    gapRow: "{cause} · {duration} · {time}",
   },
 
   devices: {
@@ -903,6 +923,9 @@ export const en = {
     footerStale: "You will get one more mail when readings resume.",
     footerRecovered: "No further mail unless the router goes quiet again.",
     dashboardLine: "Dashboard: {url}",
+    bodyCause: "What happened: {causes}.",
+    causePart: "{cause} ({duration})",
+    causeJoiner: ", then ",
   },
 
   /** The monthly-cap mails: a threshold mark reached, or the projection crossing the cap. */

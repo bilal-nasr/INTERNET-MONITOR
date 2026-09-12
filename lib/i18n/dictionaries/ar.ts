@@ -162,6 +162,7 @@ export const ar = {
     noContactExplanation:
       "لم تصل أي إشارة منذ {duration}. الراوتر مطفأ أو غير قابل للوصول أو توقف سكربته. تُعرض آخر جلسة كما تُركت.",
     staleAlertSent: "أُرسل تنبيه بالبريد في {time}.",
+    causeAfterReconnect: "سيظهر ما إذا كان السبب من جهتك أو من المزوّد بعد عودة اتصال الراوتر.",
     noSessionYet: "لم تُسجَّل أي جلسة بعد",
     interface: "الواجهة {name}",
     lastReading: "آخر قراءة",
@@ -389,6 +390,24 @@ export const ar = {
     calendarCell: "{day}: منقطع {duration}",
     calendarCellNone: "{day}: لا انقطاعات",
     calendarTooLong: "اختر مدة {max} يوماً أو أقل لعرض التقويم.",
+    causes: {
+      router_off: "الراوتر مطفأ",
+      roof_link_down: "انقطاع وصلة السطح",
+      no_internet: "لا إنترنت من المزوّد",
+      scheduled_reconnect: "إعادة اتصال مجدولة",
+      pppoe_down: "المزوّد أسقط اتصال PPPoE",
+      app_unreachable: "تعذّر الوصول إلى التطبيق",
+      unknown: "السبب غير معروف",
+    },
+    causeSegment: "{cause} {duration}",
+    splitYours: "من جهتك {duration}",
+    splitIsp: "من المزوّد {duration}",
+    splitNeutral: "مجدول {duration}",
+    splitUnknown: "سبب غير معروف {duration}",
+    calendarCellSplit: "{day}: منقطع {duration} ({split})",
+    gapsHeading: "فجوات المراقبة",
+    gapsHint: "توقف الراوتر عن الإبلاغ دون أن ينقطع الاتصال؛ لا تُحتسب ضمن الانقطاع",
+    gapRow: "{cause} · {duration} · {time}",
   },
 
   devices: {
@@ -888,6 +907,9 @@ export const ar = {
     footerStale: "ستصلك رسالة أخرى واحدة عند استئناف القراءات.",
     footerRecovered: "لا رسائل أخرى ما لم يتوقف الراوتر عن الإبلاغ مجدداً.",
     dashboardLine: "لوحة التحكم: {url}",
+    bodyCause: "ما حدث: {causes}.",
+    causePart: "{cause} ({duration})",
+    causeJoiner: "، ثم ",
   },
 
   emailCycle: {

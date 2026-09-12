@@ -1,6 +1,6 @@
 import { fill } from "@/lib/i18n";
 import { getI18n } from "@/lib/i18n/server";
-import type { DayDowntime } from "@/lib/outages";
+import { describeSplit, type DayDowntime, type DowntimeSplit } from "@/lib/outages";
 import { localParts } from "@/lib/time";
 
 /** Beyond this many days the cells are too small to read; the tiles still show. */
@@ -50,11 +50,14 @@ function daysBetween(from: Date, to: Date, timezone: string): string[] {
 
 export async function OutageCalendar({
   byDay,
+  splitByDay = new Map(),
   from,
   to,
   timezone,
 }: {
   byDay: DayDowntime[];
+  /** Downtime by side for each day, from lib/outages.ts downtimeSplitByDay. */
+  splitByDay?: Map<string, DowntimeSplit>;
   from: Date | null;
   to: Date;
   timezone: string;
@@ -85,10 +88,14 @@ export async function OutageCalendar({
             const row = bySeconds.get(day);
             const seconds = row?.seconds ?? 0;
             const lvl = level(seconds);
+            const split = splitByDay.get(day);
+            const parts = split ? describeSplit(split, s, f.duration) : [];
             const title =
-              seconds > 0
-                ? fill(s.calendarCell, { day, duration: f.duration(seconds) })
-                : fill(s.calendarCellNone, { day });
+              seconds === 0
+                ? fill(s.calendarCellNone, { day })
+                : parts.length > 0
+                  ? fill(s.calendarCellSplit, { day, duration: f.duration(seconds), split: parts.join(", ") })
+                  : fill(s.calendarCell, { day, duration: f.duration(seconds) });
             return (
               // The sentence is carried once, by the hidden span: an aria-label
               // as well would have a screen reader read the cell out twice.

@@ -21,6 +21,7 @@ import { getJobRun } from "@/lib/cron/runs";
 import { isStale } from "@/lib/cron/schedule";
 import { decideStaleAction } from "@/lib/cron/stale-decision";
 import { renderLinkEmail } from "@/lib/email-link-template";
+import { findSilenceStartingAt } from "@/lib/outage-cause-store";
 import { alertLocale } from "@/lib/settings";
 import { getLatestReading } from "@/lib/usage";
 
@@ -127,6 +128,9 @@ async function run({ now, settings }: JobContext): Promise<JobResult> {
     const before =
       typeof lastStale.payload?.last_reading_at === "string" ? new Date(lastStale.payload.last_reading_at) : null;
     const ended = before ? Math.round((lastReadingAt.getTime() - before.getTime()) / 1000) : 0;
+    // The push that ended the silence has already stored what the router saw.
+    // Failing to read it only costs the mail its cause line.
+    const silence = before ? await findSilenceStartingAt(before).catch(() => null) : null;
     const email = renderLinkEmail({
       kind: "recovered",
       locale: alertLocale(settings),
@@ -134,6 +138,7 @@ async function run({ now, settings }: JobContext): Promise<JobResult> {
       silent_seconds: ended,
       timezone: settings.timezone,
       app_url: appUrl(),
+      causes: silence?.segments ?? null,
     });
     const { status } = await dispatchAlert({
       kind: "link_recovered",

@@ -1,9 +1,16 @@
 import { describe, expect, test } from "vitest";
+import type { CauseSegment } from "@/lib/outage-cause";
 import {
+  attachCauses,
+  describeSplit,
   downtimeByDay,
+  downtimeSplit,
+  downtimeSplitByDay,
   downtimeWindowEnd,
+  monitoringGaps,
   outagesFromSessions,
   type Outage,
+  type StoredSilence,
 } from "@/lib/outages";
 import type { SessionSummary } from "@/lib/sessions";
 
@@ -257,5 +264,148 @@ describe("downtimeByDay", () => {
 
   test("no outages, no rows", () => {
     expect(downtimeByDay([], "UTC")).toEqual([]);
+  });
+});
+
+function outage(from: string, to: string): Outage {
+  return {
+    from: new Date(from).toISOString(),
+    to: new Date(to).toISOString(),
+    seconds: Math.round((Date.parse(to) - Date.parse(from)) / 1000),
+    ended_session_id: 1,
+    next_session_id: 2,
+  };
+}
+
+function silence(from: string, to: string, segments: [string, string, CauseSegment["cause"]][]): StoredSilence {
+  return {
+    silence_from: new Date(from).toISOString(),
+    silence_to: new Date(to).toISOString(),
+    segments: segments.map(([f, t, cause]) => ({
+      from: new Date(f).toISOString(),
+      to: new Date(t).toISOString(),
+      cause,
+    })),
+  };
+}
+
+const iso = (value: string) => new Date(value).toISOString();
+
+describe("attachCauses", () => {
+  test("clips the silence's segments to the outage", () => {
+    const [withCauses] = attachCauses(
+      [outage("2026-09-10T10:00:00Z", "2026-09-10T10:30:00Z")],
+      [
+        silence("2026-09-10T09:59:30Z", "2026-09-10T10:31:00Z", [
+          ["2026-09-10T09:59:30Z", "2026-09-10T10:23:00Z", "router_off"],
+          ["2026-09-10T10:23:00Z", "2026-09-10T10:31:00Z", "pppoe_down"],
+        ]),
+      ],
+    );
+    expect(withCauses.causes).toEqual<CauseSegment[]>([
+      { from: iso("2026-09-10T10:00:00Z"), to: iso("2026-09-10T10:23:00Z"), cause: "router_off" },
+      { from: iso("2026-09-10T10:23:00Z"), to: iso("2026-09-10T10:30:00Z"), cause: "pppoe_down" },
+    ]);
+    expect(withCauses.seconds).toBe(1800);
+  });
+
+  test("time no silence explains is unknown, so the causes always cover the outage", () => {
+    const [withCauses] = attachCauses(
+      [outage("2026-09-10T10:00:00Z", "2026-09-10T10:30:00Z")],
+      [
+        silence("2026-09-10T10:10:00Z", "2026-09-10T10:20:00Z", [
+          ["2026-09-10T10:10:00Z", "2026-09-10T10:20:00Z", "no_internet"],
+        ]),
+      ],
+    );
+    expect(withCauses.causes.map((c) => c.cause)).toEqual(["unknown", "no_internet", "unknown"]);
+    expect(withCauses.causes[0].to).toBe(iso("2026-09-10T10:10:00Z"));
+    expect(withCauses.causes[2].from).toBe(iso("2026-09-10T10:20:00Z"));
+  });
+
+  test("an outage from before the feature is one unknown segment", () => {
+    const [withCauses] = attachCauses([outage("2026-09-10T10:00:00Z", "2026-09-10T10:30:00Z")], []);
+    expect(withCauses.causes).toEqual<CauseSegment[]>([
+      { from: iso("2026-09-10T10:00:00Z"), to: iso("2026-09-10T10:30:00Z"), cause: "unknown" },
+    ]);
+  });
+});
+
+describe("monitoringGaps", () => {
+  const outages = [outage("2026-09-10T10:00:00Z", "2026-09-10T10:30:00Z")];
+
+  test("a silence that overlaps no outage is a monitoring gap", () => {
+    const gap = silence("2026-09-10T12:00:00Z", "2026-09-10T12:03:00Z", [
+      ["2026-09-10T12:00:00Z", "2026-09-10T12:03:00Z", "no_internet"],
+    ]);
+    expect(monitoringGaps([gap], outages)).toEqual([gap]);
+  });
+
+  test("a silence behind an outage is not", () => {
+    const behind = silence("2026-09-10T09:59:30Z", "2026-09-10T10:31:00Z", [
+      ["2026-09-10T09:59:30Z", "2026-09-10T10:31:00Z", "router_off"],
+    ]);
+    expect(monitoringGaps([behind], outages)).toEqual([]);
+  });
+
+  test("the app being unreachable is always a gap, never downtime", () => {
+    const app = silence("2026-09-10T10:05:00Z", "2026-09-10T10:08:00Z", [
+      ["2026-09-10T10:05:00Z", "2026-09-10T10:08:00Z", "app_unreachable"],
+    ]);
+    expect(monitoringGaps([app], outages)).toEqual([app]);
+  });
+});
+
+describe("downtimeSplit", () => {
+  test("adds up seconds by whose side each cause is on", () => {
+    const outages = attachCauses(
+      [outage("2026-09-10T10:00:00Z", "2026-09-10T10:30:00Z")],
+      [
+        silence("2026-09-10T10:00:00Z", "2026-09-10T10:25:00Z", [
+          ["2026-09-10T10:00:00Z", "2026-09-10T10:20:00Z", "router_off"],
+          ["2026-09-10T10:20:00Z", "2026-09-10T10:25:00Z", "no_internet"],
+        ]),
+      ],
+    );
+    expect(downtimeSplit(outages)).toEqual({ yours: 1200, isp: 300, neutral: 0, unknown: 300 });
+  });
+});
+
+describe("downtimeSplitByDay", () => {
+  test("slices each side at local midnight", () => {
+    const outages = attachCauses(
+      [outage("2026-09-10T23:50:00Z", "2026-09-11T00:20:00Z")],
+      [
+        silence("2026-09-10T23:50:00Z", "2026-09-11T00:20:00Z", [
+          ["2026-09-10T23:50:00Z", "2026-09-11T00:05:00Z", "router_off"],
+          ["2026-09-11T00:05:00Z", "2026-09-11T00:20:00Z", "no_internet"],
+        ]),
+      ],
+    );
+    const byDay = downtimeSplitByDay(outages, "UTC");
+    expect(byDay.get("2026-09-10")).toEqual({ yours: 600, isp: 0, neutral: 0, unknown: 0 });
+    expect(byDay.get("2026-09-11")).toEqual({ yours: 300, isp: 900, neutral: 0, unknown: 0 });
+  });
+});
+
+describe("describeSplit", () => {
+  const words = {
+    splitYours: "your side {duration}",
+    splitIsp: "ISP {duration}",
+    splitNeutral: "scheduled {duration}",
+    splitUnknown: "cause unknown {duration}",
+  };
+  const duration = (s: number) => `${s}s`;
+
+  test("names each side that has time, in a fixed order", () => {
+    expect(describeSplit({ yours: 600, isp: 300, neutral: 0, unknown: 60 }, words, duration)).toEqual([
+      "your side 600s",
+      "ISP 300s",
+      "cause unknown 60s",
+    ]);
+  });
+
+  test("says nothing when every second is unknown, so old ranges stay quiet", () => {
+    expect(describeSplit({ yours: 0, isp: 0, neutral: 0, unknown: 900 }, words, duration)).toEqual([]);
   });
 });

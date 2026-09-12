@@ -2216,6 +2216,8 @@ psql "$DATABASE_URL" -f schema.sql
 
 Verify: `SELECT to_regclass('router_status'), to_regclass('outage_causes');` returns both names.
 
+This step must run before Step 2, not after: if the app is deployed first, `/api/ingest` logs a warning on every push (it cannot record outage evidence) and the Sessions page degrades without labels until the schema catches up.
+
 - [ ] **Step 2: Deploy the app**
 
 The owner deploys as usual. The old router script keeps working: its pushes carry no evidence, so `outage_evidence` in the response reads `"skipped"`.
@@ -2231,6 +2233,20 @@ Verify, read-only:
 
 - [ ] **Step 4: Check 1, PPPoE down (also checks that runs never overlap)**
 
+The netwatch watchdog runs `pppoe-reconnect`, which re-enables an owner-disabled `pppoe-out1` after about 10 s and makes netwatch's down mark win instead. Before disabling the interface, disable the probe:
+
+```
+/tool netwatch disable [find name=internet-probe]
+```
+
+First confirm, read-only, what status a disabled probe reports:
+
+```
+/tool netwatch print
+```
+
+If a disabled probe reports `down`, expect `no_internet` below instead of `pppoe_down`.
+
 With the owner's OK, on the router:
 
 ```
@@ -2243,17 +2259,23 @@ Wait 120 s. During the wait, `/system script job print` must never list more tha
 /interface pppoe-client enable pppoe-out1
 ```
 
+Re-enable the probe:
+
+```
+/tool netwatch enable [find name=internet-probe]
+```
+
 Within a minute of the link returning:
 
 ```sql
 SELECT silence_from, silence_to, segments FROM outage_causes ORDER BY id DESC LIMIT 1;
 ```
 
-Expected: one segment, `pppoe_down`, spanning the silence. The Sessions page shows a red "ISP dropped PPPoE" chip on the new session.
+Expected: one segment, `pppoe_down`, spanning the silence (unless `/tool netwatch print` showed a disabled probe reporting `down`, per above, in which case expect `no_internet`). The Sessions page shows a red "ISP dropped PPPoE" chip on the new session. Separately, note that with the probe enabled, long PPPoE drops are labelled `no_internet` rather than `pppoe_down` because netwatch goes down about 60 s in and lags recovery — either label is an ISP-side outage.
 
 - [ ] **Step 5: Check 2, router off**
 
-The owner unplugs the MikroTik for 2 minutes, then plugs it back in. Expected: newest row `router_off` for the whole silence, because the startup grace covers the dial. The Sessions page shows an amber "Router off" chip.
+The owner unplugs the MikroTik for 2 minutes, then plugs it back in. Expected: newest row `router_off` for the whole silence, because the startup grace covers the dial. The Sessions page shows an amber "Router off" chip, and also confirm the Sessions page shows an outage roughly as long as the silence (not a monitoring gap). Note whether `qpPlanned` is greater than 0 after boot.
 
 - [ ] **Step 6: Check 3, roof cable (settles the spec's open point)**
 
@@ -2264,16 +2286,21 @@ The owner unplugs the roof cable at the power bank for 2 minutes. The router sta
 ```
 
 - **ISP-ether1 loses its `R` (running) flag:** the newest row should be `roof_link_down`. Nothing else to do.
-- **ISP-ether1 stays running:** the power bank switches the link, and a dead roof switch looks like the ISP dropping PPPoE. Make these changes, then run `pnpm test; pnpm lint; pnpm exec tsc --noEmit`:
+- **ISP-ether1 stays running:** the power bank switches the link, and a dead roof switch looks like the ISP dropping PPPoE — the result may come out `no_internet` rather than `pppoe_down` (see Check 1), so the relabel decision below must consider both labels, not `pppoe_down` alone. Record the observed label and stop here for a decision instead of editing code; do not make the changes below without the owner's sign-off on which label(s) to relabel:
   - In `lib/outage-cause.ts` `causeSide`, move `case "pppoe_down":` from the `"isp"` group into the `default` group, so it returns `"unknown"`.
   - In `lib/outage-cause.test.ts`, change `expect(causeSide("pppoe_down")).toBe("isp");` to `expect(causeSide("pppoe_down")).toBe("unknown");`.
   - In `lib/i18n/dictionaries/en.ts`, set `pppoe_down: "Couldn't reach the ISP (roof equipment or ISP)",`.
   - In `lib/i18n/dictionaries/ar.ts`, set `pppoe_down: "تعذّر الوصول إلى المزوّد (معدات السطح أو المزوّد)",`.
   - Update the email test's expected text to `"What happened: Router off (40m 00s), then Couldn't reach the ISP (roof equipment or ISP) (5m 00s)."`.
   - In the spec's Open point and the README table, record which branch was taken.
+  - If the observed label was `no_internet` instead of `pppoe_down`, the same relabelling must be applied to `no_internet`, not `pppoe_down` — confirm with the owner before changing code, and only once run `pnpm test; pnpm lint; pnpm exec tsc --noEmit`.
 
 - [ ] **Step 7: The mail**
 
 After check 2 or 3, and provided the silence passed `stale_after_minutes` (10 by default; a 2-minute test will not), the next tick's "The router is reporting again" mail carries the "What happened: …" line. If no test ran long enough, skip this step and say so in the report.
+
+- [ ] **Step 8: qpPlanned from netwatch**
+
+Confirm `qpPlanned` increments when netwatch's down-script runs `pppoe-reconnect` — this path has only been verified from the scheduler and from an SSH session so far, not from netwatch itself.
 
 Stop here; the owner commits any branch changes.

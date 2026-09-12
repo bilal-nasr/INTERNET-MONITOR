@@ -33,6 +33,14 @@ export const QUOTA_PUSH_TEMPLATE = `:local iface         "{{iface}}"
 :global qpRx
 :global qpFail
 :if ([:typeof $qpFail] != "num") do={ :set qpFail 0 }
+:global qpEthDownAt
+:global qpEthUpAt
+:global qpPppDownAt
+:global qpPppUpAt
+:global qpNetDownAt
+:global qpNetUpAt
+:global qpPlanned
+:if ([:typeof $qpPlanned] != "num") do={ :set qpPlanned 0 }
 
 :local id [/interface find name=$iface]
 :if ([:len $id] = 0) do={
@@ -48,6 +56,41 @@ export const QUOTA_PUSH_TEMPLATE = `:local iface         "{{iface}}"
 :do { :set linkUp [/interface get $id last-link-up-time] } on-error={ :set linkUp "" }
 
 :local stamp ([/system clock get date] . " " . [/system clock get time])
+
+# ---- outage evidence ----
+# Best effort: a missing netwatch entry, or a WAN interface that is not a
+# PPPoE client, leaves its field empty and never stops the push.
+:local uptime [:tonum [/system resource get uptime]]
+:local pppDowns [/interface get $id link-downs]
+:local ethRunning ""
+:local ethDowns ""
+:do {
+    :local lower [/interface pppoe-client get [find name=$iface] interface]
+    :local eid [/interface find name=$lower]
+    :set ethRunning [:tostr [/interface get $eid running]]
+    :set ethDowns [/interface get $eid link-downs]
+} on-error={ :set ethRunning "" }
+:local net "unknown"
+:do { :set net [/tool netwatch get [find name="internet-probe"] status] } on-error={ :set net "unknown" }
+
+# The first run that finds a link down keeps its uptime until a push succeeds.
+# Finding it up records the uptime; finding it down again forgets that, so the
+# span runs from the first down to the last up.
+:if ($ethRunning = "false") do={
+    :if ([:typeof $qpEthDownAt] != "num") do={ :set qpEthDownAt $uptime }
+    :set qpEthUpAt ""
+}
+:if (($ethRunning = "true") && ([:typeof $qpEthDownAt] = "num") && ([:typeof $qpEthUpAt] != "num")) do={ :set qpEthUpAt $uptime }
+:if (!$running) do={
+    :if ([:typeof $qpPppDownAt] != "num") do={ :set qpPppDownAt $uptime }
+    :set qpPppUpAt ""
+}
+:if ($running && ([:typeof $qpPppDownAt] = "num") && ([:typeof $qpPppUpAt] != "num")) do={ :set qpPppUpAt $uptime }
+:if ($net = "down") do={
+    :if ([:typeof $qpNetDownAt] != "num") do={ :set qpNetDownAt $uptime }
+    :set qpNetUpAt ""
+}
+:if (($net = "up") && ([:typeof $qpNetDownAt] = "num") && ([:typeof $qpNetUpAt] != "num")) do={ :set qpNetUpAt $uptime }
 
 # ---- decide what kind of record this is ----
 :local event "sample"
@@ -76,7 +119,7 @@ export const QUOTA_PUSH_TEMPLATE = `:local iface         "{{iface}}"
 }
 
 :if ($send) do={
-    :local body "{\\"iface\\":\\"$iface\\",\\"event\\":\\"$event\\",\\"session_id\\":\\"$sid\\",\\"link_up\\":\\"$linkUp\\",\\"running\\":$running,\\"tx_bytes\\":$outTx,\\"rx_bytes\\":$outRx,\\"router_time\\":\\"$stamp\\"}"
+    :local body "{\\"iface\\":\\"$iface\\",\\"event\\":\\"$event\\",\\"session_id\\":\\"$sid\\",\\"link_up\\":\\"$linkUp\\",\\"running\\":$running,\\"tx_bytes\\":$outTx,\\"rx_bytes\\":$outRx,\\"router_time\\":\\"$stamp\\",\\"uptime_s\\":$uptime,\\"ether_running\\":\\"$ethRunning\\",\\"ether_link_downs\\":\\"$ethDowns\\",\\"pppoe_link_downs\\":$pppDowns,\\"netwatch\\":\\"$net\\",\\"planned_reconnects\\":$qpPlanned,\\"push_failures\\":$qpFail,\\"eth_down_at\\":\\"$qpEthDownAt\\",\\"eth_up_at\\":\\"$qpEthUpAt\\",\\"ppp_down_at\\":\\"$qpPppDownAt\\",\\"ppp_up_at\\":\\"$qpPppUpAt\\",\\"net_down_at\\":\\"$qpNetDownAt\\",\\"net_up_at\\":\\"$qpNetUpAt\\"}"
 
     :local pushed false
     :local data ""
@@ -86,6 +129,13 @@ export const QUOTA_PUSH_TEMPLATE = `:local iface         "{{iface}}"
             http-header-field="Content-Type: application/json,Authorization: Bearer $secret" \\
             output=user as-value]
         :set pushed true
+        # the app has this silence's marks now; the next one starts clean
+        :set qpEthDownAt ""
+        :set qpEthUpAt ""
+        :set qpPppDownAt ""
+        :set qpPppUpAt ""
+        :set qpNetDownAt ""
+        :set qpNetUpAt ""
         :set data ($result->"data")
 
         # only commit state AFTER a successful POST, so a failed

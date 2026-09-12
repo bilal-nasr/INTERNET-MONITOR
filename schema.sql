@@ -244,6 +244,28 @@ CREATE TABLE IF NOT EXISTS cycle_alerts (
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Outage causes (docs/superpowers/specs/2026-09-12-outage-cause-design.md).
+-- The router's last report, one row, so the push that ends a silence has
+-- something to compare with.
+CREATE TABLE IF NOT EXISTS router_status (
+  id           INTEGER PRIMARY KEY CHECK (id = 1),
+  recorded_at  TIMESTAMPTZ NOT NULL,
+  evidence     JSONB NOT NULL
+);
+
+-- One row per silence longer than 90 seconds: the cause segments and the two
+-- raw reports they were derived from, so the rules can be re-run. Unique on
+-- silence_from: two pushes ending the same silence write it once. Never thinned.
+CREATE TABLE IF NOT EXISTS outage_causes (
+  id               SERIAL PRIMARY KEY,
+  silence_from     TIMESTAMPTZ NOT NULL UNIQUE,
+  silence_to       TIMESTAMPTZ NOT NULL,
+  segments         JSONB NOT NULL,
+  evidence_before  JSONB,
+  evidence_after   JSONB NOT NULL,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 -- CHECK constraints have no IF NOT EXISTS, so add them only when missing.
 DO $$
 BEGIN
@@ -298,6 +320,8 @@ CREATE INDEX IF NOT EXISTS interface_readings_interface_recorded_idx
   ON interface_readings (interface_name, recorded_at, id);
 
 CREATE INDEX IF NOT EXISTS sessions_started_at_idx ON sessions (started_at DESC);
+
+CREATE INDEX IF NOT EXISTS outage_causes_silence_to_idx ON outage_causes (silence_to);
 
 -- At most one open session, enforced by the database rather than by hope.
 CREATE UNIQUE INDEX IF NOT EXISTS sessions_single_open_idx

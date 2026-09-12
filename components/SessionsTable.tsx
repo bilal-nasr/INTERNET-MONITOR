@@ -2,8 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useI18n } from "@/components/I18nProvider";
+import { CauseChips } from "@/components/CauseChips";
 import { formatBytes } from "@/lib/format";
 import { fill, plural, type Dictionary } from "@/lib/i18n";
+import type { CauseSegment } from "@/lib/outage-cause";
 import type { SessionSummary, SessionTotals } from "@/lib/sessions";
 import type { SelectedSessionTotals } from "@/lib/stats";
 
@@ -70,9 +72,12 @@ export function SessionTotalsCards({ totals }: { totals: SessionTotals }) {
 export function SessionsTable({
   sessions,
   timezone,
+  causesBySession = {},
 }: {
   sessions: SessionSummary[];
   timezone: string;
+  /** The causes of the outage that preceded each session, keyed by session id. */
+  causesBySession?: Record<number, CauseSegment[]>;
 }) {
   const { locale, d, f } = useI18n();
   const [selected, setSelected] = useState<Set<number>>(new Set());
@@ -158,9 +163,14 @@ export function SessionsTable({
                   <Pair
                     label={d.sessions.offlineBefore}
                     value={
-                      s.downtime_before_seconds === null
-                        ? d.common.empty
-                        : f.duration(s.downtime_before_seconds)
+                      s.downtime_before_seconds === null ? (
+                        d.common.empty
+                      ) : (
+                        <span className="flex flex-col items-start gap-1">
+                          {f.duration(s.downtime_before_seconds)}
+                          <CauseChips causes={causesBySession[s.id] ?? []} />
+                        </span>
+                      )
                     }
                   />
                   <Pair label={d.common.download} value={formatBytes(s.rx_bytes)} />
@@ -227,9 +237,14 @@ export function SessionsTable({
                   </td>
                   <td className="px-4 py-3 text-end tabular-nums">{f.duration(s.uptime_seconds)}</td>
                   <td className="px-4 py-3 text-end tabular-nums text-muted">
-                    {s.downtime_before_seconds === null
-                      ? d.common.empty
-                      : f.duration(s.downtime_before_seconds)}
+                    {s.downtime_before_seconds === null ? (
+                      d.common.empty
+                    ) : (
+                      <span className="flex flex-col items-end gap-1">
+                        {f.duration(s.downtime_before_seconds)}
+                        <CauseChips causes={causesBySession[s.id] ?? []} />
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-end tabular-nums">{formatBytes(s.rx_bytes)}</td>
                   <td className="px-4 py-3 text-end tabular-nums">{formatBytes(s.tx_bytes)}</td>

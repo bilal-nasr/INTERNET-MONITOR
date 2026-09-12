@@ -14,6 +14,7 @@ import { escapeHtml as esc } from "@/lib/format";
 import { fill, getDictionaryFor } from "@/lib/i18n";
 import { DIRECTION, type Locale } from "@/lib/i18n/config";
 import { makeFormatters } from "@/lib/i18n/format";
+import { segmentSeconds, type CauseSegment } from "@/lib/outage-cause";
 import { formatDuration, isValidTimeZone } from "@/lib/time";
 
 export interface LinkReport {
@@ -28,6 +29,11 @@ export interface LinkReport {
   timezone: string;
   /** Dashboard link for the footer, when APP_URL is configured. */
   app_url: string | null;
+  /**
+   * What the router reported about the silence (lib/outage-cause.ts), for the
+   * all-clear. Absent or empty when it reported nothing, e.g. an old script.
+   */
+  causes?: CauseSegment[] | null;
 }
 
 // --------------------------------------------------------------- palette --
@@ -75,11 +81,25 @@ export function renderLinkEmail(report: LinkReport): RenderedEmail {
       : t.bodyStaleNever
     : fill(t.bodyRecovered, { duration, time: time ?? "-", timezone: report.timezone });
   const footer = stale ? t.footerStale : t.footerRecovered;
+  const causeLine =
+    !stale && report.causes && report.causes.length > 0
+      ? fill(t.bodyCause, {
+          causes: report.causes
+            .map((segment) =>
+              fill(t.causePart, {
+                cause: d.sessions.causes[segment.cause],
+                duration: formatDuration(segmentSeconds(segment), d.duration),
+              }),
+            )
+            .join(t.causeJoiner),
+        })
+      : null;
   const causes = [t.causePower, t.causeLink, t.causeScript, t.causeApp];
 
   // ---- plain text ----
 
   const textLines = [heading, "", body];
+  if (causeLine) textLines.push("", causeLine);
   if (stale) {
     textLines.push("", t.causes, ...causes.map((cause) => `  - ${cause}`), "", t.checkHint);
   }
@@ -114,6 +134,7 @@ export function renderLinkEmail(report: LinkReport): RenderedEmail {
 <div dir="${dir}" style="font-family:${font};max-width:520px;margin:0 auto;background:${C.card};border:1px solid ${C.border};border-radius:12px;padding:20px 22px;text-align:${align}">
   <div style="display:inline-block;background:${accent.bg};color:${accent.color};font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;padding:4px 10px;border-radius:999px;margin-bottom:12px">${esc(heading)}</div>
   <p style="margin:0 0 16px;color:#444;font-size:14px;line-height:1.5">${esc(body)}</p>
+  ${causeLine ? `<p style="margin:0 0 16px;color:${C.ink};font-size:14px;line-height:1.5">${esc(causeLine)}</p>` : ""}
   ${causesHtml}
   ${button}
   <p style="margin:16px 0 0;color:${C.muted};font-size:12px">${esc(footer)}</p>

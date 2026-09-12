@@ -102,6 +102,7 @@ export async function StatusCard({
                   duration: f.duration(state.session.seconds_since_seen),
                 })}
               </dd>
+              <dd className="text-xs text-muted">{d.router.causeAfterReconnect}</dd>
               {staleAlertAt &&
                 usage.last_reading &&
                 new Date(staleAlertAt) > new Date(usage.last_reading.recorded_at) && (

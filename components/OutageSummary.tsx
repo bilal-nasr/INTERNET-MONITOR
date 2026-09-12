@@ -1,7 +1,7 @@
 import { StatTiles, type Tile } from "@/components/stats/chrome";
 import { fill, plural } from "@/lib/i18n";
 import { getI18n } from "@/lib/i18n/server";
-import type { Outage } from "@/lib/outages";
+import { describeSplit, downtimeSplit, type Outage, type OutageWithCauses } from "@/lib/outages";
 
 /**
  * Three figures for the range: how long the link was down in total, the
@@ -14,7 +14,7 @@ export async function OutageSummary({
   rangeSeconds,
   timezone,
 }: {
-  outages: Outage[];
+  outages: OutageWithCauses[];
   /**
    * Downtime between sessions over the range, counted in the database. The same
    * figure the "offline" hint on the totals cards above is drawn from, so the
@@ -45,6 +45,8 @@ export async function OutageSummary({
   const hints = [
     share !== null ? fill(s.downtimeShare, { percent: share.toFixed(share >= 10 ? 0 : 1) }) : null,
     ongoing ? fill(s.includingStillDown, { duration: f.duration(ongoing.seconds) }) : null,
+    // Whose side the listed outages were on, from the router's own evidence.
+    ...describeSplit(downtimeSplit(outages), s, f.duration),
   ].filter((part): part is string => part !== null);
 
   const tiles: Tile[] = [

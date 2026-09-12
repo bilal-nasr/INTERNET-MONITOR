@@ -4,6 +4,8 @@ import { checkCycleAlerts } from "@/lib/alerts/cycle";
 import { badRequest, errorResponse, isCronAuthorized } from "@/lib/api";
 import { getCycleUsageCached } from "@/lib/cycle-cache";
 import { db } from "@/lib/db";
+import { noteRouterStatus, recordRouterEvidence } from "@/lib/outage-cause-store";
+import { evidenceBodyFields, evidenceFromBody } from "@/lib/outage-evidence";
 import { recordReading, storeReading } from "@/lib/readings";
 import { decidePolicy, type Policy } from "@/lib/router/policy";
 import { applySessionEvent } from "@/lib/sessions";
@@ -34,6 +36,8 @@ const bodySchema = z
     router_time: z.string().trim().max(100).optional(),
     running: boolish.optional(),
     disabled: boolish.optional(),
+    /** Outage evidence (lib/outage-evidence.ts). Each field falls back rather than failing the push. */
+    ...evidenceBodyFields,
   })
   .passthrough();
 
@@ -70,6 +74,8 @@ export async function POST(request: Request) {
   try {
     const settings = await getSettings();
     if (!settings.polling_enabled) {
+      // A paused period is not an outage, so the silence it leaves must not be recorded as one.
+      await noteRouterStatus(evidenceFromBody(body, body.running ?? true), new Date());
       return NextResponse.json({
         status: "paused",
         message: "polling_enabled is false; reading discarded",
@@ -147,9 +153,13 @@ export async function POST(request: Request) {
     // reports its own outcome in the response for the router log.
     const cycleCheck = await checkCycleAlerts(settings, now);
 
+    // Last, and never failing the push either: it catches its own errors.
+    const outageEvidence = await recordRouterEvidence(evidenceFromBody(body, running), now);
+
     return NextResponse.json({
       ...result,
       policy,
+      outage_evidence: outageEvidence,
       reported_event: body.event ?? null,
       router_clock_skew_seconds: clockSkewSeconds,
       cycle_check: cycleCheck,

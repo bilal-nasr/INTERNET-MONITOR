@@ -87,6 +87,31 @@ Timestamps come from the server clock, except the moment the link came up, which
 
 The known limit: traffic between the last sample and an unexpected drop cannot be recovered, so a session can under-report by up to one polling interval.
 
+### Outage causes
+
+The router reports over the connection that fails, so while an outage lasts the
+app only sees silence. Every run of `quota-push` therefore also notes, in uptime
+seconds, when it first found the WAN port, the PPPoE link or the netwatch probe
+down, and when it found them back. The push that ends a silence of more than 90
+seconds carries those marks. `lib/outage-cause.ts` turns them into labelled
+stretches, stored in `outage_causes`:
+
+| Label | Evidence | Side |
+| --- | --- | --- |
+| Router off | uptime shorter than the silence (power cut, or the router unplugged); includes the first three minutes after boot | yours |
+| Roof link down | the router stayed up but the WAN port lost its link | yours |
+| No internet from the ISP | the netwatch probe was down | ISP |
+| ISP dropped PPPoE | PPPoE went down with the port up and the probe fine | ISP |
+| Scheduled reconnect | PPPoE drop matched by a `pppoe-reconnect` run | neither |
+| App unreachable | everything was up, only the push failed | not downtime |
+
+The Sessions page labels each outage and splits downtime by side. Silences with
+no outage behind them are listed as monitoring gaps and not counted. Downtime
+totals are unchanged: they still come from the sessions. What happened before a
+reboot cannot be known, because the marks live in memory, so the whole stretch
+before a boot is "router off". Outages from before the router sent this
+evidence show as "cause unknown".
+
 ### Retention
 
 Readings arrive every 30 seconds, about 2,900 rows a day and over a million a
@@ -560,6 +585,9 @@ lib/
   settings.ts            settings read and upsert
   readings.ts            stores a reading and applies the quota window logic
   sessions.ts            link session tracking and reporting
+  outages.ts             outages derived from sessions, with their causes attached
+  outage-cause.ts        pure rules that label a silence from the router's evidence
+  outage-cause-store.ts  router_status and outage_causes reads and writes
   usage.ts               reading queries, reboot-aware usage math, daily history
   stats.ts               every aggregate behind /stats, all computed in Postgres
   report.ts              assembles one statistics payload from those aggregates

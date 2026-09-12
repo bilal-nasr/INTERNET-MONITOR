@@ -26,6 +26,13 @@
     :error "no interface"
 }
 
+# Counted so the app can tell this planned drop from the ISP dropping the link;
+# quota-push sends the count with every push. The watchdog's runs count too,
+# which is harmless: netwatch being down outranks a planned drop.
+:global qpPlanned
+:if ([:typeof $qpPlanned] != "num") do={ :set qpPlanned 0 }
+:set qpPlanned ($qpPlanned + 1)
+
 :log info "pppoe-reconnect: cycling $iface"
 /interface pppoe-client disable [find name=$iface]
 # Long enough for the session to tear down before it is re-established.

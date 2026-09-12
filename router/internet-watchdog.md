@@ -46,3 +46,13 @@ probe at an unroutable address and watch the log:
 # wait ~40s, check Log, then:
 /tool netwatch remove [find name=probe-test]
 ```
+
+## What the app learns from it
+
+`quota-push` reads this probe's `status` on every run, by the name
+`internet-probe`, so keep that name. While the probe is down, the pushes fail.
+The push that finally gets through carries the moment quota-push first saw the
+probe down, and the outage is labelled **No internet from the ISP** on the
+Sessions page, even though the watchdog was cycling PPPoE the whole time.
+Without the probe, those outages show as **ISP dropped PPPoE** or as a
+monitoring gap.
