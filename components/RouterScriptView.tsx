@@ -4,6 +4,7 @@ import { useState } from "react";
 import { CopyButton } from "@/components/CopyButton";
 import { useI18n } from "@/components/I18nProvider";
 import { secondaryButtonClass } from "@/components/auth/fields";
+import { fillScriptSecret } from "@/lib/router/script";
 
 const MASK = "••••••••••••••••";
 
@@ -23,8 +24,11 @@ export function RouterScriptView({
 }) {
   const { d } = useI18n();
   const [revealed, setRevealed] = useState(false);
-  const shown = script.replace("{{secret}}", revealed ? secret : MASK);
-  const real = script.replace("{{secret}}", secret);
+  // Escaped on the way in, exactly as the other values in the script were, so
+  // a secret with a quote, a backslash or a dollar sign still parses on the
+  // router -- and so that what is revealed is what is copied.
+  const shown = fillScriptSecret(script, revealed ? secret : MASK);
+  const real = fillScriptSecret(script, secret);
 
   return (
     <div className="space-y-3">

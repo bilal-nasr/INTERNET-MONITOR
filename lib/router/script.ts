@@ -29,6 +29,24 @@ export function renderQuotaPushScript(vars: ScriptVars): string {
   return out;
 }
 
+/** What the card renders in the secret's place, for the view to swap out. */
+export const SECRET_PLACEHOLDER = "{{secret}}";
+
+/**
+ * Put the real secret into a script that was rendered with the placeholder.
+ *
+ * The card cannot render the secret itself -- the view masks it until it is
+ * asked for -- so the escaping the renderer would have done has to happen
+ * here instead: a secret holding a quote, a backslash or a dollar sign would
+ * otherwise end the RouterOS string, or be read as a variable, and the script
+ * would fail to parse or send the wrong Authorization header. The replacement
+ * is returned from a function for the same reason as in renderQuotaPushScript:
+ * a secret containing "$&" or "$1" must be inserted as itself.
+ */
+export function fillScriptSecret(script: string, secret: string): string {
+  return script.replace(SECRET_PLACEHOLDER, () => escapeRouterOsString(secret));
+}
+
 /**
  * The part of a .rsc file a person pastes into WinBox: everything after the
  * first line of dashes. Line endings are normalised so the same file reads

@@ -59,7 +59,13 @@ export function alertLocale(row: SettingsRow): Locale {
   return isLocale(row.language) ? row.language : DEFAULT_LOCALE;
 }
 
-/** Shape returned to the browser. */
+/**
+ * Shape returned to the browser, and by GET /api/settings.
+ *
+ * `share_token` is deliberately absent: it is a bearer secret, and this is the
+ * object whose name promises it can be served. The settings page hands the
+ * token to its own card from the row, and POST /api/share returns a new one.
+ */
 export interface PublicSettings {
   quota_gb: number;
   monthly_quota_gb: number;
@@ -75,7 +81,6 @@ export interface PublicSettings {
   throttle_on_cap: boolean;
   devices_enabled: boolean;
   retention_days: number;
-  share_token: string | null;
   stale_after_minutes: number;
   digest: string;
   alert_thresholds: number[];
@@ -145,6 +150,23 @@ async function loadSettings(): Promise<SettingsRow> {
   return row;
 }
 
+/**
+ * The share token straight from the database, never the memo.
+ *
+ * Revoking or replacing the link has to take effect at once, and the cached
+ * row is up to `SETTINGS_TTL_MS` old on every instance that did not serve the
+ * write -- several of them, behind one deployment. One indexed read of a
+ * single-row table is the price of a link that stops working when it is told
+ * to. Null while sharing is off; `tokensMatch` refuses that anyway.
+ */
+export async function getShareToken(): Promise<string | null> {
+  const row = await db.oneOrNone<{ share_token: string | null }>(
+    `SELECT share_token FROM settings WHERE id = 1`,
+  );
+  if (!row) throw new SettingsNotSeededError();
+  return row.share_token;
+}
+
 export function toPublicSettings(row: SettingsRow): PublicSettings {
   return {
     quota_gb: row.quota_gb,
@@ -161,7 +183,6 @@ export function toPublicSettings(row: SettingsRow): PublicSettings {
     throttle_on_cap: row.throttle_on_cap,
     devices_enabled: row.devices_enabled,
     retention_days: row.retention_days,
-    share_token: row.share_token,
     stale_after_minutes: row.stale_after_minutes,
     digest: row.digest,
     alert_thresholds: row.alert_thresholds,

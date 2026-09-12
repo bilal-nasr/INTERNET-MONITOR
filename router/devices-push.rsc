@@ -18,6 +18,12 @@
 #
 # Devices are sent in batches of 200 so a large LAN never builds one huge
 # string on a router with 64 MB of RAM.
+#
+# Note on the two functions below: a RouterOS function body ( do={...} ) sees
+# only its own arguments and the globals - never the caller's :local
+# variables. Everything $flush needs is therefore passed in as a named
+# argument, otherwise $url and $secret would be empty inside it and the fetch
+# would fail on an empty URL every time.
 # ----------------------------------------------------------------------------
 :local url    "http://APP-HOST:3000/api/ingest/devices"
 :local secret "PASTE-YOUR-CRON_SECRET-HERE"
@@ -40,16 +46,17 @@
 :local count 0
 :local sent 0
 
+# Posts one batch and logs it. Called as:
+#   $flush items=... count=... url=... secret=... stamp=...
 :local flush do={
-    # $1 = items, $2 = count. Posts one batch and logs it.
-    :local body ("{\"router_time\":\"" . $stamp . "\",\"devices\":[" . $1 . "]}")
+    :local body ("{\"router_time\":\"" . $stamp . "\",\"devices\":[" . $items . "]}")
     :do {
         /tool fetch url=$url http-method=post http-data=$body \
             http-header-field="Content-Type: application/json,Authorization: Bearer $secret" \
             output=none
-        :log info ("devices-push: sent " . $2 . " devices")
+        :log info ("devices-push: sent " . $count . " devices")
     } on-error={
-        :log warning "devices-push: POST to $url failed"
+        :log warning ("devices-push: POST to " . $url . " failed")
     }
 }
 
@@ -81,7 +88,7 @@
         :set count ($count + 1)
 
         :if ($count >= $batchSize) do={
-            $flush $items $count
+            $flush items=$items count=$count url=$url secret=$secret stamp=$stamp
             :set sent ($sent + $count)
             :set items ""
             :set count 0
@@ -90,7 +97,7 @@
 }
 
 :if ($count > 0) do={
-    $flush $items $count
+    $flush items=$items count=$count url=$url secret=$secret stamp=$stamp
     :set sent ($sent + $count)
 }
 :if ($sent = 0) do={ :log info "devices-push: no devices tracked yet (is devices-setup done?)" }

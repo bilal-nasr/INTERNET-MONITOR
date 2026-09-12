@@ -158,3 +158,23 @@ export function parseReadingsJson(text: string): ParseResult {
   });
   return c.result();
 }
+
+/**
+ * A file can repeat a reading; only the first copy is offered to the database.
+ *
+ * Two rows collide when they would land on the same interface at the same
+ * instant, so the key uses the name the row will actually be stored under: a
+ * row from an export written before the `interface_name` column existed
+ * carries null and will be stored under `fallbackInterface`.
+ */
+export function dedupeRows(rows: ImportRow[], fallbackInterface: string): ImportRow[] {
+  const seen = new Set<string>();
+  const out: ImportRow[] = [];
+  for (const row of rows) {
+    const key = `${row.recorded_at.toISOString()}|${row.interface_name ?? fallbackInterface}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(row);
+  }
+  return out;
+}

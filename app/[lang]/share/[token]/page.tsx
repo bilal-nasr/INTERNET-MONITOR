@@ -7,7 +7,7 @@ import { StatusCard } from "@/components/StatusCard";
 import { UsageProgress } from "@/components/UsageProgress";
 import { getI18n } from "@/lib/i18n/server";
 import { getLatestSessionSummary } from "@/lib/sessions";
-import { getSettings } from "@/lib/settings";
+import { getSettings, getShareToken } from "@/lib/settings";
 import { tokensMatch } from "@/lib/share";
 import { getCycleUsage } from "@/lib/stats";
 import { getTodayUsage } from "@/lib/usage";
@@ -21,12 +21,16 @@ export async function generateMetadata(): Promise<Metadata> {
  * The dashboard's three cards, behind the share token instead of a sign-in.
  * A wrong token is a 404: the page neither confirms that sharing is on nor
  * offers a place to try again.
+ *
+ * The token is read from the database, not from the cached settings row: a
+ * link that was replaced or turned off has to stop working now, on every
+ * instance, not when this one's memo happens to lapse.
  */
 export default async function SharePage({ params }: { params: Promise<{ token: string }> }) {
   await connection();
   const { token } = await params;
+  if (!tokensMatch(token, await getShareToken())) notFound();
   const settings = await getSettings();
-  if (!tokensMatch(token, settings.share_token)) notFound();
 
   const { d } = await getI18n();
   const [usage, session, cycle] = await Promise.all([

@@ -12,7 +12,7 @@ import type { ITask } from "pg-promise";
 import { badRequest, errorResponse, rejectUnauthenticated } from "@/lib/api";
 import { db, pgp } from "@/lib/db";
 import { dictionaryFromRequest } from "@/lib/i18n/request";
-import { parseReadingsCsv, parseReadingsJson, type ImportRow } from "@/lib/import/parse";
+import { dedupeRows, parseReadingsCsv, parseReadingsJson, type ImportRow } from "@/lib/import/parse";
 import { getSettings } from "@/lib/settings";
 
 export const maxDuration = 300;
@@ -20,8 +20,11 @@ export const maxDuration = 300;
 const MAX_BYTES = 50 * 1024 * 1024;
 const BATCH = 2000;
 
+// The cast keeps the column's type explicit even when every row in the batch
+// carries a null name, which an export written before the interface_name
+// column existed does.
 const columns = new pgp.helpers.ColumnSet<ImportRow>(
-  ["recorded_at", "tx_bytes", "rx_bytes", "interface_name"],
+  ["recorded_at", "tx_bytes", "rx_bytes", { name: "interface_name", cast: "text" }],
   { table: "interface_readings" },
 );
 
@@ -31,12 +34,25 @@ const columns = new pgp.helpers.ColumnSet<ImportRow>(
  * rather than ON CONFLICT because the table has no unique constraint on
  * (recorded_at, interface_name) and adding one would fail on any existing
  * duplicate the router happened to push twice.
+ *
+ * The name the file gave is what the existence test compares, nulls included,
+ * so a row from an export older than the interface_name column matches the
+ * null-named row it was written from. Only the value being stored falls back
+ * to the configured interface. Substituting before the test instead would
+ * leave every such row matching nothing and inserted a second time, and since
+ * traffic is read as counter growth along a per-interface chain, a second
+ * chain counts the same growth twice.
  */
-async function insertBatch(t: ITask<object>, rows: ImportRow[]): Promise<number> {
+async function insertBatch(t: ITask<object>, rows: ImportRow[], fallback: string): Promise<number> {
   const values = pgp.helpers.values(rows, columns);
+  // Both are written into the statement as finished literals rather than as
+  // parameters: the row values are already formatted into `values`, and a
+  // second formatting pass would look for variables inside them too.
+  const name = pgp.as.text(fallback);
   const result = await t.result(
     `INSERT INTO interface_readings (recorded_at, tx_bytes, rx_bytes, interface_name)
-     SELECT v.recorded_at::timestamptz, v.tx_bytes::bigint, v.rx_bytes::bigint, v.interface_name::text
+     SELECT v.recorded_at::timestamptz, v.tx_bytes::bigint, v.rx_bytes::bigint,
+            COALESCE(v.interface_name::text, ${name})
      FROM (VALUES ${values}) AS v(recorded_at, tx_bytes, rx_bytes, interface_name)
      WHERE NOT EXISTS (
        SELECT 1 FROM interface_readings r
@@ -45,19 +61,6 @@ async function insertBatch(t: ITask<object>, rows: ImportRow[]): Promise<number>
      )`,
   );
   return result.rowCount;
-}
-
-/** A file can repeat a reading; only the first copy is offered to the database. */
-function dedupe(rows: ImportRow[]): ImportRow[] {
-  const seen = new Set<string>();
-  const out: ImportRow[] = [];
-  for (const row of rows) {
-    const key = `${row.recorded_at.toISOString()}|${row.interface_name ?? ""}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(row);
-  }
-  return out;
 }
 
 export async function POST(request: Request) {
@@ -90,14 +93,13 @@ export async function POST(request: Request) {
 
   try {
     const settings = await getSettings();
-    const rows = dedupe(
-      parsed.rows.map((r) => ({ ...r, interface_name: r.interface_name ?? settings.wan_interface_name })),
-    );
+    const fallback = settings.wan_interface_name;
+    const rows = dedupeRows(parsed.rows, fallback);
 
     let inserted = 0;
     await db.tx(async (t) => {
       for (let i = 0; i < rows.length; i += BATCH) {
-        inserted += await insertBatch(t, rows.slice(i, i + BATCH));
+        inserted += await insertBatch(t, rows.slice(i, i + BATCH), fallback);
       }
     });
 

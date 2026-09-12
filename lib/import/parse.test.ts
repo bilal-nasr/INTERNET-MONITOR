@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { MAX_ERRORS, parseReadingsCsv, parseReadingsJson } from "@/lib/import/parse";
+import { dedupeRows, MAX_ERRORS, parseReadingsCsv, parseReadingsJson, type ImportRow } from "@/lib/import/parse";
 
 const HEADER = "recorded_at,tx_bytes,rx_bytes,total_bytes,interface_name";
 
@@ -104,5 +104,36 @@ describe("parseReadingsJson", () => {
     expect(rows).toHaveLength(1);
     expect(rejected).toBe(2);
     expect(errors).toEqual(["item 2: not an object", 'item 3: rx_bytes "undefined" is not a whole number of bytes']);
+  });
+});
+
+describe("dedupeRows", () => {
+  const row = (at: string, interface_name: string | null): ImportRow => ({
+    recorded_at: new Date(at),
+    tx_bytes: 1,
+    rx_bytes: 2,
+    interface_name,
+  });
+
+  test("keeps the first of two readings of the same interface at the same instant", () => {
+    const rows = [row("2026-09-01T10:00:00Z", "ether1"), row("2026-09-01T10:00:00Z", "ether1")];
+    expect(dedupeRows(rows, "pppoe-out1")).toEqual([rows[0]]);
+  });
+
+  test("keeps both when the same instant is two different interfaces", () => {
+    const rows = [row("2026-09-01T10:00:00Z", "ether1"), row("2026-09-01T10:00:00Z", "ether2")];
+    expect(dedupeRows(rows, "pppoe-out1")).toHaveLength(2);
+  });
+
+  test("a nameless row collides with a row already carrying the configured name", () => {
+    // The nameless row will be stored under the fallback, so leaving both in
+    // would insert the same reading twice in one file.
+    const rows = [row("2026-09-01T10:00:00Z", null), row("2026-09-01T10:00:00Z", "pppoe-out1")];
+    expect(dedupeRows(rows, "pppoe-out1")).toEqual([rows[0]]);
+  });
+
+  test("leaves the parsed null in place for the caller's existence test", () => {
+    const rows = [row("2026-09-01T10:00:00Z", null)];
+    expect(dedupeRows(rows, "pppoe-out1")[0].interface_name).toBeNull();
   });
 });

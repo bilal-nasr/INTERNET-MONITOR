@@ -267,14 +267,16 @@ The app never connects to the router, but the router asks the app something ever
 
 Setup, once:
 
-1. Run [`router/throttle-setup.rsc`](router/throttle-setup.rsc) in **New Terminal**. It creates the queue disabled, at 2M/2M; edit `max-limit` to taste.
+1. Run [`router/throttle-setup.rsc`](router/throttle-setup.rsc) in **New Terminal**. It creates the queue disabled, at 2M/2M; edit `maxLimit` to taste. **Check `lanTarget` at the top of that script first.** It defaults to RouterOS's own `192.168.88.0/24`; on a renumbered LAN a queue aimed at the wrong subnet matches nothing and throttles nothing, with no error to tell you. `IP > Addresses` (or `/ip address print`) shows the address on the bridge - `192.168.1.1/24` there means `lanTarget "192.168.1.0/24"`.
 2. Make sure the installed `quota-push` script is the current version (the one on `/settings`), since older versions ignore the reply.
 3. Switch the enforcement toggles on in `/settings`.
 
 Two things to know:
 
 - The default RouterOS configuration fasttracks established connections, and fasttracked packets never reach a queue. The script therefore disables the rule with comment `defconf: fasttrack` while the queue is on, and re-enables it after. On a hEX lite this means every packet goes through the full firewall while throttled, which costs CPU, but only for as long as the throttle lasts.
+- **The throttle is not instant for transfers already running.** Disabling the fasttrack rule only stops *new* connections being fasttracked. A connection that was already fasttracked keeps bypassing the queue until its connection-tracking entry is gone, and for an established TCP download that is `tcp-established-timeout` - one day by default (`/ip firewall connection tracking`). So new connections are limited within 30 seconds, but the big download that blew the quota can keep running at full speed. To cut what is in flight, run `/ip firewall connection remove [find]` from the router terminal; that drops *every* tracked connection, not only the fasttracked ones, so VoIP calls and SSH sessions have to re-establish. The script does not do this by itself for that reason.
 - The decision is made on the server and only re-evaluated on the next push. When the window closes or the cycle rolls over, the throttle lifts on the first push afterwards, at most 30 seconds later. The monthly figure is cached for five minutes on the server, so the cap throttle can start up to five minutes after the cap is crossed.
+- **The throttle fails open.** The policy is applied outside the fetch, so a push that fails - app down, database down, rotated `CRON_SECRET` answering 401, changed URL - cannot leave the house throttled forever. Six consecutive failures (three minutes at a 30 second interval) lift the throttle: the queue is disabled and the fasttrack rule re-enabled, and the log shows `quota-push: throttle OFF`. The app can only hold the throttle on while it is reachable. Change `failLimit` at the top of the script to trade recovery speed against tolerance for blips.
 
 If the queue does not exist the script does nothing about the policy and logs nothing, so the setting is harmless until the router is ready.
 ### Per-device usage
@@ -289,10 +291,16 @@ Preconditions, all verified on a hEX lite running RouterOS 7.24.2:
   least one kid-control entry exists. `router/devices-setup.rsc` adds a placeholder
   entry named `all-devices` that restricts nothing.
 - Kid-control counts inside the firewall, and the default fasttrack rule lets
-  established connections skip the firewall. The setup script therefore disables the
-  `defconf: fasttrack` rule. On a hEX lite this raises CPU load noticeably under heavy
-  traffic; it is the price of per-device figures. To go back, run the two undo lines at
-  the bottom of the setup script and turn the setting off.
+  established connections skip the firewall, so the per-device counters may stay near
+  zero with fasttrack on. That is the common report but it was not verified on this
+  hardware, and turning fasttrack off needlessly costs real CPU on a hEX lite. So the
+  setup script does **not** disable it for you: it has a `disableFasttrack` switch at
+  the top, defaulting to `"no"`. Run the script, use the internet for a few minutes,
+  then look at **IP > Kid Control > Devices** (`/ip kid-control device print detail`).
+  If Bytes Up/Down are rising, leave fasttrack alone. If they are stuck at zero while
+  the WAN counters climb, set `disableFasttrack` to `"yes"`, run the script again and
+  check once more. To go back, run the two undo lines at the bottom of the setup script
+  and turn the setting off.
 - A downstream router in NAT mode (an Archer AX55 Pro on this network) hides its clients
   behind one MAC. Only devices the MikroTik hands addresses to appear separately. In
   access-point mode every client shows up on its own.
