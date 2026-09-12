@@ -218,6 +218,12 @@ Set the same interface name on `/settings` so the dashboard labels it correctly.
 
 The script reports `session_start`, `session_end` and `session_restart` alongside each sample, which is what fills the `/sessions` page. A failed POST is retried on the next run rather than lost.
 
+### Install on a phone
+
+The dashboard is installable: open it in Chrome on Android or Safari on iOS and choose
+"Add to Home Screen". It opens full screen in the language you last used. It needs HTTPS,
+which a Vercel deployment or any reverse proxy with a certificate provides.
+
 ### Starting a fresh session on purpose
 
 A session ends and a new one begins whenever the WAN link drops, with no configuration needed. Two optional scripts add the other cases:
@@ -302,6 +308,32 @@ Setup:
 Names come from the DHCP lease's host-name; rename any device on the page. Usage is the
 growth of each device's counter between pushes, so a router reboot loses at most one
 minute. Pushes are batched at 200 devices.
+## Sharing
+
+The Sharing section on `/settings` creates a read-only link, `/<lang>/share/<token>`, that shows
+the dashboard's three cards (today's window, the router, the billing cycle) to anyone holding it,
+with no sign-in. It never shows settings, history or the sessions page. Replacing the link stops
+the old one working; turning sharing off does the same. The token is a secret: treat the link
+like a password and replace it if it leaks.
+
+The same token serves `GET /api/share/<token>/usage`, which returns today's usage and the cycle
+figures as JSON. A Home Assistant REST sensor can read it:
+
+```yaml
+rest:
+  - resource: https://netmonitor.example.com/api/share/<token>/usage
+    scan_interval: 60
+    sensor:
+      - name: "Internet used today"
+        unit_of_measurement: "GB"
+        value_template: "{{ (value_json.today.used_since_baseline / 1e9) | round(2) }}"
+      - name: "Internet cycle used"
+        unit_of_measurement: "%"
+        value_template: "{{ value_json.cycle.percent_of_cap | round(1) }}"
+```
+
+Signed-in browsers are listed further down the same page; any of them can be signed out from
+there, and "Sign out everywhere else" drops all but the current one.
 
 ## Languages
 
@@ -353,6 +385,10 @@ so they follow the `language` column in `settings` rather than a URL. Set it on 
 | `POST` | `/api/auth/password` | `{ "current_password", "new_password", "confirm_password" }`. Signs other browsers out. |
 | `POST` | `/api/auth/forgot` | `{ "username" }`. Emails a one-hour reset link. Always `200`, so accounts cannot be enumerated. |
 | `POST` | `/api/auth/reset` | `{ "token", "password", "confirm_password" }` from the emailed link. |
+| `GET` `DELETE` | `/api/auth/sessions` | The browsers signed in to the account; `DELETE` signs every other one out. |
+| `DELETE` | `/api/auth/sessions/{id}` | Signs one browser out. `400` for the caller's own session, `404` when it is already gone. |
+| `POST` `DELETE` | `/api/share` | Creates or replaces the read-only link (`{ "token", "url" }`), or turns sharing off. |
+| `GET` | `/api/share/{token}/usage` | Public. Today's window usage and the billing cycle as JSON, for Home Assistant and similar. `404` for a wrong token. |
 
 Any route that can reject a request takes an optional `lang` (`en` or `ar`), and answers in
 that language; without it the `NEXT_LOCALE` cookie and then `Accept-Language` decide. The
@@ -363,6 +399,8 @@ probe, neither of which has a language.
 Every route not listed under `/api/auth`, `/api/ingest`, `/api/health` or `/api/cron/tick`
 answers `401` `unauthorized` without a live session cookie; those four take a bearer token or
 nothing at all.
+Every route not listed under `/api/auth`, `/api/ingest`, `/api/health` or `/api/share/{token}` answers `401`
+`unauthorized` without a live session cookie.
 
 ### Ranges
 

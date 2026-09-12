@@ -29,6 +29,7 @@ import { dictionaryFromRequest } from "@/lib/i18n/request";
  * neither is sent to the login page (a page) or answered 401 (the API). The
  * router's push to /api/ingest carries a bearer token instead and is let
  * through untouched, as are the health probe and the auth endpoints themselves.
+ * The share page and its feed carry a token in the path and check it themselves.
  *
  * What the lookup found is handed to the page in a request header, so the
  * render does not repeat it. Every forwarded request has that header rewritten
@@ -50,8 +51,14 @@ const PUBLIC_API = new Set([
   "/api/auth/reset",
 ]);
 
+/**
+ * Route prefixes that carry their own credential in the path. The share feed
+ * checks its token itself; the proxy only has to stand aside.
+ */
+const PUBLIC_API_PREFIXES = ["/api/share/"];
+
 /** Page segments under /[lang] that render signed out. */
-const PUBLIC_PAGES = new Set(["login", "forgot-password", "reset-password"]);
+const PUBLIC_PAGES = new Set(["login", "forgot-password", "reset-password", "share"]);
 
 interface Session {
   context: AuthContext;
@@ -118,7 +125,8 @@ function proceed(request: NextRequest, session: Session, secure: boolean): NextR
 
 async function handleApi(request: NextRequest): Promise<NextResponse> {
   const { pathname } = request.nextUrl;
-  if (PUBLIC_API.has(pathname)) return passThrough(request);
+  if (PUBLIC_API.has(pathname) || PUBLIC_API_PREFIXES.some((prefix) => pathname.startsWith(prefix)))
+    return passThrough(request);
 
   const secure = isSecureRequest(request);
   const session = await resolveSession(request);

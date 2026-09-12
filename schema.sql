@@ -197,6 +197,10 @@ CREATE TABLE IF NOT EXISTS device_readings (
 -- Retention. A database upgraded from an earlier release keeps ninety days of
 -- full detail, which is what a fresh one gets too.
 ALTER TABLE settings ADD COLUMN IF NOT EXISTS retention_days INTEGER NOT NULL DEFAULT 90;
+-- Read-only share link. NULL means sharing is off. The value is a bearer
+-- secret compared in constant time by the share page and its JSON feed; it is
+-- written only by POST/DELETE /api/share, never through PUT /api/settings.
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS share_token TEXT;
 
 -- Scheduled checks (plan 02). stale_after_minutes = 0 disables the
 -- "router has gone quiet" alert. digest picks the scheduled summary.
