@@ -11,7 +11,7 @@
 
 import { dispatchAlert } from "@/lib/alerts/dispatch";
 import { latestAlert } from "@/lib/alerts/log";
-import { JOBS, type Job, type JobContext, type JobResult } from "@/lib/cron/jobs";
+import { registerJob, type Job, type JobContext, type JobResult } from "@/lib/cron/jobs";
 import { isStale } from "@/lib/cron/schedule";
 import { decideStaleAction } from "@/lib/cron/stale-decision";
 import { renderLinkEmail } from "@/lib/email-link-template";
@@ -101,4 +101,4 @@ async function run({ now, settings }: JobContext): Promise<JobResult> {
 
 export const staleJob: Job = { name: "stale", run };
 
-JOBS.push(staleJob);
+registerJob(staleJob);
