@@ -8,25 +8,12 @@ import { findUserByUsername } from "@/lib/auth/users";
 import { sendPasswordResetEmail } from "@/lib/email";
 import { fill } from "@/lib/i18n";
 import { dictionaryFromRequest, localeFromRequest } from "@/lib/i18n/request";
+import { publicBaseUrl } from "@/lib/public-url";
 import { getSettings } from "@/lib/settings";
 
 const bodySchema = z.object({
   username: z.string().trim().min(1).max(100),
 });
-
-/**
- * Where the reset link points. APP_URL when the operator set one, since that
- * is the address they want in an email; otherwise the address this request
- * arrived on, honouring a reverse proxy's forwarded headers.
- */
-function publicBaseUrl(request: Request): string {
-  const configured = process.env.APP_URL?.trim().replace(/\/+$/, "");
-  if (configured) return configured;
-  const url = new URL(request.url);
-  const proto = request.headers.get("x-forwarded-proto")?.split(",")[0].trim() || url.protocol.replace(":", "");
-  const host = request.headers.get("x-forwarded-host")?.split(",")[0].trim() || request.headers.get("host") || url.host;
-  return `${proto}://${host}`;
-}
 
 /**
  * Email a reset link. The answer is the same whether or not the username
