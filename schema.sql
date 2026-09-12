@@ -143,6 +143,43 @@ ALTER TABLE settings ADD COLUMN IF NOT EXISTS billing_cycle_day INTEGER NOT NULL
 -- English alerts until /settings says otherwise.
 ALTER TABLE settings ADD COLUMN IF NOT EXISTS language TEXT NOT NULL DEFAULT 'en';
 
+-- Alert marks. Percent of the daily quota (and of the monthly cap) at which a
+-- mail goes out. 100 is the "exceeded" alert that has always existed; the
+-- defaults add two earlier warnings. Sorted ascending, each 1..100, unique.
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS alert_thresholds       INTEGER[] NOT NULL DEFAULT '{50,80,100}';
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS cycle_alert_thresholds INTEGER[] NOT NULL DEFAULT '{80,100}';
+-- One mail per cycle when the projection first says the cap will be exhausted.
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS cycle_pace_alert       BOOLEAN NOT NULL DEFAULT true;
+
+-- The highest threshold percent already mailed for the day. `notified` stays
+-- for older queries and is true exactly when notified_level >= 100.
+ALTER TABLE daily_windows ADD COLUMN IF NOT EXISTS notified_level INTEGER NOT NULL DEFAULT 0;
+UPDATE daily_windows SET notified_level = 100 WHERE notified AND notified_level < 100;
+
+-- Every alert ever sent, failed or skipped, one row each. `channel` exists so a
+-- second channel can be added later without a migration.
+CREATE TABLE IF NOT EXISTS alerts (
+  id          SERIAL PRIMARY KEY,
+  kind        TEXT NOT NULL,
+  level       INTEGER,
+  scope_key   TEXT NOT NULL,
+  channel     TEXT NOT NULL DEFAULT 'email',
+  recipient   TEXT,
+  subject     TEXT NOT NULL,
+  status      TEXT NOT NULL CHECK (status IN ('sent', 'failed', 'skipped')),
+  error       TEXT,
+  payload     JSONB,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Per-cycle alert state, keyed by the local date the cycle began.
+CREATE TABLE IF NOT EXISTS cycle_alerts (
+  cycle_start     DATE PRIMARY KEY,
+  notified_level  INTEGER NOT NULL DEFAULT 0,
+  pace_notified   BOOLEAN NOT NULL DEFAULT false,
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 -- CHECK constraints have no IF NOT EXISTS, so add them only when missing.
 DO $$
 BEGIN
@@ -157,6 +194,14 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'settings_language_check') THEN
     ALTER TABLE settings ADD CONSTRAINT settings_language_check
       CHECK (language IN ('en', 'ar'));
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'settings_alert_thresholds_check') THEN
+    ALTER TABLE settings ADD CONSTRAINT settings_alert_thresholds_check
+      CHECK (cardinality(alert_thresholds) BETWEEN 0 AND 8);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'settings_cycle_alert_thresholds_check') THEN
+    ALTER TABLE settings ADD CONSTRAINT settings_cycle_alert_thresholds_check
+      CHECK (cardinality(cycle_alert_thresholds) BETWEEN 0 AND 8);
   END IF;
 END
 $$;
@@ -184,6 +229,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS sessions_single_open_idx
 
 CREATE INDEX IF NOT EXISTS auth_sessions_user_id_idx ON auth_sessions (user_id);
 CREATE INDEX IF NOT EXISTS password_resets_user_id_idx ON password_resets (user_id);
+
+CREATE INDEX IF NOT EXISTS alerts_created_at_idx ON alerts (created_at DESC);
+CREATE INDEX IF NOT EXISTS alerts_kind_scope_idx ON alerts (kind, scope_key);
 
 -- ------------------------------------------------------------------ seed ----
 
