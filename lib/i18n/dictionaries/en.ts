@@ -440,7 +440,7 @@ export const en = {
     title: "Export readings",
     subtitle: "Download raw interface counter readings for a date range.",
     columnsHint:
-      "Dates are inclusive and interpreted in the timezone from Settings. Columns: recorded_at (ISO 8601 UTC), tx_bytes, rx_bytes, total_bytes.",
+      "Dates are inclusive and interpreted in the timezone from Settings. Columns: recorded_at (ISO 8601 UTC), tx_bytes, rx_bytes, total_bytes, interface_name.",
     pickBothDates: "Pick both dates.",
     startBeforeEnd: "The start date must be on or before the end date.",
     downloadCsv: "Download CSV",

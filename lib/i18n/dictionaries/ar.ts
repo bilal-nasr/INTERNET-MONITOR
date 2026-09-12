@@ -416,7 +416,7 @@ export const ar = {
     title: "تصدير القراءات",
     subtitle: "نزّل قراءات عدّادات الواجهة الخام لفترة محددة.",
     columnsHint:
-      "التاريخان محتسبان بالكامل ويُفسَّران بالمنطقة الزمنية المحددة في الإعدادات. الأعمدة: recorded_at (بصيغة ISO 8601 وبتوقيت UTC)، tx_bytes، rx_bytes، total_bytes.",
+      "التاريخان محتسبان بالكامل ويُفسَّران بالمنطقة الزمنية المحددة في الإعدادات. الأعمدة: recorded_at (بصيغة ISO 8601 وبتوقيت UTC)، tx_bytes، rx_bytes، total_bytes، interface_name.",
     pickBothDates: "اختر التاريخين معاً.",
     startBeforeEnd: "يجب أن يكون تاريخ البداية في نفس يوم النهاية أو قبله.",
     downloadCsv: "تنزيل CSV",
