@@ -2,7 +2,7 @@
  * The settings page's tabs, in display order. The page reads `?tab=` against
  * this list, so a link can open a tab directly (`/settings?tab=router`).
  */
-export const SETTINGS_TABS = ["limits", "alerts", "router", "data", "account"] as const;
+export const SETTINGS_TABS = ["limits", "alerts", "router", "data", "appearance", "account"] as const;
 
 export type SettingsTab = (typeof SETTINGS_TABS)[number];
 

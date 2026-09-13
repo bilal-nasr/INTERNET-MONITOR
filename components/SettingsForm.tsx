@@ -14,6 +14,7 @@ import {
 import { useI18n } from "@/components/I18nProvider";
 import { Toast, type ToastState } from "@/components/Toast";
 import { hintClass, inputClass, labelClass, secondaryButtonClass } from "@/components/auth/fields";
+import { AppearanceCard } from "@/components/settings/AppearanceCard";
 import { SettingsCard } from "@/components/settings/SettingsCard";
 import { SETTINGS_TABS, isSettingsTab, type SettingsTab } from "@/components/settings/tabs";
 import { Interpolate } from "@/lib/i18n/react";
@@ -129,8 +130,8 @@ const primaryButtonClass =
 
 /**
  * The settings page body: the tab list, the settings form spread over the
- * first four tabs, and the sharing card and account panel, which save on their
- * own and are passed in already rendered.
+ * first four tabs, and the sharing card, appearance card and account panel,
+ * which save on their own.
  *
  * Every panel stays mounted and is only hidden, so switching tabs never loses
  * an edit. Saving is one request for all four form tabs; a bar at the foot of
@@ -330,6 +331,7 @@ export function SettingsForm({
     alerts: { label: t.alerts, hint: t.alertsHint },
     router: { label: t.router, hint: t.routerHint },
     data: { label: t.data, hint: t.dataHint },
+    appearance: { label: t.appearance, hint: t.appearanceHint },
     account: { label: t.account, hint: t.accountHint },
   };
 
@@ -760,6 +762,7 @@ export function SettingsForm({
           )}
         </form>
 
+        {panel("appearance", <AppearanceCard />)}
         {panel("account", account)}
       </div>
 

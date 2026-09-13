@@ -74,7 +74,9 @@ export function Turnstile({
           sitekey: siteKey,
           action,
           language: locale,
-          theme: "auto",
+          // "auto" follows the device, which is wrong once the appearance
+          // setting overrides it; the page's own theme is on <html>.
+          theme: document.documentElement.dataset.theme ?? "auto",
           size: "flexible",
           callback: (token: string) => report.current(token),
           "expired-callback": () => report.current(null),

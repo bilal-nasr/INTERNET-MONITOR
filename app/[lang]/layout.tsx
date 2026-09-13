@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Cairo } from "next/font/google";
 import { I18nProvider } from "@/components/I18nProvider";
+import { APPEARANCE_SCRIPT } from "@/lib/appearance";
 import { DIRECTION, LOCALES } from "@/lib/i18n/config";
 import { getI18n } from "@/lib/i18n/server";
 import "../globals.css";
@@ -59,12 +60,18 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const { locale, d } = await getI18n();
   const dir = DIRECTION[locale];
 
+  // suppressHydrationWarning: the appearance script sets data-theme on <html>
+  // before React hydrates, and the DOM is meant to win.
   return (
     <html
       lang={locale}
       dir={dir}
       className={`${geistSans.variable} ${geistMono.variable} ${cairo.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: APPEARANCE_SCRIPT }} />
+      </head>
       <body className="min-h-full flex flex-col font-sans">
         <I18nProvider locale={locale} dictionary={d}>
           {children}

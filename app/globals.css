@@ -1,6 +1,22 @@
 @import "tailwindcss";
 
 /*
+ * Dark mode is the device's setting unless the appearance setting overrides it
+ * with `data-theme` on <html> (lib/appearance.ts). One variant serves both the
+ * palette below and every `dark:` class, so the two can never disagree.
+ */
+@custom-variant dark {
+  &:where([data-theme="dark"], [data-theme="dark"] *) {
+    @slot;
+  }
+  @media (prefers-color-scheme: dark) {
+    &:where(:root:not([data-theme="light"]), :root:not([data-theme="light"]) *) {
+      @slot;
+    }
+  }
+}
+
+/*
  * Chart colours come from a validated categorical palette: download is slot 1
  * (blue), upload is slot 2 (orange). The pair clears colourblind separation and
  * contrast against both surfaces, and every chart that uses it also carries a
@@ -63,8 +79,8 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
+:root {
+  @variant dark {
     --background: #121211;
     --foreground: #ededed;
     --surface: #1a1a19;
@@ -94,7 +110,10 @@
  * follow the theme instead of staying light-mode grey on a dark page.
  */
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
+  @variant dark {
+    color-scheme: dark;
+  }
 }
 
 /*
