@@ -24,9 +24,23 @@ import {
   rangeErrorMessage,
   resolveRange,
   type BucketUnit,
+  type ResolvedRange,
 } from "@/lib/range";
-import { buildStatsReport, type StatsReport } from "@/lib/report";
-import { getSettings } from "@/lib/settings";
+import {
+  describeStatsReport,
+  isStatsView,
+  loadOverviewFigures,
+  loadPatternFigures,
+  loadQuotaFigures,
+  loadReliabilityFigures,
+  type OverviewFigures,
+  type PatternFigures,
+  type QuotaFigures,
+  type ReliabilityFigures,
+  type StatsReportHead,
+  type StatsView,
+} from "@/lib/report";
+import { getSettings, type SettingsRow } from "@/lib/settings";
 
 export async function generateMetadata(): Promise<Metadata> {
   const { d } = await getI18n();
@@ -37,12 +51,6 @@ type Search = Record<string, string | string[] | undefined>;
 
 function one(value: string | string[] | undefined): string | null {
   return Array.isArray(value) ? (value[0] ?? null) : (value ?? null);
-}
-
-const STATS_VIEWS = ["overview", "patterns", "reliability", "quota"] as const;
-
-function isStatsView(value: unknown): value is (typeof STATS_VIEWS)[number] {
-  return typeof value === "string" && (STATS_VIEWS as readonly string[]).includes(value);
 }
 
 /** What the tile builders below need: the numbers, plus how to write them. */
@@ -80,10 +88,13 @@ export default async function StatsPage({ searchParams }: { searchParams: Promis
     range = resolveRange({ range: DEFAULT_PRESET }, options);
   }
 
-  const report = await buildStatsReport(settings, range, d);
-  // Judged on window-only usage, which is what the compliance chart draws, so a
-  // flagged bar and a flagged line describe the same number.
-  const anomalies = flagAnomalies(report.compliance.days);
+  // Settings and range only: the heading costs no query, so the page shell
+  // never waits on a figure.
+  const report = describeStatsReport(settings, range, d);
+  const requested = one(params.view);
+  const view: StatsView = isStatsView(requested) ? requested : "overview";
+  // Views already opened are kept while the range stays the same.
+  const cacheKey = [range.preset, range.from_input ?? "", range.to_input ?? "", range.bucket].join("|");
 
   return (
     <div className="space-y-6">
@@ -110,110 +121,24 @@ export default async function StatsPage({ searchParams }: { searchParams: Promis
 
       {/* Four views over the same range, so the picker above stays put while
           the page below it is one screenful at a time instead of all twenty
-          charts in a row. */}
+          charts in a row. Only the open view is read from the database. */}
       <Tabs
         param="view"
         label={d.stats.tabs.label}
-        initial={isStatsView(params.view) ? params.view : "overview"}
+        current={view}
+        cacheKey={cacheKey}
         tabs={[
-          {
-            id: "overview",
-            label: d.stats.tabs.overview,
-            content: (
-              <>
-                <StatTiles tiles={volumeTiles(report, w)} />
-                <div className="grid gap-6 lg:grid-cols-[3fr_2fr]">
-                  <Card
-                    title={fill(d.stats.trafficOverTime, {
-                      bucket: d.buckets[report.range.bucket as BucketUnit],
-                    })}
-                    hint={fill(d.common.readingsCount, { count: f.count(report.summary.readings) })}
-                  >
-                    <UsageTimeline
-                      series={report.series}
-                      bucket={report.range.bucket as BucketUnit}
-                      totals={report.summary}
-                    />
-                  </Card>
-                  <Card title={d.stats.downloadAndUpload} hint={d.stats.shareOfTotal}>
-                    <TrafficSplitDonut rxBytes={report.summary.rx_bytes} txBytes={report.summary.tx_bytes} />
-                  </Card>
-                </div>
-              </>
-            ),
-          },
-          {
-            id: "patterns",
-            label: d.stats.tabs.patterns,
-            content: (
-              <>
-                <StatTiles tiles={patternTiles(report, w)} columns={3} />
-                <Card title={d.stats.trafficByWeekdayAndHour} hint={d.stats.localTime}>
-                  <UsageHeatmap cells={report.heatmap} />
-                </Card>
-                <div className="grid gap-6 lg:grid-cols-2">
-                  <Card title={d.stats.trafficByHour}>
-                    <HourProfileChart hours={report.hours} />
-                  </Card>
-                  <Card title={d.stats.trafficByWeekday}>
-                    <WeekdayProfileChart weekdays={report.weekdays} />
-                  </Card>
-                </div>
-              </>
-            ),
-          },
-          {
-            id: "reliability",
-            label: d.stats.tabs.reliability,
-            content: (
-              <>
-                <StatTiles tiles={reliabilityTiles(report, w)} />
-                <div className="grid gap-6 lg:grid-cols-2">
-                  <Card title={d.stats.timeOnline} hint={d.stats.timeOnlineHint}>
-                    <AvailabilityDonut
-                      uptimeSeconds={report.sessions.uptime_seconds}
-                      downtimeSeconds={report.sessions.downtime_seconds}
-                      availability={report.sessions.availability}
-                    />
-                  </Card>
-                  <Card title={d.stats.sessionLengths}>
-                    <DurationChart durations={report.durations} />
-                  </Card>
-                </div>
-                <Card title={d.stats.heaviestSessions} hint={d.stats.topTenByTraffic}>
-                  <TopSessionsTable sessions={report.top_sessions} timezone={report.timezone} />
-                </Card>
-              </>
-            ),
-          },
-          {
-            id: "quota",
-            label: d.stats.tabs.quota,
-            content: (
-              <>
-                <StatTiles tiles={complianceTiles(report, w)} />
-                <Card
-                  title={d.stats.dailyUsageInWindow}
-                  hint={fill(d.stats.dailyUsageInWindowHint, {
-                    start: report.quota.window_start,
-                    end: report.quota.window_end,
-                    quota: report.quota.daily_gb,
-                  })}
-                >
-                  <ComplianceChart compliance={report.compliance} />
-                </Card>
-                <AnomalyList flags={anomalies} />
-                <CycleGauge cycle={report.cycle} timezone={report.timezone} />
-                <Card
-                  title={d.stats.consumptionPerCycle}
-                  hint={fill(d.stats.cycleStartsOnDay, { day: report.quota.cycle_day })}
-                >
-                  <CycleHistoryChart cycles={report.cycle_history} capGb={report.quota.monthly_gb} />
-                </Card>
-              </>
-            ),
-          },
+          { id: "overview", label: d.stats.tabs.overview },
+          { id: "patterns", label: d.stats.tabs.patterns },
+          { id: "reliability", label: d.stats.tabs.reliability },
+          { id: "quota", label: d.stats.tabs.quota },
         ]}
+        fallback={<PanelSkeleton />}
+        // Awaited, not wrapped in Suspense: Tabs keeps this element to show
+        // again later, and a boundary still streaming inside a kept element is
+        // never revealed. One view's queries take a single round trip, and the
+        // skeleton above covers the wait when a tab is opened.
+        content={await StatsPanel({ view, settings, range, report, w })}
       />
 
       <p className="text-xs text-muted">{d.stats.methodology}</p>
@@ -221,7 +146,142 @@ export default async function StatsPage({ searchParams }: { searchParams: Promis
   );
 }
 
-function describeRange(report: StatsReport, f: Formatters, d: Dictionary): string {
+/**
+ * One view of the page, reading only the figures that view draws. The other
+ * views' queries do not run until their tab is opened (components/Tabs.tsx).
+ */
+async function StatsPanel({
+  view,
+  settings,
+  range,
+  report,
+  w,
+}: {
+  view: StatsView;
+  settings: SettingsRow;
+  range: ResolvedRange;
+  report: StatsReportHead;
+  w: Words;
+}) {
+  const { d, f } = w;
+
+  if (view === "patterns") {
+    const figures = await loadPatternFigures(settings, range, d);
+    return (
+      <>
+        <StatTiles tiles={patternTiles(figures, report, w)} columns={3} />
+        <Card title={d.stats.trafficByWeekdayAndHour} hint={d.stats.localTime}>
+          <UsageHeatmap cells={figures.heatmap} />
+        </Card>
+        <div className="grid gap-6 lg:grid-cols-2">
+          <Card title={d.stats.trafficByHour}>
+            <HourProfileChart hours={figures.hours} />
+          </Card>
+          <Card title={d.stats.trafficByWeekday}>
+            <WeekdayProfileChart weekdays={figures.weekdays} />
+          </Card>
+        </div>
+      </>
+    );
+  }
+
+  if (view === "reliability") {
+    const figures = await loadReliabilityFigures(range, d);
+    return (
+      <>
+        <StatTiles tiles={reliabilityTiles(figures, w)} />
+        <div className="grid gap-6 lg:grid-cols-2">
+          <Card title={d.stats.timeOnline} hint={d.stats.timeOnlineHint}>
+            <AvailabilityDonut
+              uptimeSeconds={figures.sessions.uptime_seconds}
+              downtimeSeconds={figures.sessions.downtime_seconds}
+              availability={figures.sessions.availability}
+            />
+          </Card>
+          <Card title={d.stats.sessionLengths}>
+            <DurationChart durations={figures.durations} />
+          </Card>
+        </div>
+        <Card title={d.stats.heaviestSessions} hint={d.stats.topTenByTraffic}>
+          <TopSessionsTable sessions={figures.top_sessions} timezone={report.timezone} />
+        </Card>
+      </>
+    );
+  }
+
+  if (view === "quota") {
+    const figures = await loadQuotaFigures(settings, range);
+    // Judged on window-only usage, which is what the compliance chart draws, so a
+    // flagged bar and a flagged line describe the same number.
+    const anomalies = flagAnomalies(figures.compliance.days);
+    return (
+      <>
+        <StatTiles tiles={complianceTiles(figures, w)} />
+        <Card
+          title={d.stats.dailyUsageInWindow}
+          hint={fill(d.stats.dailyUsageInWindowHint, {
+            start: report.quota.window_start,
+            end: report.quota.window_end,
+            quota: report.quota.daily_gb,
+          })}
+        >
+          <ComplianceChart compliance={figures.compliance} />
+        </Card>
+        <AnomalyList flags={anomalies} />
+        <CycleGauge cycle={figures.cycle} timezone={report.timezone} />
+        <Card
+          title={d.stats.consumptionPerCycle}
+          hint={fill(d.stats.cycleStartsOnDay, { day: report.quota.cycle_day })}
+        >
+          <CycleHistoryChart cycles={figures.cycle_history} capGb={report.quota.monthly_gb} />
+        </Card>
+      </>
+    );
+  }
+
+  const figures = await loadOverviewFigures(settings, range);
+  return (
+    <>
+      <StatTiles tiles={volumeTiles(figures, w)} />
+      <div className="grid gap-6 lg:grid-cols-[3fr_2fr]">
+        <Card
+          title={fill(d.stats.trafficOverTime, {
+            bucket: d.buckets[report.range.bucket as BucketUnit],
+          })}
+          hint={fill(d.common.readingsCount, { count: f.count(figures.summary.readings) })}
+        >
+          <UsageTimeline
+            series={figures.series}
+            bucket={report.range.bucket as BucketUnit}
+            totals={figures.summary}
+          />
+        </Card>
+        <Card title={d.stats.downloadAndUpload} hint={d.stats.shareOfTotal}>
+          <TrafficSplitDonut rxBytes={figures.summary.rx_bytes} txBytes={figures.summary.tx_bytes} />
+        </Card>
+      </div>
+    </>
+  );
+}
+
+/** Stands in for a view while its figures are read: a row of tiles and two cards. */
+function PanelSkeleton() {
+  return (
+    <div className="animate-pulse space-y-6" aria-busy="true">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+        {Array.from({ length: 4 }, (_, i) => (
+          <div key={i} className="h-[5.5rem] rounded-xl border border-border bg-surface" />
+        ))}
+      </div>
+      <div className="grid gap-6 lg:grid-cols-[3fr_2fr]">
+        <div className="h-72 rounded-xl border border-border bg-surface" />
+        <div className="h-72 rounded-xl border border-border bg-surface" />
+      </div>
+    </div>
+  );
+}
+
+function describeRange(report: StatsReportHead, f: Formatters, d: Dictionary): string {
   return fill(d.stats.rangeSpan, {
     start: f.dayMonthClock(report.range.from!, report.timezone),
     end: f.dayMonthClock(report.range.to, report.timezone),
@@ -232,7 +292,7 @@ function perSecond(bytes: number): string {
   return `${formatBytes(bytes, 1)}/s`;
 }
 
-function volumeTiles(report: StatsReport, { d, f }: Words): Tile[] {
+function volumeTiles(report: OverviewFigures, { d, f }: Words): Tile[] {
   const { summary, cycle } = report;
   return [
     {
@@ -262,7 +322,7 @@ function volumeTiles(report: StatsReport, { d, f }: Words): Tile[] {
   ];
 }
 
-function patternTiles(report: StatsReport, { d, f }: Words): Tile[] {
+function patternTiles(report: PatternFigures, head: StatsReportHead, { d, f }: Words): Tile[] {
   const { summary, peak } = report;
   const busiestHour = report.hours.reduce((best, h) => (h.total_bytes > best.total_bytes ? h : best));
   const busiestDay = report.weekdays.reduce((best, x) => (x.total_bytes > best.total_bytes ? x : best));
@@ -302,14 +362,14 @@ function patternTiles(report: StatsReport, { d, f }: Words): Tile[] {
       value: f.count(summary.readings),
       hint: summary.last_reading_at
         ? fill(d.stats.tiles.lastReadingAt, {
-            time: f.clock(summary.last_reading_at, report.timezone),
+            time: f.clock(summary.last_reading_at, head.timezone),
           })
         : d.stats.tiles.noneYet,
     },
   ];
 }
 
-function reliabilityTiles(report: StatsReport, { locale, d, f }: Words): Tile[] {
+function reliabilityTiles(report: ReliabilityFigures, { locale, d, f }: Words): Tile[] {
   const s = report.sessions;
   return [
     {
@@ -343,7 +403,7 @@ function reliabilityTiles(report: StatsReport, { locale, d, f }: Words): Tile[] 
   ];
 }
 
-function complianceTiles(report: StatsReport, { locale, d, f }: Words): Tile[] {
+function complianceTiles(report: QuotaFigures, { locale, d, f }: Words): Tile[] {
   const c = report.compliance;
   return [
     {

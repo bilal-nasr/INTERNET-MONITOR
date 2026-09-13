@@ -7,6 +7,7 @@
  */
 
 import { db } from "@/lib/db";
+import { OTHERS_KEY } from "@/lib/devices/chart";
 import type { BucketUnit } from "@/lib/range";
 import type { RangeParams } from "@/lib/stats";
 
@@ -105,17 +106,31 @@ export interface DeviceSeriesPoint {
   readings: number;
 }
 
-/** Bucketed traffic for the listed devices only; buckets with no readings are absent. */
+/**
+ * Bucketed traffic for the `top` busiest devices of the range, each under its
+ * own MAC, and every other device folded into one series under OTHERS_KEY.
+ * Buckets with no readings are absent.
+ *
+ * The busiest devices are ranked here, in the same order getDeviceUsage lists
+ * them, so the page can run both queries at once instead of waiting for the
+ * table before it can ask for the chart. Folding the rest in the database keeps
+ * the result at most `top + 1` rows per bucket however many devices there are.
+ */
 export function getDeviceSeries(
-  macs: string[],
   range: RangeParams,
   bucket: BucketUnit,
   timezone: string,
+  top: number,
 ): Promise<DeviceSeriesPoint[]> {
-  if (macs.length === 0) return Promise.resolve([]);
   return db.any<DeviceSeriesPoint>(
-    `WITH ${DEVICE_DELTAS}
-     SELECT mac,
+    `WITH ${DEVICE_DELTAS},
+     top AS (
+       SELECT mac FROM d
+       GROUP BY mac
+       ORDER BY COALESCE(SUM(tx_delta + rx_delta), 0) DESC, mac
+       LIMIT \${top}
+     )
+     SELECT CASE WHEN d.mac IN (SELECT mac FROM top) THEN d.mac ELSE \${others} END AS mac,
             to_char(date_trunc(\${bucket}, recorded_at AT TIME ZONE \${timezone}),
                     'YYYY-MM-DD"T"HH24:MI:SS')          AS bucket,
             COALESCE(SUM(tx_delta + rx_delta), 0)::bigint AS total_bytes,
@@ -123,10 +138,9 @@ export function getDeviceSeries(
             COALESCE(SUM(rx_delta), 0)::bigint          AS rx_bytes,
             COUNT(*)::int                               AS readings
      FROM d
-     WHERE mac = ANY(\${macs})
      GROUP BY 1, 2
      ORDER BY 2, 1`,
-    { from: range.from, to: range.to, bucket, timezone, macs },
+    { from: range.from, to: range.to, bucket, timezone, top, others: OTHERS_KEY },
   );
 }
 

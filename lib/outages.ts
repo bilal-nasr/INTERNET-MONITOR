@@ -1,6 +1,6 @@
 import { fill } from "@/lib/i18n";
 import { appendSegment, CAUSE_SIDES, causeSide, type CauseSegment, type CauseSide } from "@/lib/outage-cause";
-import type { SessionSummary } from "@/lib/sessions";
+import type { SessionSpan } from "@/lib/sessions";
 import { localParts, localTimeInstant } from "@/lib/time";
 
 /**
@@ -8,7 +8,7 @@ import { localParts, localTimeInstant } from "@/lib/time";
  *
  * A session ends when the router reports the link down (or when a reconnect
  * is detected), and the next one starts at the router's link-up time, so the
- * space between them is the outage. `getSessions` lists only sessions that
+ * space between them is the outage. `getSessionSpans` lists only sessions that
  * overlap the range, which leaves two edges to handle: the gap before the
  * first listed session is known only through its `downtime_before_seconds`,
  * and a closed newest session means the link has not come back yet.
@@ -59,7 +59,7 @@ function toOutage(
 }
 
 export function outagesFromSessions(
-  sessions: SessionSummary[],
+  sessions: SessionSpan[],
   range: { from: Date | null; to: Date },
   /**
    * The newest session of all, used only when none overlaps the range. A link
@@ -67,7 +67,7 @@ export function outagesFromSessions(
    * so without this the report reads "no outages" during the one event it
    * exists to describe.
    */
-  previous: SessionSummary | null = null,
+  previous: SessionSpan | null = null,
 ): Outage[] {
   const ordered = [...sessions].sort((a, b) => {
     const byStart = a.started_at < b.started_at ? -1 : a.started_at > b.started_at ? 1 : 0;

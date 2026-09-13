@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { badRequest, errorResponse, rejectUnauthenticated } from "@/lib/api";
-import { listAlerts, type AlertLogRow } from "@/lib/alerts/log";
+import { listAlertsPage, type AlertLogRow } from "@/lib/alerts/log";
 import { fill } from "@/lib/i18n";
 import { dictionaryFromRequest } from "@/lib/i18n/request";
 
@@ -32,8 +32,12 @@ export async function GET(request: Request) {
   }
 
   try {
-    const rows = await listAlerts(limit, before);
-    return NextResponse.json({ alerts: rows.map(toPublicAlert) }, { headers: { "Cache-Control": "no-store" } });
+    // `next_cursor` is the `before` for the following page; null on the last one.
+    const page = await listAlertsPage(limit, before);
+    return NextResponse.json(
+      { alerts: page.alerts.map(toPublicAlert), next_cursor: page.next_cursor },
+      { headers: { "Cache-Control": "no-store" } },
+    );
   } catch (err) {
     return errorResponse(err, d);
   }

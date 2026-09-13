@@ -1,50 +1,109 @@
 "use client";
 
-import { useId, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useId, useState, useTransition, type KeyboardEvent, type ReactNode } from "react";
 
 export interface TabItem {
   id: string;
   label: string;
-  content: ReactNode;
+}
+
+interface Panels {
+  /** What the panels were rendered for; a different key discards them all. */
+  key: string;
+  byId: Record<string, ReactNode>;
 }
 
 /**
  * A horizontal tab strip over a set of panels, for splitting one long page
- * into views that share the controls above them.
+ * into views that share the controls above them, where each view's data is
+ * read only when its tab is first opened.
  *
- * The open tab is kept in the query string under `param`, next to whatever
- * else is there (a statistics range), so a reload or a shared link opens the
- * same view. It is written with replaceState, which Next's router picks up,
- * so a later router.push that copies the search params carries it along.
+ * The server renders one panel, `content`, for the tab named in the query
+ * string under `param`. Opening another tab puts that tab in the address and
+ * asks the server for the page again, which then reads only the new view's
+ * data; until it arrives the panel shows `fallback`. A panel that has arrived
+ * is kept, keyed by `cacheKey` (the range the page shows), so going back to a
+ * tab is instant and costs no request; a new range starts the collection over.
  *
- * A panel mounts the first time it is opened and then stays mounted, only
- * hidden. Charts measure their container when they mount, and one mounted
- * inside a hidden panel would measure zero and draw nothing.
+ * A kept panel stays mounted and is only hidden. Charts measure their
+ * container when they mount, and one mounted inside a hidden panel would
+ * measure zero and draw nothing.
  */
 export function Tabs({
   tabs,
-  initial,
+  current,
+  content,
+  cacheKey,
+  fallback,
   param,
   label,
 }: {
   tabs: TabItem[];
-  initial: string;
+  /** The tab the server rendered `content` for. */
+  current: string;
+  content: ReactNode;
+  cacheKey: string;
+  fallback: ReactNode;
   param: string;
   label: string;
 }) {
   const baseId = useId();
-  const [active, setActive] = useState(initial);
-  const [visited, setVisited] = useState<ReadonlySet<string>>(() => new Set([initial]));
+  const router = useRouter();
+  const [navigating, startTransition] = useTransition();
+  const [active, setActive] = useState(current);
+  const [panels, setPanels] = useState<Panels>(() => ({ key: cacheKey, byId: { [current]: content } }));
+  const [rendered, setRendered] = useState({ cacheKey, current, content });
+
+  // Keep each panel the server sends. Done while rendering, from the props,
+  // so a new panel is never drawn one frame late over the fallback.
+  if (rendered.cacheKey !== cacheKey || rendered.current !== current || rendered.content !== content) {
+    const sameRange = rendered.cacheKey === cacheKey;
+    setRendered({ cacheKey, current, content });
+    setPanels((kept) =>
+      sameRange && kept.key === cacheKey
+        ? { key: cacheKey, byId: { ...kept.byId, [current]: content } }
+        : { key: cacheKey, byId: { [current]: content } },
+    );
+    // A new range, or back and forward, decides the tab. A panel arriving for
+    // a tab the reader has already moved on from does not.
+    if (!sameRange) setActive(current);
+  }
+
+  // The address follows the open tab. A request for a tab the reader then left
+  // for a kept one finishes by writing its own tab into the address; put the
+  // open one back so a reload opens what is on screen.
+  //
+  // Never while a request is on its way: Next's router takes a replaceState as
+  // a navigation of its own, and it would drop the pending one, leaving the new
+  // tab on its fallback for good.
+  useEffect(() => {
+    if (navigating) return;
+    const url = new URL(window.location.href);
+    // No parameter means the server's default, which is what `current` is then.
+    if ((url.searchParams.get(param) ?? current) === active) return;
+    url.searchParams.set(param, active);
+    window.history.replaceState(null, "", url);
+  }, [active, current, param, navigating]);
 
   const tabId = (id: string) => `${baseId}-tab-${id}`;
   const panelId = (id: string) => `${baseId}-panel-${id}`;
 
   function select(id: string) {
+    if (id === active) return;
     setActive(id);
-    setVisited((v) => (v.has(id) ? v : new Set(v).add(id)));
     const url = new URL(window.location.href);
     url.searchParams.set(param, id);
-    window.history.replaceState(null, "", url);
+    if (id in panels.byId) {
+      // Already here: showing it needs no request. replaceState is picked up by
+      // Next's router, so a later router.push that copies the search params
+      // carries the tab along.
+      window.history.replaceState(null, "", url);
+      return;
+    }
+    startTransition(() => {
+      router.replace(`${url.pathname}${url.search}`, { scroll: false });
+    });
   }
 
   /** Left and right follow the reading direction; Home and End jump to either end. */
@@ -97,18 +156,23 @@ export function Tabs({
         })}
       </div>
 
-      {tabs.map((t) => (
-        <div
-          key={t.id}
-          role="tabpanel"
-          id={panelId(t.id)}
-          aria-labelledby={tabId(t.id)}
-          hidden={t.id !== active}
-          className="space-y-6"
-        >
-          {visited.has(t.id) && t.content}
-        </div>
-      ))}
+      {tabs.map((t) => {
+        const kept = t.id in panels.byId;
+        if (!kept && t.id !== active) return null;
+        return (
+          <div
+            key={t.id}
+            role="tabpanel"
+            id={panelId(t.id)}
+            aria-labelledby={tabId(t.id)}
+            aria-busy={!kept}
+            hidden={t.id !== active}
+            className="space-y-6"
+          >
+            {kept ? panels.byId[t.id] : fallback}
+          </div>
+        );
+      })}
     </div>
   );
 }

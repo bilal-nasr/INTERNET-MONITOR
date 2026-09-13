@@ -1,7 +1,11 @@
-import type { ReactNode } from "react";
+"use client";
+
+import { useRef, type ReactNode } from "react";
 import type { PublicAlert } from "@/app/api/alerts/route";
+import { useI18n } from "@/components/I18nProvider";
+import { Pager, revealTop } from "@/components/Pager";
+import { useKeysetPages, type KeysetPage } from "@/components/useKeysetPages";
 import { fill } from "@/lib/i18n";
-import { getI18n } from "@/lib/i18n/server";
 
 const STATUS_CLASS: Record<PublicAlert["status"], string> = {
   sent: "text-green-700 dark:text-status-good",
@@ -9,9 +13,44 @@ const STATUS_CLASS: Record<PublicAlert["status"], string> = {
   skipped: "text-amber-700 dark:text-status-warning",
 };
 
-export async function AlertsTable({ alerts, timezone }: { alerts: PublicAlert[]; timezone: string }) {
-  const { d, f } = await getI18n();
+/**
+ * The alert log, newest first, one page at a time. The first page comes from
+ * the server with every refresh; older pages are fetched from /api/alerts by
+ * cursor when asked for (components/useKeysetPages.ts).
+ */
+export function AlertsTable({
+  first,
+  pageSize,
+  total,
+  timezone,
+}: {
+  first: KeysetPage<PublicAlert>;
+  pageSize: number;
+  total: number;
+  timezone: string;
+}) {
+  const { locale, d, f } = useI18n();
   const c = d.alerts.columns;
+  const top = useRef<HTMLDivElement>(null);
+
+  const pages = useKeysetPages<PublicAlert>({
+    first,
+    pageSize,
+    onPageChange: () => revealTop(top.current),
+    load: async (cursor, signal) => {
+      const res = await fetch(`/api/alerts?limit=${pageSize}&before=${cursor}&lang=${locale}`, {
+        signal,
+        cache: "no-store",
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { message?: string } | null;
+        throw new Error(body?.message ?? fill(d.settings.httpError, { status: res.status }));
+      }
+      const body = (await res.json()) as { alerts: PublicAlert[]; next_cursor: number | null };
+      return { rows: body.alerts, next: body.next_cursor };
+    },
+  });
+  const alerts = pages.rows;
 
   if (alerts.length === 0) {
     return (
@@ -50,12 +89,12 @@ export async function AlertsTable({ alerts, timezone }: { alerts: PublicAlert[];
   // One element, as before, so the page's spacing between its children does
   // not change with the breakpoint.
   return (
-    <div>
+    <div ref={top} className="scroll-mt-4 space-y-4">
       {/* Below md the six columns cannot fit, and a sideways-scrolling table
           hides the status and the recipient -- the columns someone opens this
           page to check. Each alert becomes a card instead, as the sessions
           table and the top-sessions table do. */}
-      <ul className="space-y-2 md:hidden">
+      <ul className={`space-y-2 transition-opacity md:hidden ${pages.pending ? "opacity-60" : ""}`}>
         {alerts.map((a) => (
           <li key={a.id} className="rounded-xl border border-border bg-surface p-4 text-sm">
             <div className="flex items-baseline justify-between gap-3">
@@ -84,7 +123,11 @@ export async function AlertsTable({ alerts, timezone }: { alerts: PublicAlert[];
         ))}
       </ul>
 
-      <div className="hidden overflow-x-auto rounded-xl border border-border bg-surface md:block">
+      <div
+        className={`hidden overflow-x-auto rounded-xl border border-border bg-surface transition-opacity md:block ${
+          pages.pending ? "opacity-60" : ""
+        }`}
+      >
         <table className="w-full text-sm">
           <thead className="text-xs text-muted">
             <tr className="border-b border-border">
@@ -114,6 +157,20 @@ export async function AlertsTable({ alerts, timezone }: { alerts: PublicAlert[];
           </tbody>
         </table>
       </div>
+
+      <Pager
+        order="time"
+        start={pages.start}
+        end={pages.end}
+        total={total}
+        hasPrevious={pages.hasNewer}
+        hasNext={pages.hasOlder}
+        onFirst={pages.newest}
+        onPrevious={pages.newer}
+        onNext={pages.older}
+        pending={pages.pending}
+        error={pages.error}
+      />
     </div>
   );
 }

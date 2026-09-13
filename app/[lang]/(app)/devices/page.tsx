@@ -19,8 +19,12 @@ export async function generateMetadata(): Promise<Metadata> {
   return { title: `${d.devices.title} - ${d.meta.appName}` };
 }
 
-/** One page of devices, busiest first, so a long tail is what gets cut. */
-const LIMIT = 50;
+/**
+ * Most devices listed, busiest first, so a long tail is what gets cut. The
+ * database aggregates every device either way, so the table takes them all in
+ * one go and pages through them in the browser (components/DeviceTable.tsx).
+ */
+const LIMIT = 500;
 
 type Search = Record<string, string | string[] | undefined>;
 
@@ -71,20 +75,17 @@ export default async function DevicesPage({ searchParams }: { searchParams: Prom
   // aggregate over every device: the table below stops at LIMIT, and summing
   // its rows would quietly understate the total, and overstate the busiest
   // device's share of it, on any LAN with a longer tail than one page.
-  const [devices, totals] = await Promise.all([
-    getDeviceUsage(window, LIMIT),
-    getDeviceRangeTotals(window),
-  ]);
   // A minute-level bucket over a whole day is 1,440 stacks of eight; hours are
   // the finest the chart draws, whatever the range picker chose.
   const bucket = range.bucket === "minute" ? "hour" : range.bucket;
+  // All three at once: the chart ranks its own busiest devices, in the table's
+  // order, rather than waiting for the table to say which they are.
+  const [devices, totals, series] = await Promise.all([
+    getDeviceUsage(window, LIMIT),
+    getDeviceRangeTotals(window),
+    getDeviceSeries(window, bucket, settings.timezone, TOP_DEVICES),
+  ]);
   const top = devices.slice(0, TOP_DEVICES);
-  const series = await getDeviceSeries(
-    devices.map((device) => device.mac),
-    window,
-    bucket,
-    settings.timezone,
-  );
   const rows = stackDeviceSeries(
     series,
     top.map((device) => device.mac),
@@ -129,10 +130,10 @@ export default async function DevicesPage({ searchParams }: { searchParams: Prom
         rows={rows}
         devices={top.map((device) => ({ mac: device.mac, label: device.label }))}
         bucket={bucket}
-        hasOthers={devices.length > top.length}
+        hasOthers={totals.devices > top.length}
       />
 
-      <DeviceTable devices={devices} timezone={settings.timezone} />
+      <DeviceTable devices={devices} total={totals.devices} timezone={settings.timezone} />
     </div>
   );
 }

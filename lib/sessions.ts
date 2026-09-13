@@ -332,33 +332,106 @@ export interface SessionWindow {
   to: Date;
 }
 
+export interface SessionPage {
+  sessions: SessionSummary[];
+  /** Id to pass as `before` for the next page; null when this is the last one. */
+  next_cursor: number | null;
+}
+
 /**
- * Sessions overlapping the window, newest first, with uptime and the offline
- * gap that preceded each one. A session counts when any part of it falls inside
- * the window, so an outage in progress at either edge is still visible.
+ * One page of the sessions overlapping the window, newest first, with uptime
+ * and the offline gap that preceded each one. A session counts when any part of
+ * it falls inside the window, so an outage in progress at either edge is still
+ * visible.
+ *
+ * Paged by cursor: `beforeId` asks for the sessions after that one in the
+ * newest-first order, which stays put while new sessions arrive at the top
+ * (components/useKeysetPages.ts). The cursor is an id, not a timestamp, because
+ * a start time can carry microseconds that a JavaScript Date would round away.
+ *
+ * The gap before each session is read from its predecessor with one index
+ * lookup per row, so a page costs the same however long the history is. An
+ * unknown cursor matches nothing and returns an empty last page.
  */
-export async function getSessions(
+export async function getSessionsPage(
   { from, to }: SessionWindow,
-  limit = 200,
-): Promise<SessionSummary[]> {
+  { limit, beforeId = null }: { limit: number; beforeId?: number | null },
+): Promise<SessionPage> {
   const rows = await db.any<SessionQueryRow>(
+    `SELECT s.id, s.session_key, s.interface_name, s.started_at, s.ended_at, s.end_reason,
+            s.last_seen_at, s.tx_bytes, s.rx_bytes, s.total_bytes,
+            s.last_tx_counter, s.last_rx_counter, s.samples,
+            GREATEST(EXTRACT(EPOCH FROM (now() - s.last_seen_at)), 0)::bigint AS seconds_since_seen,
+            GREATEST(EXTRACT(EPOCH FROM (COALESCE(s.ended_at, s.last_seen_at) - s.started_at)), 0)::bigint AS uptime_seconds,
+            GREATEST(EXTRACT(EPOCH FROM (s.started_at - prev.finished_at)), 0)::bigint AS downtime_before_seconds
+     FROM sessions s
+     LEFT JOIN LATERAL (
+       SELECT COALESCE(p.ended_at, p.last_seen_at) AS finished_at
+       FROM sessions p
+       WHERE (p.started_at, p.id) < (s.started_at, s.id)
+       ORDER BY p.started_at DESC, p.id DESC
+       LIMIT 1
+     ) prev ON true
+     WHERE COALESCE(s.ended_at, s.last_seen_at) >= COALESCE($1::timestamptz, '-infinity'::timestamptz)
+       AND s.started_at < $2::timestamptz
+       AND ($3::int IS NULL OR (s.started_at, s.id) < (SELECT c.started_at, c.id FROM sessions c WHERE c.id = $3))
+     ORDER BY s.started_at DESC, s.id DESC
+     LIMIT $4`,
+    // One extra row says whether another page follows, without a count.
+    [from, to, beforeId, limit + 1],
+  );
+  const more = rows.length > limit;
+  const page = more ? rows.slice(0, limit) : rows;
+  return {
+    sessions: page.map(toSummary),
+    next_cursor: more ? page[page.length - 1].id : null,
+  };
+}
+
+/** What the downtime report needs of each session, and nothing else. */
+export type SessionSpan = Pick<SessionSummary, "id" | "started_at" | "ended_at" | "downtime_before_seconds">;
+
+/**
+ * Every session overlapping the window, newest first, reduced to its start,
+ * end and the gap before it: the input the outage report is derived from.
+ *
+ * Separate from the table's query because the report must see the whole range
+ * while the table shows one page of it, and four narrow columns are cheap to
+ * send where fourteen wide ones for every session would not be. `limit` is only
+ * a guard against an unbounded range.
+ *
+ * Sessions that start at or after the end of the window are left out before the
+ * window function runs. That cannot change any gap: a session's predecessor
+ * always started before it did.
+ */
+export async function getSessionSpans({ from, to }: SessionWindow, limit: number): Promise<SessionSpan[]> {
+  const rows = await db.any<{
+    id: number;
+    started_at: Date;
+    ended_at: Date | null;
+    downtime_before_seconds: number | null;
+  }>(
     `WITH ordered AS (
-       SELECT ${COLS},
-              GREATEST(EXTRACT(EPOCH FROM (now() - last_seen_at)), 0)::bigint AS seconds_since_seen,
-              GREATEST(EXTRACT(EPOCH FROM (COALESCE(ended_at, last_seen_at) - started_at)), 0)::bigint AS uptime_seconds,
+       SELECT id, started_at, ended_at,
+              COALESCE(ended_at, last_seen_at) AS finished_at,
               GREATEST(EXTRACT(EPOCH FROM (
                 started_at - LAG(COALESCE(ended_at, last_seen_at)) OVER (ORDER BY started_at, id)
               )), 0)::bigint AS downtime_before_seconds
        FROM sessions
+       WHERE started_at < $2::timestamptz
      )
-     SELECT * FROM ordered
-     WHERE COALESCE(ended_at, last_seen_at) >= COALESCE($1::timestamptz, '-infinity'::timestamptz)
-       AND started_at < $2::timestamptz
+     SELECT id, started_at, ended_at, downtime_before_seconds FROM ordered
+     WHERE finished_at >= COALESCE($1::timestamptz, '-infinity'::timestamptz)
      ORDER BY started_at DESC, id DESC
      LIMIT $3`,
     [from, to, limit],
   );
-  return rows.map(toSummary);
+  return rows.map((r) => ({
+    id: r.id,
+    started_at: r.started_at.toISOString(),
+    ended_at: r.ended_at ? r.ended_at.toISOString() : null,
+    downtime_before_seconds: r.downtime_before_seconds,
+  }));
 }
 
 export async function getSessionTotals({ from, to }: SessionWindow): Promise<SessionTotals> {

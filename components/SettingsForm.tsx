@@ -134,9 +134,13 @@ const primaryButtonClass =
  * which save on their own.
  *
  * Every panel stays mounted and is only hidden, so switching tabs never loses
- * an edit. Saving is one request for all four form tabs; a bar at the foot of
- * the screen appears as soon as anything differs from what is saved, and each
- * tab holding a change carries a dot.
+ * an edit. The account panel is the exception on the way in: it is mounted the
+ * first time its tab is opened, because the browsers it lists are read from the
+ * database, and most visits to this page never look at them.
+ *
+ * Saving is one request for all four form tabs; a bar at the foot of the
+ * screen appears as soon as anything differs from what is saved, and each tab
+ * holding a change carries a dot.
  *
  * `initial` is the row as the server page read it, so the form is filled in
  * from the first paint rather than after a round trip through /api/settings.
@@ -158,6 +162,7 @@ export function SettingsForm({
   const router = useRouter();
   const baseId = useId();
   const [tab, setTab] = useState<SettingsTab>(initialTab);
+  const [accountOpened, setAccountOpened] = useState(initialTab === "account");
   const [saved, setSaved] = useState<FormState>(() => toForm(initial));
   const [form, setForm] = useState<FormState>(saved);
   const [saving, setSaving] = useState(false);
@@ -186,6 +191,7 @@ export function SettingsForm({
   /** Show a tab and put it in the address, so a reload or a shared link opens the same one. */
   function selectTab(next: SettingsTab) {
     setTab(next);
+    if (next === "account") setAccountOpened(true);
     const url = new URL(window.location.href);
     url.searchParams.set("tab", next);
     window.history.replaceState(null, "", url);
@@ -763,7 +769,7 @@ export function SettingsForm({
         </form>
 
         {panel("appearance", <AppearanceCard />)}
-        {panel("account", account)}
+        {panel("account", accountOpened ? account : null)}
       </div>
 
       <Toast toast={toast} onDismiss={dismiss} />

@@ -3,12 +3,13 @@ import { connection } from "next/server";
 import { toPublicAlert } from "@/app/api/alerts/route";
 import { AlertsTable } from "@/components/AlertsTable";
 import { AutoRefresh } from "@/components/AutoRefresh";
-import { listAlerts } from "@/lib/alerts/log";
+import { countAlerts, listAlertsPage } from "@/lib/alerts/log";
 import { fill } from "@/lib/i18n";
 import { getI18n } from "@/lib/i18n/server";
 import { getSettings } from "@/lib/settings";
 
-const LIMIT = 100;
+/** Rows per page. Older pages are fetched as they are asked for. */
+const PAGE_SIZE = 25;
 
 export async function generateMetadata(): Promise<Metadata> {
   const { d } = await getI18n();
@@ -18,8 +19,7 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function AlertsPage() {
   await connection();
   const { d } = await getI18n();
-  const [settings, rows] = await Promise.all([getSettings(), listAlerts(LIMIT)]);
-  const alerts = rows.map(toPublicAlert);
+  const [settings, page, total] = await Promise.all([getSettings(), listAlertsPage(PAGE_SIZE), countAlerts()]);
 
   return (
     <div className="space-y-6">
@@ -31,9 +31,12 @@ export default async function AlertsPage() {
         <AutoRefresh seconds={30} />
       </div>
 
-      <AlertsTable alerts={alerts} timezone={settings.timezone} />
-
-      {alerts.length === LIMIT && <p className="text-xs text-muted">{fill(d.alerts.showing, { count: LIMIT })}</p>}
+      <AlertsTable
+        first={{ rows: page.alerts.map(toPublicAlert), next: page.next_cursor }}
+        pageSize={PAGE_SIZE}
+        total={total}
+        timezone={settings.timezone}
+      />
     </div>
   );
 }

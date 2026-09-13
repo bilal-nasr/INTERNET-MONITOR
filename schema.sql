@@ -321,6 +321,11 @@ CREATE INDEX IF NOT EXISTS interface_readings_interface_recorded_idx
 
 CREATE INDEX IF NOT EXISTS sessions_started_at_idx ON sessions (started_at DESC);
 
+-- The sessions table pages newest first by (started_at, id), and reads each
+-- row's predecessor in that order (lib/sessions.ts getSessionsPage). This index
+-- serves both the cursor and the predecessor lookup without a sort.
+CREATE INDEX IF NOT EXISTS sessions_started_at_id_idx ON sessions (started_at, id);
+
 CREATE INDEX IF NOT EXISTS outage_causes_silence_to_idx ON outage_causes (silence_to);
 
 -- At most one open session, enforced by the database rather than by hope.

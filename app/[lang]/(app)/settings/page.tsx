@@ -6,7 +6,6 @@ import { SettingsForm } from "@/components/SettingsForm";
 import { ShareCard } from "@/components/ShareCard";
 import { isSettingsTab } from "@/components/settings/tabs";
 import { requireAuth } from "@/lib/auth/server";
-import { listSessions, toPublicSession } from "@/lib/auth/sessions";
 import { getI18n } from "@/lib/i18n/server";
 import { getSettings, toPublicSettings } from "@/lib/settings";
 
@@ -26,7 +25,6 @@ export default async function SettingsPage({
     getSettings(),
     searchParams,
   ]);
-  const sessions = await listSessions(auth.user.id, auth.sessionId);
   return (
     <div className="space-y-6">
       <div>
@@ -41,7 +39,8 @@ export default async function SettingsPage({
         account={
           <>
             <AccountForm user={auth.user} />
-            <SessionsList initial={sessions.map(toPublicSession)} timezone={settings.timezone} />
+            {/* Reads its rows itself, once the account tab is first opened. */}
+            <SessionsList timezone={settings.timezone} />
           </>
         }
       />

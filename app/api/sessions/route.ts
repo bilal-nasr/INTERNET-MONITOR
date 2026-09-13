@@ -8,7 +8,7 @@ import {
   rangeLabel,
   resolveRange,
 } from "@/lib/range";
-import { getSessions, getSessionTotals, type SessionWindow } from "@/lib/sessions";
+import { getSessionsPage, getSessionTotals, type SessionWindow } from "@/lib/sessions";
 import { getSettings } from "@/lib/settings";
 
 const MAX_LIMIT = 1000;
@@ -20,6 +20,10 @@ const MAX_DAYS = 3650;
  * Takes the same `range`, `from` and `to` parameters as /api/stats. `days=N` is
  * still accepted, for bookmarks and scripts written against the earlier shape,
  * and simply means the last N times twenty-four hours.
+ *
+ * Paged newest first by cursor: `limit` rows, and `next_cursor` to pass back as
+ * `before` for the rows after them (null on the last page). `totals=0` skips
+ * the range totals, which a caller turning pages already has.
  */
 export async function GET(request: Request) {
   const params = new URL(request.url).searchParams;
@@ -28,9 +32,15 @@ export async function GET(request: Request) {
   const denied = await rejectUnauthenticated(request, d);
   if (denied) return denied;
   const limit = Number(params.get("limit") ?? "200");
+  const beforeRaw = params.get("before");
+  const before = beforeRaw === null ? null : Number(beforeRaw);
+  const withTotals = params.get("totals") !== "0";
 
   if (!Number.isInteger(limit) || limit < 1 || limit > MAX_LIMIT) {
     return badRequest(fill(d.errors.limitRange, { max: MAX_LIMIT }));
+  }
+  if (before !== null && (!Number.isInteger(before) || before < 1)) {
+    return badRequest(fill(d.errors.notASessionId, { value: beforeRaw ?? "" }));
   }
 
   try {
@@ -65,9 +75,9 @@ export async function GET(request: Request) {
       preset = range.preset;
     }
 
-    const [sessions, totals] = await Promise.all([
-      getSessions(window, limit),
-      getSessionTotals(window),
+    const [page, totals] = await Promise.all([
+      getSessionsPage(window, { limit, beforeId: before }),
+      withTotals ? getSessionTotals(window) : null,
     ]);
 
     return NextResponse.json({
@@ -78,8 +88,9 @@ export async function GET(request: Request) {
         to: window.to.toISOString(),
       },
       timezone: settings.timezone,
-      totals,
-      sessions,
+      ...(totals ? { totals } : {}),
+      sessions: page.sessions,
+      next_cursor: page.next_cursor,
     });
   } catch (err) {
     if (err instanceof InvalidRangeError) return badRequest(rangeErrorMessage(d, err));

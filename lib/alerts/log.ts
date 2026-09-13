@@ -87,6 +87,24 @@ export function listAlerts(limit: number, beforeId: number | null = null): Promi
   );
 }
 
+/**
+ * One page of the log and the cursor for the next: `limit` rows older than
+ * `beforeId`, read one extra so the last page is known without a count.
+ */
+export async function listAlertsPage(
+  limit: number,
+  beforeId: number | null = null,
+): Promise<{ alerts: AlertLogRow[]; next_cursor: number | null }> {
+  const rows = await listAlerts(limit + 1, beforeId);
+  const more = rows.length > limit;
+  const alerts = more ? rows.slice(0, limit) : rows;
+  return { alerts, next_cursor: more ? alerts[alerts.length - 1].id : null };
+}
+
+export function countAlerts(): Promise<number> {
+  return db.one<{ count: number }>("SELECT COUNT(*)::int AS count FROM alerts").then((r) => r.count);
+}
+
 export function latestAlert(kind: AlertKind, scopeKey?: string): Promise<AlertLogRow | null> {
   return db.oneOrNone<AlertLogRow>(
     `SELECT ${COLS} FROM alerts

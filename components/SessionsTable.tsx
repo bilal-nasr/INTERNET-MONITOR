@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useI18n } from "@/components/I18nProvider";
 import { CauseChips } from "@/components/CauseChips";
+import { Pager, revealTop } from "@/components/Pager";
+import { useKeysetPages, type KeysetPage } from "@/components/useKeysetPages";
 import { formatBytes } from "@/lib/format";
 import { fill, plural, type Dictionary } from "@/lib/i18n";
 import { SILENCE_SECONDS, type CauseSegment } from "@/lib/outage-cause";
@@ -64,7 +66,12 @@ export function SessionTotalsCards({ totals }: { totals: SessionTotals }) {
 }
 
 /**
- * The sessions table, with row selection.
+ * The sessions table, with row selection, one page at a time.
+ *
+ * The first page is rendered by the server and refreshed with the page; older
+ * pages are fetched from /api/sessions when asked for, by cursor
+ * (components/useKeysetPages.ts), so turning a page reads one page of rows and
+ * nothing else on the page is recomputed.
  *
  * Selected totals are fetched from /api/sessions/totals rather than summed in
  * the browser. The browser holds every visible row's counters, so summing here
@@ -73,23 +80,50 @@ export function SessionTotalsCards({ totals }: { totals: SessionTotals }) {
  * of "total" for the whole application.
  */
 export function SessionsTable({
-  sessions,
+  first,
+  pageSize,
+  total,
+  rangeQuery,
   timezone,
   causesBySession = {},
 }: {
-  sessions: SessionSummary[];
+  first: KeysetPage<SessionSummary>;
+  pageSize: number;
+  /** Sessions in the whole range, for "26-50 of 340". */
+  total: number;
+  /** The range parameters the page was rendered with, for fetching later pages. */
+  rangeQuery: string;
   timezone: string;
   /** The causes of the outage that preceded each session, keyed by session id. */
   causesBySession?: Record<number, CauseSegment[]>;
 }) {
   const { locale, d, f } = useI18n();
   const [selected, setSelected] = useState<Set<number>>(new Set());
+  const top = useRef<HTMLDivElement>(null);
+
+  const pages = useKeysetPages<SessionSummary>({
+    first,
+    pageSize,
+    onPageChange: () => revealTop(top.current),
+    load: async (cursor, signal) => {
+      const query = new URLSearchParams(rangeQuery);
+      query.set("limit", String(pageSize));
+      query.set("before", String(cursor));
+      query.set("totals", "0");
+      query.set("lang", locale);
+      const res = await fetch(`/api/sessions?${query}`, { signal, cache: "no-store" });
+      if (!res.ok) throw new Error(await readMessage(res, d));
+      const body = (await res.json()) as { sessions: SessionSummary[]; next_cursor: number | null };
+      return { rows: body.sessions, next: body.next_cursor };
+    },
+  });
+  const sessions = pages.rows;
 
   const visibleIds = useMemo(() => sessions.map((s) => s.id), [sessions]);
 
   // Totals cover only the rows actually on screen. Narrowing here rather than
   // pruning the stored set means a row that leaves and returns, as it does on
-  // every auto-refresh, comes back still selected.
+  // every auto-refresh and every turn of the page, comes back still selected.
   const selectedVisible = useMemo(
     () => visibleIds.filter((id) => selected.has(id)),
     [visibleIds, selected],
@@ -116,7 +150,7 @@ export function SessionsTable({
   }
 
   return (
-    <div className="space-y-4">
+    <div ref={top} className="scroll-mt-4 space-y-4">
       <SelectionSummary ids={selectedVisible} onClear={() => setSelected(new Set())} />
 
       <label className="flex items-center gap-2 text-xs text-muted md:hidden">
@@ -131,7 +165,7 @@ export function SessionsTable({
       {/* Below md the nine columns cannot fit, and a sideways-scrolling table
           hides exactly the traffic figures the page exists to show. Each
           session becomes a card instead, with the same selection behaviour. */}
-      <ul className="space-y-2 md:hidden">
+      <ul className={`space-y-2 transition-opacity md:hidden ${pages.pending ? "opacity-60" : ""}`}>
         {sessions.map((s) => {
           const checked = selected.has(s.id);
           return (
@@ -185,7 +219,11 @@ export function SessionsTable({
         })}
       </ul>
 
-      <div className="hidden overflow-x-auto rounded-xl border border-border bg-surface md:block">
+      <div
+        className={`hidden overflow-x-auto rounded-xl border border-border bg-surface transition-opacity md:block ${
+          pages.pending ? "opacity-60" : ""
+        }`}
+      >
         <table className="w-full min-w-[58rem] text-sm">
           <thead>
             <tr className="border-b border-border text-start text-xs text-muted">
@@ -260,6 +298,20 @@ export function SessionsTable({
           </tbody>
         </table>
       </div>
+
+      <Pager
+        order="time"
+        start={pages.start}
+        end={pages.end}
+        total={total}
+        hasPrevious={pages.hasNewer}
+        hasNext={pages.hasOlder}
+        onFirst={pages.newest}
+        onPrevious={pages.newer}
+        onNext={pages.older}
+        pending={pages.pending}
+        error={pages.error}
+      />
     </div>
   );
 }

@@ -83,11 +83,26 @@ export const en = {
     onlineFor: "{duration} online",
     readingsCount: "{count} readings",
     live: "Live",
+    loading: "Loading...",
     refreshHint: "Refreshes every {seconds} seconds. Click to refresh now.",
     lastNDays: plural({
       one: "Last {count} day",
       other: "Last {count} days",
     }),
+  },
+
+  /** The page controls under a long table. */
+  pager: {
+    label: "Pages",
+    range: "{from}–{to} of {total}",
+    rangeOpen: "{from}–{to}",
+    newest: "Newest",
+    newer: "Newer",
+    older: "Older",
+    first: "First",
+    previous: "Previous",
+    next: "Next",
+    failed: "Could not load this page: {reason}",
   },
 
   /** Suffixes for "2d 3h 14m". Short by design: they sit inside dense tables. */
@@ -352,7 +367,7 @@ export const en = {
     subtitle:
       "Every WAN connection the router reported, with its uptime and traffic. Times in {timezone}.",
     footnote:
-      "Totals are the sum of each session's own counters, so a reconnect never loses or double-counts traffic. Traffic between the last sample and an unexpected drop cannot be recovered, so a session can under-report by up to one polling interval. At most {limit} sessions are listed; narrow the range to see older ones.",
+      "Totals are the sum of each session's own counters, so a reconnect never loses or double-counts traffic. Traffic between the last sample and an unexpected drop cannot be recovered, so a session can under-report by up to one polling interval. The downtime report reads at most the newest {limit} sessions of a range; narrow the range to see older outages.",
     empty: "No sessions in this range. They appear once the router script posts its first reading.",
     totalConsumed: "Total consumed",
     sessionsCount: plural({
@@ -696,7 +711,6 @@ export const en = {
       link: "Router link",
       cycle: "Cycle from {date}",
     },
-    showing: "Showing the last {count} alerts.",
   },
 
   auth: {

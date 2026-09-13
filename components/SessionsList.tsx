@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useI18n } from "@/components/I18nProvider";
 import { Toast, type ToastState } from "@/components/Toast";
 import { readApiError, secondaryButtonClass } from "@/components/auth/fields";
@@ -19,17 +19,33 @@ function deviceLabel(device: UserAgentDescription, d: Dictionary): string {
 /**
  * The browsers signed in to this account, with a way to sign each one out.
  *
- * `initial` is what the server page read, so the table is full from the first
- * paint; after any change the list is fetched again rather than patched, so
- * what is shown is always what the database says.
+ * The rows are fetched when the list first mounts, which the settings page
+ * puts off until its account tab is opened. After any change the list is
+ * fetched again rather than patched, so what is shown is always what the
+ * database says.
  */
-export function SessionsList({ initial, timezone }: { initial: PublicSession[]; timezone: string }) {
+export function SessionsList({ timezone }: { timezone: string }) {
   const { locale, d, f } = useI18n();
   const s = d.auth.sessions;
-  const [rows, setRows] = useState<PublicSession[]>(initial);
+  const [rows, setRows] = useState<PublicSession[] | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [busy, setBusy] = useState<number | "all" | null>(null);
   const [toast, setToast] = useState<ToastState | null>(null);
   const dismiss = useCallback(() => setToast(null), []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch(`/api/auth/sessions?lang=${locale}`, { signal: controller.signal, cache: "no-store" })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(await readApiError(res, fill(d.settings.httpError, { status: res.status })));
+        return (await res.json()) as { sessions: PublicSession[] };
+      })
+      .then((body) => setRows(body.sessions))
+      .catch((err: Error) => {
+        if (err.name !== "AbortError") setLoadError(err.message);
+      });
+    return () => controller.abort();
+  }, [locale, d]);
 
   /**
    * Refresh the table from the database. The signing-out itself has already
@@ -46,7 +62,11 @@ export function SessionsList({ initial, timezone }: { initial: PublicSession[]; 
       setRows(body.sessions);
     } catch {
       setRows((current) =>
-        revoked === "others" ? current.filter((r) => r.current) : current.filter((r) => r.id !== revoked),
+        current === null
+          ? current
+          : revoked === "others"
+            ? current.filter((r) => r.current)
+            : current.filter((r) => r.id !== revoked),
       );
     }
   }
@@ -77,6 +97,23 @@ export function SessionsList({ initial, timezone }: { initial: PublicSession[]; 
     } finally {
       setBusy(null);
     }
+  }
+
+  if (rows === null) {
+    return (
+      <SettingsCard title={s.section} description={s.sectionHint}>
+        {loadError ? (
+          <p className="text-sm text-status-critical">{loadError}</p>
+        ) : (
+          <div className="animate-pulse space-y-2" aria-busy="true">
+            <span className="sr-only">{d.common.loading}</span>
+            {Array.from({ length: 3 }, (_, i) => (
+              <div key={i} className="h-8 rounded-md bg-border/40" />
+            ))}
+          </div>
+        )}
+      </SettingsCard>
+    );
   }
 
   const others = rows.filter((r) => !r.current);
