@@ -5,12 +5,15 @@ import { useI18n } from "@/components/I18nProvider";
 import { CauseChips } from "@/components/CauseChips";
 import { formatBytes } from "@/lib/format";
 import { fill, plural, type Dictionary } from "@/lib/i18n";
-import type { CauseSegment } from "@/lib/outage-cause";
+import { SILENCE_SECONDS, type CauseSegment } from "@/lib/outage-cause";
 import type { SessionSummary, SessionTotals } from "@/lib/sessions";
 import type { SelectedSessionTotals } from "@/lib/stats";
 
-/** Ten missed pushes at the default interval. */
-const SILENT_AFTER_SECONDS = 300;
+/**
+ * "Live" stops after three missed pushes: the same silence that gets its cause
+ * recorded, so a short power cut reads "No contact" while it lasts.
+ */
+const SILENT_AFTER_SECONDS = SILENCE_SECONDS;
 
 function Cell({ iso, timeZone }: { iso: string | null; timeZone: string }) {
   const { d, f } = useI18n();

@@ -1,5 +1,6 @@
 import type { ITask } from "pg-promise";
 import { db } from "@/lib/db";
+import { reconnectedSince } from "@/lib/session-reconnect";
 
 /**
  * A WAN link session (one PPPoE connection, or one period of link-up).
@@ -166,9 +167,9 @@ function applySample(
  * Record one session event from the router and return what it changed.
  *
  * Identity rule: there is at most one open session (`ended_at IS NULL`). A
- * sample belongs to it unless the router reports a different session key, or
- * the interface counters went backwards, either of which means the link
- * reconnected between two samples.
+ * sample belongs to it unless the link reconnected between two samples: the
+ * counters went backwards, the link-up time moved later, or the session key
+ * changed for a link-up that did not stay put (lib/session-reconnect.ts).
  */
 export function applySessionEvent(event: SessionEvent): Promise<SessionOutcome> {
   return db.tx(async (t): Promise<SessionOutcome> => {
@@ -199,32 +200,24 @@ export function applySessionEvent(event: SessionEvent): Promise<SessionOutcome> 
     let action: SessionAction = "sample";
 
     if (session) {
-      // A sample that is not newer than the last one is a retry or an overtaken
-      // request. Its counters describe the past, so they must never be read as
-      // evidence that the link reconnected.
-      const fresh = event.at.getTime() > session.last_seen_at.getTime();
-      const keyChanged =
-        fresh && event.sessionKey !== "" && session.session_key !== event.sessionKey;
-      const countersReset =
-        fresh &&
-        (event.txCounter < session.last_tx_counter || event.rxCounter < session.last_rx_counter);
-      // The router reporting a link-up later than this session began means the
-      // link went down and came back. This is the only signal left when the
-      // router sends no session id and the counters did not reset. The minute
-      // of slack absorbs clock jitter and a start time that was clamped.
-      const relinked =
-        fresh &&
-        event.linkUpAt !== null &&
-        event.linkUpAt.getTime() > session.started_at.getTime() + 60_000 &&
-        event.linkUpAt.getTime() <= event.at.getTime() + 60_000;
-
-      if (keyChanged || countersReset || relinked) {
+      if (reconnectedSince(session, event)) {
         // The link came back between two samples, so the old session ended at
         // the last sample that found it up. The new session then starts at the
         // router's link-up time, which is what makes the outage measurable.
         closed = await closeSession(t, session.id, session.last_seen_at, "restart");
         session = null;
         action = "restarted";
+      } else if (
+        event.sessionKey !== "" &&
+        event.sessionKey !== session.session_key &&
+        event.at.getTime() > session.last_seen_at.getTime()
+      ) {
+        // Same link, new key: the router's clock was set after a boot and the
+        // link-up now reads differently. Adopt the key so later samples match.
+        session = await t.one<SessionRow>(
+          `UPDATE sessions SET session_key = $2 WHERE id = $1 RETURNING ${COLS}`,
+          [session.id, event.sessionKey],
+        );
       }
     }
 
