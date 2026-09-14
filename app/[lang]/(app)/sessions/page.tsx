@@ -37,7 +37,7 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 /** Rows per page of the table. Older pages are fetched as they are asked for. */
-const PAGE_SIZE = 25;
+const PAGE_SIZE = 10;
 
 /**
  * Most sessions the downtime report reads in one range. Only a guard: it reads

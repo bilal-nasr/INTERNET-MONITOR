@@ -13,7 +13,8 @@ const buttonClass =
  * `order` picks the words. A list newest first reads "Newer" and "Older", which
  * says which way time runs; anything else reads "Previous" and "Next".
  *
- * Renders nothing while everything fits on one page.
+ * Shown even when everything fits on one page, with both buttons disabled, so
+ * the table always says how many rows there are and where paging lives.
  */
 export function Pager({
   start,
@@ -45,8 +46,6 @@ export function Pager({
 }) {
   const { d, f } = useI18n();
   const p = d.pager;
-
-  if (!hasPrevious && !hasNext && !error) return null;
 
   const words =
     order === "time"
