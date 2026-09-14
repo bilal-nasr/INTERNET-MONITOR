@@ -14,7 +14,7 @@ const inputClass =
 const buttonClass = "rounded-md border border-border px-2 py-1 text-xs hover:bg-border/60 disabled:opacity-50";
 
 /** Rows per page. */
-const PAGE_SIZE = 25;
+const PAGE_SIZE = 10;
 
 /**
  * One row per device with an inline rename. The name is saved through

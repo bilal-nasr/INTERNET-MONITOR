@@ -9,7 +9,7 @@ import { getI18n } from "@/lib/i18n/server";
 import { getSettings } from "@/lib/settings";
 
 /** Rows per page. Older pages are fetched as they are asked for. */
-const PAGE_SIZE = 25;
+const PAGE_SIZE = 10;
 
 export async function generateMetadata(): Promise<Metadata> {
   const { d } = await getI18n();
