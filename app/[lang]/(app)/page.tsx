@@ -109,7 +109,7 @@ export default async function DashboardPage() {
 
       <HistoryChart
         history={history}
-        quotaGb={settings.quota_gb}
+        quotaGb={usage.quota_gb}
         today={usage.date}
         anomalies={anomalies.map((a) => a.day)}
       />

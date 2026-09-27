@@ -15,6 +15,8 @@ export function isDigestKind(value: string): value is DigestKind {
 export interface SettingsRow {
   id: number;
   quota_gb: number;
+  /** False when the plan has no daily allowance; `quota_gb` is then kept but ignored. */
+  daily_quota_enabled: boolean;
   monthly_quota_gb: number;
   billing_cycle_day: number;
   window_start: string; // "HH:MM:SS" from Postgres TIME
@@ -57,6 +59,11 @@ export interface SettingsRow {
  * but a row written before a language was dropped from the application still
  * could. Falling back keeps an alert going out in English rather than not at all.
  */
+/** The daily quota in GB, or null when the plan has none. */
+export function dailyQuotaGb(row: Pick<SettingsRow, "quota_gb" | "daily_quota_enabled">): number | null {
+  return row.daily_quota_enabled ? row.quota_gb : null;
+}
+
 export function alertLocale(row: SettingsRow): Locale {
   return isLocale(row.language) ? row.language : DEFAULT_LOCALE;
 }
@@ -70,6 +77,7 @@ export function alertLocale(row: SettingsRow): Locale {
  */
 export interface PublicSettings {
   quota_gb: number;
+  daily_quota_enabled: boolean;
   monthly_quota_gb: number;
   billing_cycle_day: number;
   window_start: string; // "HH:MM"
@@ -95,6 +103,7 @@ export type SettingsPatch = Partial<
   Pick<
     SettingsRow,
     | "quota_gb"
+    | "daily_quota_enabled"
     | "monthly_quota_gb"
     | "billing_cycle_day"
     | "window_start"
@@ -140,7 +149,7 @@ export function getSettings(): Promise<SettingsRow> {
 
 async function loadSettings(): Promise<SettingsRow> {
   const row = await db.oneOrNone<SettingsRow>(
-    `SELECT id, quota_gb, monthly_quota_gb, billing_cycle_day, window_start,
+    `SELECT id, quota_gb, daily_quota_enabled, monthly_quota_gb, billing_cycle_day, window_start,
             window_end, timezone, alert_email_to, wan_interface_name,
             polling_enabled, language, alert_thresholds, cycle_alert_thresholds,
             cycle_pace_alert, stale_after_minutes, digest,
@@ -172,6 +181,7 @@ export async function getShareToken(): Promise<string | null> {
 export function toPublicSettings(row: SettingsRow): PublicSettings {
   return {
     quota_gb: row.quota_gb,
+    daily_quota_enabled: row.daily_quota_enabled,
     monthly_quota_gb: row.monthly_quota_gb,
     billing_cycle_day: row.billing_cycle_day,
     window_start: row.window_start.slice(0, 5),
@@ -201,6 +211,7 @@ export function toPublicSettings(row: SettingsRow): PublicSettings {
 /** Column names are interpolated into SQL, so they are checked at runtime, not just by types. */
 const WRITABLE = new Set<string>([
   "quota_gb",
+  "daily_quota_enabled",
   "monthly_quota_gb",
   "billing_cycle_day",
   "window_start",

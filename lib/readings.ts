@@ -27,7 +27,8 @@ export interface RecordedResult {
     baseline_bytes: number;
     baseline_created: boolean;
     used_since_baseline: number;
-    quota_bytes: number;
+    /** Null when the daily quota is off. */
+    quota_bytes: number | null;
     exceeded: boolean;
     alert_sent: boolean;
     already_notified: boolean;
@@ -157,9 +158,12 @@ export async function recordReading(
   // the post-reboot accumulated readings when one did.
   const windowEnd = localTimeInstant(local.date, settings.window_end, settings.timezone, 1);
   const used = await sumUsageSince(window!.baseline_recorded_at, windowEnd);
+  // With the daily quota off the window is still measured, for the dashboard,
+  // but nothing is compared against it: no marks, no breach, no throttle.
+  const quotaOn = settings.daily_quota_enabled;
   const quota = quotaBytes(settings.quota_gb);
-  const exceeded = used > quota;
-  const percent = quota > 0 ? (used / quota) * 100 : 0;
+  const exceeded = quotaOn && used > quota;
+  const percent = quotaOn && quota > 0 ? (used / quota) * 100 : 0;
 
   // One mail per mark per day. The mark is claimed with a conditional update
   // before anything is sent, so two readings arriving at once cannot both send
@@ -169,7 +173,7 @@ export async function recordReading(
   // and there is no point re-deciding that on every push for the rest of the day.
   let alertSent = false;
   let notifiedLevel = window!.notified_level;
-  const level = nextThreshold(percent, notifiedLevel, settings.alert_thresholds);
+  const level = quotaOn ? nextThreshold(percent, notifiedLevel, settings.alert_thresholds) : null;
   // Claimed but not yet resolved: set between the claim and the send, cleared
   // once the outcome is known, so the catch below knows a claim is outstanding.
   let claimedPrev: number | null = null;
@@ -249,7 +253,7 @@ export async function recordReading(
       baseline_bytes: window!.baseline_bytes,
       baseline_created: baselineCreated,
       used_since_baseline: used,
-      quota_bytes: quota,
+      quota_bytes: quotaOn ? quota : null,
       exceeded,
       alert_sent: alertSent,
       already_notified: notifiedLevel >= 100,

@@ -24,6 +24,7 @@ import type { PublicSettings } from "@/lib/settings";
 
 interface FormState {
   quota_gb: string;
+  daily_quota_enabled: boolean;
   monthly_quota_gb: string;
   billing_cycle_day: string;
   window_start: string;
@@ -47,6 +48,7 @@ interface FormState {
 /** Which tab each field is on, so a tab can show that it holds unsaved changes. */
 const FIELD_TAB: Record<keyof FormState, SettingsTab> = {
   quota_gb: "limits",
+  daily_quota_enabled: "limits",
   window_start: "limits",
   window_end: "limits",
   timezone: "limits",
@@ -70,6 +72,7 @@ const FIELD_TAB: Record<keyof FormState, SettingsTab> = {
 function toForm(s: PublicSettings): FormState {
   return {
     quota_gb: String(s.quota_gb),
+    daily_quota_enabled: s.daily_quota_enabled,
     monthly_quota_gb: String(s.monthly_quota_gb),
     billing_cycle_day: String(s.billing_cycle_day),
     window_start: s.window_start,
@@ -262,6 +265,7 @@ export function SettingsForm({
     try {
       const payload = {
         quota_gb: Number(form.quota_gb),
+        daily_quota_enabled: form.daily_quota_enabled,
         monthly_quota_gb: Number(form.monthly_quota_gb),
         billing_cycle_day: Number(form.billing_cycle_day),
         window_start: form.window_start,
@@ -407,15 +411,25 @@ export function SettingsForm({
             "limits",
             <>
               <SettingsCard title={d.settings.quotaSection} description={d.settings.quotaSectionHint}>
+                <Switch
+                  checked={form.daily_quota_enabled}
+                  onChange={(v) => update("daily_quota_enabled", v)}
+                  label={form.daily_quota_enabled ? d.settings.dailyQuotaEnabled : d.settings.dailyQuotaDisabled}
+                  hint={d.settings.dailyQuotaHint}
+                />
                 <div className="grid gap-4 sm:grid-cols-3">
                   <Field id="quota_gb" label={d.settings.quotaGb} hint={d.settings.quotaGbHint}>
                     <WithUnit unit={d.settings.units.gb}>
+                      {/* Kept, not cleared, while the quota is off, so turning it
+                          back on restores the old figure. Disabled inputs are
+                          skipped by :invalid, so a stale value cannot block a save. */}
                       <input
                         id="quota_gb"
                         type="number"
                         min="0.01"
                         step="0.01"
                         required
+                        disabled={!form.daily_quota_enabled}
                         value={form.quota_gb}
                         onChange={(e) => update("quota_gb", e.target.value)}
                         className={`${inputClass} pe-12`}
@@ -557,6 +571,7 @@ export function SettingsForm({
                       type="text"
                       dir="ltr"
                       inputMode="decimal"
+                      disabled={!form.daily_quota_enabled}
                       value={form.alert_thresholds}
                       onChange={(e) => update("alert_thresholds", e.target.value)}
                       className={`${inputClass} font-mono`}

@@ -37,7 +37,8 @@ export interface AlertReportInput {
   date: string;
   /** Usage that tripped the alert, measured over the quota window. */
   usedBytes: number;
-  quotaBytes: number;
+  /** Null when the daily quota is off: the mail reports usage without a quota. */
+  quotaBytes: number | null;
   /** The percent mark that fired, when this is a threshold warning; null for a test, a digest, or the plain exceeded mail. */
   threshold?: number | null;
   now?: Date;
@@ -86,6 +87,16 @@ function windowRange(settings: SettingsRow, date: string, now: Date) {
   return to > start ? { from: start, to } : null;
 }
 
+/** The headline figures, with the quota-relative ones null when there is no quota. */
+function quotaFigures(usedBytes: number, quotaBytes: number | null) {
+  return {
+    used_bytes: usedBytes,
+    quota_bytes: quotaBytes,
+    percent: quotaBytes === null ? null : quotaBytes > 0 ? (usedBytes / quotaBytes) * 100 : 0,
+    over_bytes: quotaBytes === null ? 0 : Math.max(0, usedBytes - quotaBytes),
+  };
+}
+
 export async function buildAlertReport(input: AlertReportInput): Promise<AlertReport> {
   const { settings, kind, date, usedBytes, quotaBytes } = input;
   const now = input.now ?? new Date();
@@ -102,7 +113,8 @@ export async function buildAlertReport(input: AlertReportInput): Promise<AlertRe
     getCycleUsage(settings.monthly_quota_gb, settings.billing_cycle_day, settings.timezone, now, {
       atCycleEnd: input.atCycleEnd,
     }),
-    historyRange
+    // The week strip is a compliance chart, so it has nothing to say without a quota.
+    historyRange && quotaBytes !== null
       ? getComplianceDays(historyRange, settings.timezone, settings.window_start, settings.window_end)
       : Promise.reject(new Error("no history range")),
     historyRange ? getSessionStats(historyRange) : Promise.reject(new Error("no history range")),
@@ -138,10 +150,7 @@ export async function buildAlertReport(input: AlertReportInput): Promise<AlertRe
     threshold: input.threshold ?? null,
 
     today: {
-      used_bytes: usedBytes,
-      quota_bytes: quotaBytes,
-      percent: quotaBytes > 0 ? (usedBytes / quotaBytes) * 100 : 0,
-      over_bytes: Math.max(0, usedBytes - quotaBytes),
+      ...quotaFigures(usedBytes, quotaBytes),
       // The split is measured over the window, so it can differ from the
       // baseline total by a reading or two. Scaling it to match would invent
       // precision the counters do not have.
@@ -246,10 +255,7 @@ export function minimalAlertReport(input: AlertReportInput): AlertReport {
     app_url: appUrl(),
     threshold: input.threshold ?? null,
     today: {
-      used_bytes: input.usedBytes,
-      quota_bytes: input.quotaBytes,
-      percent: input.quotaBytes > 0 ? (input.usedBytes / input.quotaBytes) * 100 : 0,
-      over_bytes: Math.max(0, input.usedBytes - input.quotaBytes),
+      ...quotaFigures(input.usedBytes, input.quotaBytes),
       tx_bytes: 0,
       rx_bytes: 0,
       peak_bytes_per_second: 0,

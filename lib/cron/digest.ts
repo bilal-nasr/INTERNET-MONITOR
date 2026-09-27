@@ -104,7 +104,7 @@ async function run(ctx: JobContext): Promise<JobResult> {
     digest: settings.digest,
     date,
     usedBytes,
-    quotaBytes: quotaBytes(settings.quota_gb),
+    quotaBytes: settings.daily_quota_enabled ? quotaBytes(settings.quota_gb) : null,
     threshold: null,
     now: reportAt,
     // The cycle digest reports a cycle that has just closed, so the cycle

@@ -309,3 +309,34 @@ describe("digest", () => {
     expect(html).toContain("Billing cycle");
   });
 });
+
+describe("no daily quota", () => {
+  const noQuota = (over: Partial<AlertReport> = {}) =>
+    report({
+      threshold: null,
+      week: null,
+      today: { ...report().today, quota_bytes: null, percent: null, over_bytes: 0 },
+      ...over,
+    });
+
+  test("the test mail reports usage without a quota", () => {
+    const r = noQuota({ kind: "test" });
+    expect(subjectLine(r)).toBe("[Test] Internet usage report: 12.40 GB on 2026-09-11");
+    const { text, html } = renderAlertEmail(r);
+    expect(text).toContain("Daily usage report.");
+    expect(text).toContain("  Used          12.40 GB");
+    expect(html).toContain("used in today&#39;s window");
+    expect(html).not.toContain("Remaining today");
+    expect(html).not.toContain("Over quota by");
+    expect(html).not.toContain("daily quota");
+  });
+
+  test("the digests drop the quota from their subjects", () => {
+    expect(subjectLine(noQuota({ kind: "digest", digest: "weekly" }))).toBe(
+      "Weekly internet report: 12.40 GB on 2026-09-11",
+    );
+    expect(subjectLine(noQuota({ kind: "digest", digest: "cycle" }))).toBe(
+      "Billing cycle report: 12.40 GB on 2026-09-11",
+    );
+  });
+});

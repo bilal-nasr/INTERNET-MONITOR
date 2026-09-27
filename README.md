@@ -46,6 +46,11 @@ Every 30 seconds the router runs a small script (`router/quota-push.rsc`) that r
 
 Quota is decimal gigabytes: 8 GB = 8,000,000,000 bytes.
 
+The daily quota is optional (`settings.daily_quota_enabled`, on by default). With it off the
+window is still measured and shown on the dashboard, but no daily marks are mailed, the daily
+throttle never applies, and the compliance chart on `/stats` is hidden. The monthly cap is
+unaffected.
+
 Alongside the daily window quota there is a monthly cap (`settings.monthly_quota_gb`, 600 GB by
 default) measured over a billing cycle that rolls over on `settings.billing_cycle_day`, the 5th by
 default. Unlike the daily quota the cap counts all traffic at every hour, not just traffic inside

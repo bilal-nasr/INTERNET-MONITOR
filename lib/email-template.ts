@@ -61,8 +61,9 @@ export interface AlertReport {
 
   today: {
     used_bytes: number;
-    quota_bytes: number;
-    percent: number;
+    /** Null, with `percent`, when the daily quota is off. */
+    quota_bytes: number | null;
+    percent: number | null;
     over_bytes: number;
     tx_bytes: number;
     rx_bytes: number;
@@ -383,7 +384,8 @@ export function renderAlertEmail(report: AlertReport): RenderedEmail {
  * 100 mark is itself the breach the mail exists to report.
  */
 function isExceeded(report: AlertReport): boolean {
-  return report.threshold === 100 || report.today.used_bytes > report.today.quota_bytes;
+  const quota = report.today.quota_bytes;
+  return report.threshold === 100 || (quota !== null && report.today.used_bytes > quota);
 }
 
 /**
@@ -397,26 +399,39 @@ function isExceeded(report: AlertReport): boolean {
  * usage has since climbed past the quota. So it stays.
  */
 function isWarning(report: AlertReport): boolean {
-  return report.threshold !== null && report.threshold < 100 && report.today.used_bytes <= report.today.quota_bytes;
+  const quota = report.today.quota_bytes;
+  return report.threshold !== null && report.threshold < 100 && quota !== null && report.today.used_bytes <= quota;
 }
 
 export function subjectLine(report: AlertReport): string {
   const st = styleFor(report.locale);
   const { today } = report;
+  const quota = today.quota_bytes;
   if (report.kind === "digest") {
-    return fill(report.digest === "cycle" ? st.t.subjectDigestCycle : st.t.subjectDigest, {
+    const template =
+      report.digest === "cycle"
+        ? quota === null
+          ? st.t.subjectDigestCycleNoQuota
+          : st.t.subjectDigestCycle
+        : quota === null
+          ? st.t.subjectDigestNoQuota
+          : st.t.subjectDigest;
+    return fill(template, {
       used: formatBytes(today.used_bytes),
-      quota: formatBytes(today.quota_bytes),
+      quota: quota === null ? "" : formatBytes(quota),
       date: report.date,
     });
   }
   const prefix = report.kind === "test" ? st.t.testPrefix : "";
+  if (quota === null || today.percent === null) {
+    return prefix + fill(st.t.subjectReportNoQuota, { used: formatBytes(today.used_bytes), date: report.date });
+  }
   const template = isExceeded(report) ? st.t.subjectExceeded : isWarning(report) ? st.t.subjectThreshold : st.t.subjectReport;
   return (
     prefix +
     fill(template, {
       used: formatBytes(today.used_bytes),
-      quota: formatBytes(today.quota_bytes),
+      quota: formatBytes(quota),
       // The mark is what the reader is being told about; the exact figure follows in the body.
       percent: isWarning(report) ? `${report.threshold}%` : pct(today.percent),
       date: report.date,
@@ -454,18 +469,22 @@ function renderText(report: AlertReport, st: Style): string {
         ? t.introExceeded
         : isWarning(report)
           ? fill(t.introThreshold, { percent: `${report.threshold}%` })
-          : t.introReport,
+          : today.quota_bytes === null
+            ? t.introReportNoQuota
+            : t.introReport,
     "",
     t.sectionToday,
     line(L.date, fill(t.textDate, { date: report.date, timezone: report.timezone })),
     line(L.window, fill(t.textWindow, { start: report.window.start, end: report.window.end })),
     line(
       L.used,
-      fill(t.textUsed, {
-        used: formatBytes(today.used_bytes),
-        quota: formatBytes(today.quota_bytes),
-        percent: pct(today.percent),
-      }),
+      today.quota_bytes === null || today.percent === null
+        ? formatBytes(today.used_bytes)
+        : fill(t.textUsed, {
+            used: formatBytes(today.used_bytes),
+            quota: formatBytes(today.quota_bytes),
+            percent: pct(today.percent),
+          }),
     ),
   );
   if (today.over_bytes > 0) lines.push(line(L.overBy, formatBytes(today.over_bytes)));
@@ -580,8 +599,9 @@ function renderText(report: AlertReport, st: Style): string {
 function renderHtml(report: AlertReport, st: Style): string {
   const { today, cycle, week, connection } = report;
   const { t, d, font } = st;
-  const over = today.used_bytes > today.quota_bytes;
-  const headlineTone = tone(today.percent);
+  const quota = today.quota_bytes;
+  const over = quota !== null && today.used_bytes > quota;
+  const headlineTone = today.percent === null ? C.blue : tone(today.percent);
   const accent = over
     ? { bg: C.redTint, border: C.redBorder, cls: "dm-accent-critical" }
     : { bg: C.blueTint, border: C.blueBorder, cls: "dm-accent-info" };
@@ -610,25 +630,26 @@ function renderHtml(report: AlertReport, st: Style): string {
               ? t.eyebrowExceeded
               : isWarning(report)
                 ? fill(t.eyebrowThreshold, { percent: `${report.threshold}%` })
-                : t.eyebrowReport,
+                : quota === null
+                  ? t.eyebrowReportNoQuota
+                  : t.eyebrowReport,
           headlineTone,
           headlineTone,
         ) +
           `<div style="font-family:${font};font-size:38px;font-weight:700;letter-spacing:${st.tracking("-.02em")};color:${C.ink};line-height:1.1;padding:10px 0 2px" class="dm-text">${esc(formatBytes(today.used_bytes))}</div>` +
-          `<div style="font-family:${font};font-size:13px;color:${C.muted};line-height:1.4;padding-bottom:14px" class="dm-muted">${esc(fill(t.ofDailyQuota, { quota: formatBytes(today.quota_bytes) }))} &middot; <strong class="${toneClass(headlineTone)}" style="color:${headlineTone}">${esc(pct(today.percent))}</strong></div>` +
-          meter(st, today.percent, headlineTone) +
+          (quota === null || today.percent === null
+            ? `<div style="font-family:${font};font-size:13px;color:${C.muted};line-height:1.4;padding-bottom:4px" class="dm-muted">${esc(t.usedInWindow)}</div>`
+            : `<div style="font-family:${font};font-size:13px;color:${C.muted};line-height:1.4;padding-bottom:14px" class="dm-muted">${esc(fill(t.ofDailyQuota, { quota: formatBytes(quota) }))} &middot; <strong class="${toneClass(headlineTone)}" style="color:${headlineTone}">${esc(pct(today.percent))}</strong></div>` +
+              meter(st, today.percent, headlineTone)) +
           `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:12px">` +
-          (over
-            ? kv(st, t.overQuotaBy, formatBytes(today.over_bytes), C.red)
-            : kv(
-                st,
-                t.remainingToday,
-                formatBytes(Math.max(0, today.quota_bytes - today.used_bytes)),
-                C.green,
-              )) +
+          (quota === null
+            ? ""
+            : over
+              ? kv(st, t.overQuotaBy, formatBytes(today.over_bytes), C.red)
+              : kv(st, t.remainingToday, formatBytes(Math.max(0, quota - today.used_bytes)), C.green)) +
           kv(
             st,
-            t.quotaWindow,
+            quota === null ? t.labels.window : t.quotaWindow,
             fill(t.windowSpan, { start: report.window.start, end: report.window.end }),
           ) +
           kv(st, t.labels.date, fill(t.textDate, { date: report.date, timezone: report.timezone })) +
@@ -784,12 +805,15 @@ function renderHtml(report: AlertReport, st: Style): string {
     ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto"><tr><td style="background:${C.ink};border-radius:9px" class="dm-button"><a href="${esc(report.app_url)}" style="display:inline-block;padding:11px 22px;font-family:${font};font-size:13px;font-weight:600;color:#ffffff;text-decoration:none">${esc(t.openDashboard)}</a></td></tr></table><div style="height:16px;line-height:16px;font-size:0">&nbsp;</div>`
     : "";
 
-  const preheader = fill(over ? t.preheaderOver : t.preheaderUnder, {
-    used: formatBytes(today.used_bytes),
-    quota: formatBytes(today.quota_bytes),
-    percent: pct(today.percent),
-    date: report.date,
-  });
+  const preheader =
+    quota === null || today.percent === null
+      ? fill(t.preheaderNoQuota, { used: formatBytes(today.used_bytes), date: report.date })
+      : fill(over ? t.preheaderOver : t.preheaderUnder, {
+          used: formatBytes(today.used_bytes),
+          quota: formatBytes(quota),
+          percent: pct(today.percent),
+          date: report.date,
+        });
 
   const footerNote =
     report.kind === "digest"

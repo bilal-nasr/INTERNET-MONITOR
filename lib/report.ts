@@ -19,7 +19,7 @@ import {
   type CycleTotal,
   type ProfileBar,
 } from "@/lib/series";
-import type { SettingsRow } from "@/lib/settings";
+import { dailyQuotaGb, type SettingsRow } from "@/lib/settings";
 import {
   getComplianceDays,
   getCycleUsage,
@@ -59,7 +59,8 @@ export interface StatsReport {
     to_input: string | null;
   };
   quota: {
-    daily_gb: number;
+    /** Null when the daily quota is off. */
+    daily_gb: number | null;
     monthly_gb: number;
     cycle_day: number;
     window_start: string;
@@ -71,7 +72,8 @@ export interface StatsReport {
   hours: ProfileBar[];
   weekdays: ProfileBar[];
   peak: HeatCell | null;
-  compliance: ComplianceSummary;
+  /** Null when the daily quota is off: there is nothing to comply with. */
+  compliance: ComplianceSummary | null;
   sessions: SessionRangeStats;
   durations: DurationBucket[];
   top_sessions: TopSession[];
@@ -110,7 +112,7 @@ export function describeStatsReport(
       to_input: range.to_input,
     },
     quota: {
-      daily_gb: settings.quota_gb,
+      daily_gb: dailyQuotaGb(settings),
       monthly_gb: settings.monthly_quota_gb,
       cycle_day: settings.billing_cycle_day,
       window_start: settings.window_start.slice(0, 5),
@@ -178,13 +180,16 @@ export async function loadQuotaFigures(
 ): Promise<QuotaFigures> {
   const params = { from: range.from, to: range.to };
   const oldestCycle = cycleBounds(now, settings.billing_cycle_day, settings.timezone, -(CYCLE_HISTORY - 1));
+  const quotaGb = dailyQuotaGb(settings);
   const [complianceDays, cycle, cycleDays] = await Promise.all([
-    getComplianceDays(params, settings.timezone, settings.window_start, settings.window_end),
+    quotaGb === null
+      ? null
+      : getComplianceDays(params, settings.timezone, settings.window_start, settings.window_end),
     getCycleUsage(settings.monthly_quota_gb, settings.billing_cycle_day, settings.timezone, now),
     getSeries({ from: oldestCycle.start, to: now }, "day", settings.timezone),
   ]);
   return {
-    compliance: summariseCompliance(complianceDays, settings.quota_gb),
+    compliance: quotaGb === null || complianceDays === null ? null : summariseCompliance(complianceDays, quotaGb),
     cycle,
     cycle_history: foldIntoCycles(cycleDays, settings.billing_cycle_day, settings.timezone, CYCLE_HISTORY, now),
   };
@@ -207,6 +212,7 @@ export async function buildStatsReport(
   // The cycle-history chart needs day totals reaching back to the start of the
   // oldest cycle it shows, which is a wider span than the selected range.
   const oldestCycle = cycleBounds(now, settings.billing_cycle_day, settings.timezone, -(CYCLE_HISTORY - 1));
+  const quotaGb = dailyQuotaGb(settings);
 
   const [
     summary,
@@ -223,7 +229,9 @@ export async function buildStatsReport(
     getRangeSummary(params),
     getSeries(params, range.bucket, settings.timezone),
     getHeatmap(params, settings.timezone),
-    getComplianceDays(params, settings.timezone, settings.window_start, settings.window_end),
+    quotaGb === null
+      ? null
+      : getComplianceDays(params, settings.timezone, settings.window_start, settings.window_end),
     getSessionStats(params),
     getSessionDurations(params, d),
     getTopSessions(params, TOP_SESSIONS),
@@ -240,7 +248,7 @@ export async function buildStatsReport(
     hours: hourProfile(heatmap),
     weekdays: weekdayProfile(heatmap, d),
     peak: peakCell(heatmap),
-    compliance: summariseCompliance(complianceDays, settings.quota_gb),
+    compliance: quotaGb === null || complianceDays === null ? null : summariseCompliance(complianceDays, quotaGb),
     sessions,
     durations,
     top_sessions: topSessions,

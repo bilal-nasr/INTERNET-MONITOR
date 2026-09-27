@@ -5,8 +5,13 @@ import type { TodayUsage } from "@/lib/usage";
 
 export async function UsageProgress({ usage }: { usage: TodayUsage }) {
   const { d, f } = await getI18n();
-  const pct = Math.min(100, Math.max(0, usage.percent_of_quota));
-  const over = usage.used_since_baseline > usage.quota_bytes;
+  // With the daily quota off the card still reports the window's usage, but
+  // there is nothing to measure it against: no bar, no badge, no alert state.
+  const quota = usage.quota_bytes;
+  const percent = usage.percent_of_quota;
+  const hasQuota = quota !== null && percent !== null;
+  const pct = Math.min(100, Math.max(0, percent ?? 0));
+  const over = quota !== null && usage.used_since_baseline > quota;
   const warn = !over && pct >= 80;
   const barColor = over ? "bg-status-critical" : warn ? "bg-status-warning" : "bg-series-1";
 
@@ -33,30 +38,36 @@ export async function UsageProgress({ usage }: { usage: TodayUsage }) {
             {formatBytes(usage.used_since_baseline)}
           </div>
           <div className="text-sm text-muted">
-            {fill(d.dashboard.ofQuota, {
-              quota: formatBytes(usage.quota_bytes),
-              percent: usage.percent_of_quota.toFixed(0),
-            })}
+            {hasQuota
+              ? fill(d.dashboard.ofQuota, {
+                  quota: formatBytes(quota),
+                  percent: percent.toFixed(0),
+                })
+              : d.dashboard.usedInWindow}
           </div>
         </div>
-        <Badge
-          over={over}
-          warn={warn}
-          notified={usage.notified}
-          hasBaseline={usage.baseline !== null}
-        />
+        {(hasQuota || usage.baseline === null) && (
+          <Badge
+            over={over}
+            warn={warn}
+            notified={usage.notified}
+            hasBaseline={usage.baseline !== null}
+          />
+        )}
       </div>
 
-      <div
-        role="progressbar"
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={Math.round(pct)}
-        aria-label={d.dashboard.progressLabel}
-        className="mt-4 h-3 w-full overflow-hidden rounded-full bg-border"
-      >
-        <div className={`h-full rounded-full ${barColor} transition-[width]`} style={{ width: `${pct}%` }} />
-      </div>
+      {hasQuota && (
+        <div
+          role="progressbar"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.round(pct)}
+          aria-label={d.dashboard.progressLabel}
+          className="mt-4 h-3 w-full overflow-hidden rounded-full bg-border"
+        >
+          <div className={`h-full rounded-full ${barColor} transition-[width]`} style={{ width: `${pct}%` }} />
+        </div>
+      )}
 
       <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-1 text-xs text-muted sm:grid-cols-4">
         <div>
@@ -69,14 +80,18 @@ export async function UsageProgress({ usage }: { usage: TodayUsage }) {
           <dt>{d.dashboard.readingsToday}</dt>
           <dd className="text-foreground tabular-nums">{f.count(usage.readings_count)}</dd>
         </div>
-        <div>
-          <dt>{d.dashboard.quota}</dt>
-          <dd className="text-foreground tabular-nums">{usage.quota_gb} GB</dd>
-        </div>
-        <div>
-          <dt>{d.dashboard.alertSent}</dt>
-          <dd className="text-foreground">{usage.notified ? d.common.yes : d.common.no}</dd>
-        </div>
+        {hasQuota && (
+          <>
+            <div>
+              <dt>{d.dashboard.quota}</dt>
+              <dd className="text-foreground tabular-nums">{usage.quota_gb} GB</dd>
+            </div>
+            <div>
+              <dt>{d.dashboard.alertSent}</dt>
+              <dd className="text-foreground">{usage.notified ? d.common.yes : d.common.no}</dd>
+            </div>
+          </>
+        )}
       </dl>
     </section>
   );

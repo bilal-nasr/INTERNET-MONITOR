@@ -27,6 +27,7 @@ function patchSchema(d: Dictionary) {
   return z
     .object({
       quota_gb: z.coerce.number().positive(e.quotaPositive).max(100_000),
+      daily_quota_enabled: z.boolean(),
       monthly_quota_gb: z.coerce.number().positive(e.monthlyQuotaPositive).max(1_000_000),
       // 31 is allowed: shorter months clamp to their last day (see lib/billing.ts).
       billing_cycle_day: z.coerce

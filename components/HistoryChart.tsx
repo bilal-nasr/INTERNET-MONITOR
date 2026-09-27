@@ -22,7 +22,8 @@ import type { DailyUsage } from "@/lib/usage";
 
 interface Props {
   history: DailyUsage[];
-  quotaGb: number;
+  /** Null when the daily quota is off; no quota line is drawn. */
+  quotaGb: number | null;
   /** Today's date in the configured timezone, as YYYY-MM-DD. */
   today: string;
   days?: number;
@@ -139,7 +140,7 @@ export function HistoryChart({ history, quotaGb, today, days = 30, anomalies = [
           {fill(d.dashboard.historyHeading, { days })}
         </h2>
         <span className="text-xs text-muted">
-          {fill(d.dashboard.historyHint, { quota: quotaGb })}
+          {quotaGb === null ? d.dashboard.historyHintNoQuota : fill(d.dashboard.historyHint, { quota: quotaGb })}
         </span>
       </div>
       <div className="mt-4 h-64 w-full">
@@ -176,7 +177,9 @@ export function HistoryChart({ history, quotaGb, today, days = 30, anomalies = [
                 tickFormatter={(v: number) => String(v)}
               />
               <Tooltip content={ChartTooltip} cursor={{ fill: "var(--border)", opacity: 0.4 }} />
-              <ReferenceLine y={quotaGb} stroke="var(--status-critical)" strokeDasharray="4 4" />
+              {quotaGb !== null && (
+                <ReferenceLine y={quotaGb} stroke="var(--status-critical)" strokeDasharray="4 4" />
+              )}
               {/* All bars share one hue because they are whole days while the
                   quota governs only the window; the warning colour is reserved
                   for flagged days. */}

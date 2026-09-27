@@ -156,6 +156,8 @@ export const ar = {
     withinQuota: "ضمن الحصة",
     historyHeading: "الاستهلاك اليومي بالجيجابايت، آخر {days} يوماً",
     historyHint: "كل حركة البيانات؛ الخط المتقطع = حصة النافذة {quota} GB",
+    historyHintNoQuota: "كل حركة البيانات",
+    usedInWindow: "المستهلك اليوم داخل النافذة",
     historyEmpty: "لم يُسجَّل أي استهلاك بعد. تظهر البيانات بعد بضع قراءات.",
     drillHint: "انقر على يوم لعرضه ساعة بساعة.",
     throughputHeading: "السرعة الحالية",
@@ -507,6 +509,10 @@ export const ar = {
     quotaSection: "الحصة اليومية",
     quotaSectionHint:
       "يُحتسب الاستهلاك داخل هذه النافذة اليومية ضمن الحصة. الأوقات بالمنطقة الزمنية المحددة أدناه.",
+    dailyQuotaEnabled: "الحصة اليومية مفعّلة",
+    dailyQuotaDisabled: "الحصة اليومية متوقفة",
+    dailyQuotaHint:
+      "أوقفها إذا لم تكن لباقتك حصة يومية. تبقى النافذة أدناه مقيسة ومعروضة، لكن لا تُرسل تنبيهات يومية ولا يُطبَّق الإبطاء اليومي أبدًا.",
     quotaGb: "الحصة",
     quotaGbHint: "1 GB = 1,000,000,000 بايت",
     windowStart: "بداية النافذة",
@@ -591,6 +597,7 @@ export const ar = {
     digestHint: "التقرير نفسه المرسل عند تجاوز الحصة، لكن وفق جدول زمني.",
     fields: {
       quota_gb: "الحصة (GB)",
+      daily_quota_enabled: "الحصة اليومية",
       monthly_quota_gb: "الحد الأقصى للاستهلاك (GB)",
       billing_cycle_day: "تبدأ الدورة في اليوم",
       window_start: "بداية النافذة",
@@ -808,6 +815,9 @@ export const ar = {
       "حصة الإنترنت عند {percent}: {used} من أصل {quota} بتاريخ {date}",
     subjectDigest: "تقرير الإنترنت الأسبوعي: {used} من {quota} في {date}",
     subjectDigestCycle: "تقرير دورة الفوترة: {used} من {quota} في {date}",
+    subjectDigestNoQuota: "تقرير الإنترنت الأسبوعي: {used} في {date}",
+    subjectDigestCycleNoQuota: "تقرير دورة الفوترة: {used} في {date}",
+    subjectReportNoQuota: "تقرير استهلاك الإنترنت: {used} في {date}",
     introDigest: "ملخص الإنترنت المجدول.",
     eyebrowDigest: "ملخص مجدول",
     digestFooter: "أُرسل وفق الجدول. يمكن تغييره أو إيقافه من الإعدادات، الفحوصات المجدولة.",
@@ -815,6 +825,7 @@ export const ar = {
     introExceeded:
       "تجاوز استهلاك الإنترنت المنزلي الحصة اليومية.",
     introReport: "تقرير الحصة اليومية.",
+    introReportNoQuota: "تقرير الاستهلاك اليومي.",
     introThreshold:
       "بلغ استهلاك الإنترنت المنزلي {percent} من الحصة اليومية.",
     textTestBanner:
@@ -871,6 +882,8 @@ export const ar = {
       " هذا بالضبط شكل تنبيه الحصة الحقيقي، ملئًا ببياناتك الفعلية. ولم يُعلَّم شيء كتنبيه مُرسَل.",
     eyebrowExceeded: "تم تجاوز الحصة",
     eyebrowReport: "تقرير الحصة اليومية",
+    eyebrowReportNoQuota: "تقرير الاستهلاك اليومي",
+    usedInWindow: "المستهلك داخل نافذة اليوم",
     eyebrowThreshold: "الحصة عند {percent}",
     ofDailyQuota: "من أصل حصة يومية {quota}",
     overQuotaBy: "تجاوز الحصة بـ",
@@ -905,6 +918,7 @@ export const ar = {
     openDashboard: "افتح لوحة التحكم",
     preheaderOver: "استُهلك {used} من أصل {quota} ({percent}) بتاريخ {date}",
     preheaderUnder: "استُهلك {used} من أصل {quota} بتاريخ {date}",
+    preheaderNoQuota: "استُهلك {used} بتاريخ {date}",
     footerTest:
       "معاينة تجريبية. لم تتغير أي حالة تنبيه.",
     generatedLine:

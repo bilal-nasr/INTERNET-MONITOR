@@ -9,8 +9,9 @@
 
 export interface MetricsSample {
   today_used_bytes: number;
-  today_quota_bytes: number;
-  today_percent: number;
+  /** Null, and so omitted, when the daily quota is off. */
+  today_quota_bytes: number | null;
+  today_percent: number | null;
   window_active: boolean;
   cycle_used_bytes: number;
   cycle_cap_bytes: number;

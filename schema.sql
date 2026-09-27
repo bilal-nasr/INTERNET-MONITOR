@@ -13,6 +13,9 @@
 CREATE TABLE IF NOT EXISTS settings (
   id                  INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
   quota_gb            NUMERIC NOT NULL DEFAULT 8 CHECK (quota_gb > 0),
+  -- Off for a plan with no daily allowance: no daily marks, no daily throttle,
+  -- and the pages show the window's usage without measuring it against quota_gb.
+  daily_quota_enabled BOOLEAN NOT NULL DEFAULT true,
   -- Cap for a whole billing cycle, independent of the daily window quota.
   monthly_quota_gb    NUMERIC NOT NULL DEFAULT 600 CHECK (monthly_quota_gb > 0),
   -- Day of the month the billing cycle rolls over on. Clamped to the last day
@@ -162,6 +165,9 @@ ALTER TABLE settings ADD COLUMN IF NOT EXISTS billing_cycle_day INTEGER NOT NULL
 -- Alert language. A database upgraded from an earlier release keeps sending
 -- English alerts until /settings says otherwise.
 ALTER TABLE settings ADD COLUMN IF NOT EXISTS language TEXT NOT NULL DEFAULT 'en';
+
+-- Daily quota switch. Existing databases keep their quota on.
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS daily_quota_enabled BOOLEAN NOT NULL DEFAULT true;
 
 -- Enforcement switches. Existing databases start with both off, so nothing
 -- changes on the router until /settings says so.

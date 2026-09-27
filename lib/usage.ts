@@ -135,11 +135,12 @@ export interface TodayUsage {
   timezone: string;
   local_time: string;
   window: { start: string; end: string; active: boolean };
-  quota_gb: number;
-  quota_bytes: number;
+  /** The daily quota, or null when it is turned off in /settings. */
+  quota_gb: number | null;
+  quota_bytes: number | null;
   baseline: { bytes: number; recorded_at: string } | null;
   used_since_baseline: number;
-  percent_of_quota: number;
+  percent_of_quota: number | null;
   notified: boolean;
   notified_level: number;
   last_reading: {
@@ -162,7 +163,7 @@ export async function getTodayUsage(settings: SettingsRow, now = new Date()): Pr
     countReadingsForLocalDate(parts.date, settings.timezone),
     getLatestReading(),
   ]);
-  const quota = quotaBytes(settings.quota_gb);
+  const quota = settings.daily_quota_enabled ? quotaBytes(settings.quota_gb) : null;
 
   return {
     generated_at: now.toISOString(),
@@ -174,13 +175,13 @@ export async function getTodayUsage(settings: SettingsRow, now = new Date()): Pr
       end: toHHMM(settings.window_end),
       active: isWithinWindow(parts.minutes, settings.window_start, settings.window_end),
     },
-    quota_gb: settings.quota_gb,
+    quota_gb: quota === null ? null : settings.quota_gb,
     quota_bytes: quota,
     baseline: window
       ? { bytes: window.baseline_bytes, recorded_at: window.baseline_recorded_at.toISOString() }
       : null,
     used_since_baseline: used,
-    percent_of_quota: quota > 0 ? (used / quota) * 100 : 0,
+    percent_of_quota: quota === null ? null : quota > 0 ? (used / quota) * 100 : 0,
     notified: window?.notified ?? false,
     notified_level: window?.notified_level ?? 0,
     last_reading: latest

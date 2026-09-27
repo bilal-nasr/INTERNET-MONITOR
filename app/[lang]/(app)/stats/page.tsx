@@ -35,12 +35,12 @@ import {
   loadReliabilityFigures,
   type OverviewFigures,
   type PatternFigures,
-  type QuotaFigures,
   type ReliabilityFigures,
   type StatsReportHead,
   type StatsView,
 } from "@/lib/report";
 import { getSettings, type SettingsRow } from "@/lib/settings";
+import type { ComplianceSummary } from "@/lib/stats";
 
 export async function generateMetadata(): Promise<Metadata> {
   const { d } = await getI18n();
@@ -213,21 +213,28 @@ async function StatsPanel({
     const figures = await loadQuotaFigures(settings, range);
     // Judged on window-only usage, which is what the compliance chart draws, so a
     // flagged bar and a flagged line describe the same number.
-    const anomalies = flagAnomalies(figures.compliance.days);
+    // Without a daily quota there is nothing to comply with, and the tab is
+    // left with the monthly cap.
+    const compliance = figures.compliance;
+    const anomalies = compliance ? flagAnomalies(compliance.days) : [];
     return (
       <>
-        <StatTiles tiles={complianceTiles(figures, w)} />
-        <Card
-          title={d.stats.dailyUsageInWindow}
-          hint={fill(d.stats.dailyUsageInWindowHint, {
-            start: report.quota.window_start,
-            end: report.quota.window_end,
-            quota: report.quota.daily_gb,
-          })}
-        >
-          <ComplianceChart compliance={figures.compliance} />
-        </Card>
-        <AnomalyList flags={anomalies} />
+        {compliance && report.quota.daily_gb !== null && (
+          <>
+            <StatTiles tiles={complianceTiles(compliance, w)} />
+            <Card
+              title={d.stats.dailyUsageInWindow}
+              hint={fill(d.stats.dailyUsageInWindowHint, {
+                start: report.quota.window_start,
+                end: report.quota.window_end,
+                quota: report.quota.daily_gb,
+              })}
+            >
+              <ComplianceChart compliance={compliance} />
+            </Card>
+            <AnomalyList flags={anomalies} />
+          </>
+        )}
         <CycleGauge cycle={figures.cycle} timezone={report.timezone} />
         <Card
           title={d.stats.consumptionPerCycle}
@@ -403,8 +410,7 @@ function reliabilityTiles(report: ReliabilityFigures, { locale, d, f }: Words): 
   ];
 }
 
-function complianceTiles(report: QuotaFigures, { locale, d, f }: Words): Tile[] {
-  const c = report.compliance;
+function complianceTiles(c: ComplianceSummary, { locale, d, f }: Words): Tile[] {
   return [
     {
       label: d.stats.tiles.daysWithinQuota,
