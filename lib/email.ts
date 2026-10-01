@@ -97,3 +97,31 @@ export function sendPasswordResetEmail(to: string, locale: Locale, username: str
   );
   return send(to, d.resetSubject, text, html);
 }
+
+/**
+ * The code that confirms deleting old data. `date` is already formatted in the
+ * page's language and timezone; the code is digits, so it reads the same in
+ * either direction and is set left to right regardless.
+ */
+export function sendDataResetCodeEmail(
+  to: string,
+  locale: Locale,
+  username: string,
+  date: string,
+  code: string,
+): Promise<string> {
+  const d = getDictionaryFor(locale).dataReset.email;
+  const intro = fill(d.intro, { username, date });
+  const text = [intro, ``, code, ``, d.expiry, ``, d.ignore].join("\n");
+  const html = shell(
+    locale,
+    `<p style="margin:0 0 16px">${fill(d.intro, {
+      username: `<strong>${escapeHtml(username)}</strong>`,
+      date: `<strong>${escapeHtml(date)}</strong>`,
+    })}</p>
+      <p dir="ltr" style="margin:0 0 16px;font-size:28px;font-weight:600;letter-spacing:.3em;font-family:ui-monospace,Menlo,Consolas,monospace">${code}</p>
+      <p style="margin:0 0 16px;color:#444;font-size:14px">${d.expiry}</p>
+      <p style="margin:0;color:#888;font-size:12px">${d.ignore}</p>`,
+  );
+  return send(to, d.subject, text, html);
+}

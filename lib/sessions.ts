@@ -51,8 +51,11 @@ export interface SessionOutcome {
 
 type Tx = ITask<object>;
 
-/** Arbitrary fixed key; only this module takes it. */
-const SESSION_LOCK_KEY = 8_474_120_001;
+/**
+ * Arbitrary fixed key. Taken here and by lib/data-reset-store.ts, which
+ * rewrites the open session and must not race a push doing the same.
+ */
+export const SESSION_LOCK_KEY = 8_474_120_001;
 
 const COLS = `id, session_key, interface_name, started_at, ended_at, end_reason,
               last_seen_at, tx_bytes, rx_bytes, total_bytes,

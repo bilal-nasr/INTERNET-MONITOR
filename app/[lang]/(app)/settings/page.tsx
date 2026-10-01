@@ -4,6 +4,7 @@ import { RouterScriptCard } from "@/components/RouterScriptCard";
 import { SessionsList } from "@/components/SessionsList";
 import { SettingsForm } from "@/components/SettingsForm";
 import { ShareCard } from "@/components/ShareCard";
+import { DataResetCard } from "@/components/settings/DataResetCard";
 import { isSettingsTab } from "@/components/settings/tabs";
 import { requireAuth } from "@/lib/auth/server";
 import { getI18n } from "@/lib/i18n/server";
@@ -36,6 +37,7 @@ export default async function SettingsPage({
         initialTab={isSettingsTab(tab) ? tab : "limits"}
         routerScript={<RouterScriptCard interfaceName={settings.wan_interface_name} />}
         sharing={<ShareCard initialToken={settings.share_token} locale={locale} />}
+        dataReset={<DataResetCard timezone={settings.timezone} />}
         account={
           <>
             <AccountForm user={auth.user} />

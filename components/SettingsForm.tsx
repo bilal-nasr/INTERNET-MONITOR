@@ -133,13 +133,13 @@ const primaryButtonClass =
 
 /**
  * The settings page body: the tab list, the settings form spread over the
- * first four tabs, and the sharing card, appearance card and account panel,
- * which save on their own.
+ * first four tabs, and the sharing card, data reset card, appearance card and
+ * account panel, which save on their own.
  *
  * Every panel stays mounted and is only hidden, so switching tabs never loses
- * an edit. The account panel is the exception on the way in: it is mounted the
- * first time its tab is opened, because the browsers it lists are read from the
- * database, and most visits to this page never look at them.
+ * an edit. The account panel and the data reset card are the exception on the
+ * way in: each is mounted the first time its tab is opened, because what they
+ * show is read from the database, and most visits to this page never look.
  *
  * Saving is one request for all four form tabs; a bar at the foot of the
  * screen appears as soon as anything differs from what is saved, and each tab
@@ -153,12 +153,14 @@ export function SettingsForm({
   initialTab,
   routerScript,
   sharing,
+  dataReset,
   account,
 }: {
   initial: PublicSettings;
   initialTab: SettingsTab;
   routerScript: ReactNode;
   sharing: ReactNode;
+  dataReset: ReactNode;
   account: ReactNode;
 }) {
   const { locale, d } = useI18n();
@@ -166,6 +168,7 @@ export function SettingsForm({
   const baseId = useId();
   const [tab, setTab] = useState<SettingsTab>(initialTab);
   const [accountOpened, setAccountOpened] = useState(initialTab === "account");
+  const [dataOpened, setDataOpened] = useState(initialTab === "data");
   const [saved, setSaved] = useState<FormState>(() => toForm(initial));
   const [form, setForm] = useState<FormState>(saved);
   const [saving, setSaving] = useState(false);
@@ -195,6 +198,7 @@ export function SettingsForm({
   function selectTab(next: SettingsTab) {
     setTab(next);
     if (next === "account") setAccountOpened(true);
+    if (next === "data") setDataOpened(true);
     const url = new URL(window.location.href);
     url.searchParams.set("tab", next);
     window.history.replaceState(null, "", url);
@@ -751,6 +755,7 @@ export function SettingsForm({
                 </Link>
               </SettingsCard>
               {sharing}
+              {dataOpened ? dataReset : null}
             </>,
           )}
 

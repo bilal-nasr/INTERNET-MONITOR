@@ -140,6 +140,20 @@ CREATE TABLE IF NOT EXISTS password_resets (
   CONSTRAINT password_resets_token_hash_key UNIQUE (token_hash)
 );
 
+-- An emailed code confirming "delete everything before `cutoff`" (lib/data-reset.ts).
+-- Ten minutes, single use, five wrong tries. The hash covers the cut-off too,
+-- so a code cannot be spent on another date.
+CREATE TABLE IF NOT EXISTS data_reset_codes (
+  id          SERIAL PRIMARY KEY,
+  user_id     INTEGER NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  cutoff      TIMESTAMPTZ NOT NULL,
+  code_hash   TEXT NOT NULL,
+  attempts    INTEGER NOT NULL DEFAULT 0,
+  expires_at  TIMESTAMPTZ NOT NULL,
+  used_at     TIMESTAMPTZ,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 -- One row per scheduled job, written by /api/cron/tick after every run. The
 -- tick may be called every minute; each job reads its own state (this row,
 -- the alerts log) to decide whether there is anything to do.
