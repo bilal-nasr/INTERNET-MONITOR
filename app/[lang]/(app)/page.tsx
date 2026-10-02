@@ -12,6 +12,7 @@ import { flagAnomalies } from "@/lib/anomaly";
 import { fill } from "@/lib/i18n";
 import { Interpolate } from "@/lib/i18n/react";
 import { getI18n } from "@/lib/i18n/server";
+import { getRouterAddress } from "@/lib/router/address-store";
 import { getLatestSessionSummary } from "@/lib/sessions";
 import { getSettings, type SettingsRow } from "@/lib/settings";
 import { setupStatus } from "@/lib/setup-status";
@@ -34,7 +35,7 @@ export default async function DashboardPage() {
     return <SetupError message={err instanceof Error ? err.message : String(err)} />;
   }
 
-  const [usage, history, session, cycle, staleAlert, latest, recent] = await Promise.all([
+  const [usage, history, session, cycle, staleAlert, latest, recent, address] = await Promise.all([
     getTodayUsage(settings),
     getDailyHistory(30, settings.timezone),
     getLatestSessionSummary(),
@@ -42,6 +43,8 @@ export default async function DashboardPage() {
     latestAlert("link_stale", "link").catch(() => null),
     getLatestReading(),
     getRecentReadings(THROUGHPUT_MINUTES),
+    // Before schema.sql has created the table, the card says "not reported yet".
+    getRouterAddress().catch(() => null),
   ]);
   const rates = ratesFromReadings(recent);
   // "Sat, 12 Sep" reads at a glance where "2026-09-12" has to be parsed.
@@ -100,6 +103,7 @@ export default async function DashboardPage() {
           // "skipped" (no recipient) row would otherwise make the card claim
           // the user was emailed when nobody was.
           staleAlertAt={staleAlert?.status === "sent" ? staleAlert.created_at.toISOString() : null}
+          address={address}
         />
       </div>
 

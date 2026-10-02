@@ -7,6 +7,8 @@ import { db } from "@/lib/db";
 import { noteRouterStatus, recordRouterEvidence } from "@/lib/outage-cause-store";
 import { evidenceBodyFields, evidenceFromBody } from "@/lib/outage-evidence";
 import { recordReading, storeReading } from "@/lib/readings";
+import { cleanIp, clientIpFromRequest } from "@/lib/router/address";
+import { recordRouterAddress } from "@/lib/router/address-store";
 import { decidePolicy, type Policy } from "@/lib/router/policy";
 import { applySessionEvent } from "@/lib/sessions";
 import { getSettings } from "@/lib/settings";
@@ -36,6 +38,8 @@ const bodySchema = z
     router_time: z.string().trim().max(100).optional(),
     running: boolish.optional(),
     disabled: boolish.optional(),
+    /** Address on the WAN interface. A malformed one is dropped rather than failing the push. */
+    wan_ip: z.unknown().transform(cleanIp).optional(),
     /** Outage evidence (lib/outage-evidence.ts). Each field falls back rather than failing the push. */
     ...evidenceBodyFields,
   })
@@ -71,11 +75,17 @@ export async function POST(request: Request) {
   }
   const body = parsed.data;
 
+  // Only while the link is up: a push reporting the drop has no WAN address
+  // and leaves by whatever line is left, so it would record a false change.
+  const addressSeen = (at: Date) =>
+    (body.running ?? true) ? recordRouterAddress(body.wan_ip ?? null, clientIpFromRequest(request), at) : undefined;
+
   try {
     const settings = await getSettings();
     if (!settings.polling_enabled) {
       // A paused period is not an outage, so the silence it leaves must not be recorded as one.
-      await noteRouterStatus(evidenceFromBody(body, body.running ?? true), new Date());
+      const at = new Date();
+      await Promise.all([noteRouterStatus(evidenceFromBody(body, body.running ?? true), at), addressSeen(at)]);
       return NextResponse.json({
         status: "paused",
         message: "polling_enabled is false; reading discarded",
@@ -153,8 +163,11 @@ export async function POST(request: Request) {
     // reports its own outcome in the response for the router log.
     const cycleCheck = await checkCycleAlerts(settings, now);
 
-    // Last, and never failing the push either: it catches its own errors.
-    const outageEvidence = await recordRouterEvidence(evidenceFromBody(body, running), now);
+    // Last, and never failing the push either: both catch their own errors.
+    const [outageEvidence] = await Promise.all([
+      recordRouterEvidence(evidenceFromBody(body, running), now),
+      addressSeen(now),
+    ]);
 
     return NextResponse.json({
       ...result,

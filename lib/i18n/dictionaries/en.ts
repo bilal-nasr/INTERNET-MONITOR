@@ -204,6 +204,16 @@ export const en = {
     monitoring: "Monitoring",
     monitoringEnabled: "enabled",
     monitoringPaused: "paused, incoming readings are discarded",
+    address: "Public IP",
+    addressPending: "Not reported yet. Update quota-push on the router with the script from Settings.",
+    addressWan: "WAN interface {ip}",
+    addressSince: "unchanged since {time}",
+    addressPublic: "The router's own address. Reachable from outside wherever its firewall allows.",
+    addressCgnat: "Behind the ISP's carrier-grade NAT: this address is shared, and nothing outside can connect to the router through it.",
+    addressNat: "Behind NAT: connections from outside will not reach the router at this address.",
+    copyIp: "Copy",
+    copiedIp: "Copied",
+    copyIpFailed: "Copy failed",
   },
 
   setupError: {

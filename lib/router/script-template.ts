@@ -73,6 +73,15 @@ export const QUOTA_PUSH_TEMPLATE = `:local iface         "{{iface}}"
 :local net "unknown"
 :do { :set net [/tool netwatch get [find name="internet-probe"] status] } on-error={ :set net "unknown" }
 
+# The address on the WAN interface. The app compares it with the address the
+# push arrives from, which shows whether the line has a public IP or sits
+# behind the ISP's NAT. Empty when the interface has no address.
+:local wanIp ""
+:do {
+    :local a [/ip address get ([/ip address find interface=$iface]->0) address]
+    :set wanIp [:pick $a 0 [:find $a "/"]]
+} on-error={ :set wanIp "" }
+
 # The first run that finds a link down keeps its uptime until a push succeeds.
 # Finding it up records the uptime; finding it down again forgets that, so the
 # span runs from the first down to the last up.
@@ -119,7 +128,7 @@ export const QUOTA_PUSH_TEMPLATE = `:local iface         "{{iface}}"
 }
 
 :if ($send) do={
-    :local body "{\\"iface\\":\\"$iface\\",\\"event\\":\\"$event\\",\\"session_id\\":\\"$sid\\",\\"link_up\\":\\"$linkUp\\",\\"running\\":$running,\\"tx_bytes\\":$outTx,\\"rx_bytes\\":$outRx,\\"router_time\\":\\"$stamp\\",\\"uptime_s\\":$uptime,\\"ether_running\\":\\"$ethRunning\\",\\"ether_link_downs\\":\\"$ethDowns\\",\\"pppoe_link_downs\\":$pppDowns,\\"netwatch\\":\\"$net\\",\\"planned_reconnects\\":$qpPlanned,\\"push_failures\\":$qpFail,\\"eth_down_at\\":\\"$qpEthDownAt\\",\\"eth_up_at\\":\\"$qpEthUpAt\\",\\"ppp_down_at\\":\\"$qpPppDownAt\\",\\"ppp_up_at\\":\\"$qpPppUpAt\\",\\"net_down_at\\":\\"$qpNetDownAt\\",\\"net_up_at\\":\\"$qpNetUpAt\\"}"
+    :local body "{\\"iface\\":\\"$iface\\",\\"event\\":\\"$event\\",\\"session_id\\":\\"$sid\\",\\"link_up\\":\\"$linkUp\\",\\"running\\":$running,\\"tx_bytes\\":$outTx,\\"rx_bytes\\":$outRx,\\"router_time\\":\\"$stamp\\",\\"uptime_s\\":$uptime,\\"ether_running\\":\\"$ethRunning\\",\\"ether_link_downs\\":\\"$ethDowns\\",\\"pppoe_link_downs\\":$pppDowns,\\"netwatch\\":\\"$net\\",\\"planned_reconnects\\":$qpPlanned,\\"push_failures\\":$qpFail,\\"eth_down_at\\":\\"$qpEthDownAt\\",\\"eth_up_at\\":\\"$qpEthUpAt\\",\\"ppp_down_at\\":\\"$qpPppDownAt\\",\\"ppp_up_at\\":\\"$qpPppUpAt\\",\\"net_down_at\\":\\"$qpNetDownAt\\",\\"net_up_at\\":\\"$qpNetUpAt\\",\\"wan_ip\\":\\"$wanIp\\"}"
 
     :local pushed false
     :local data ""

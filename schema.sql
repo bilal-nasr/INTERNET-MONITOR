@@ -286,6 +286,17 @@ CREATE TABLE IF NOT EXISTS outage_causes (
   created_at       TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- The router's addresses, one row. wan_ip is what the router reports for its
+-- WAN interface; public_ip is the address its push arrived from. They differ
+-- behind carrier-grade NAT. changed_at moves only when either one changes.
+CREATE TABLE IF NOT EXISTS router_address (
+  id          INTEGER PRIMARY KEY CHECK (id = 1),
+  wan_ip      TEXT,
+  public_ip   TEXT,
+  changed_at  TIMESTAMPTZ NOT NULL,
+  seen_at     TIMESTAMPTZ NOT NULL
+);
+
 -- CHECK constraints have no IF NOT EXISTS, so add them only when missing.
 DO $$
 BEGIN

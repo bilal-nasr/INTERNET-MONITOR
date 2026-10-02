@@ -187,6 +187,16 @@ export const ar = {
     monitoring: "المراقبة",
     monitoringEnabled: "مفعّلة",
     monitoringPaused: "موقوفة، ويتم تجاهل القراءات الواردة",
+    address: "عنوان IP العام",
+    addressPending: "لم يُرسَل بعد. حدّث سكربت quota-push على الراوتر بالسكربت الموجود في الإعدادات.",
+    addressWan: "واجهة WAN {ip}",
+    addressSince: "دون تغيير منذ {time}",
+    addressPublic: "هذا عنوان الراوتر نفسه، ويمكن الوصول إليه من الخارج بقدر ما يسمح جداره الناري.",
+    addressCgnat: "خلف NAT المزوّد (CGNAT): هذا العنوان مشترك، ولا يمكن لأي جهاز من الخارج الاتصال بالراوتر عبره.",
+    addressNat: "خلف NAT: الاتصالات من الخارج لن تصل إلى الراوتر عبر هذا العنوان.",
+    copyIp: "نسخ",
+    copiedIp: "تم النسخ",
+    copyIpFailed: "تعذّر النسخ",
   },
 
   setupError: {

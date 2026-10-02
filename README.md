@@ -117,6 +117,26 @@ reboot cannot be known, because the marks live in memory, so the whole stretch
 before a boot is "router off". Outages from before the router sent this
 evidence show as "cause unknown".
 
+### Router address
+
+Every push carries the address on the WAN interface (`wan_ip`), and the app
+notes the address the push arrived from (the `x-real-ip` or `x-forwarded-for`
+header the proxy in front of it sets; on Vercel neither can be forged). Both
+are kept in the one-row `router_address` table, with the time either last
+changed, and the Router card on the dashboard shows them. The read-only share
+page does not.
+
+The card says whether the address is any use from outside. When the WAN
+address is in `100.64.0.0/10` the line is behind the ISP's carrier-grade NAT:
+the public address is shared with other customers and a connection to it
+never reaches the router. Only when the two addresses match does the router
+hold its own public address, and even then its firewall drops everything not
+coming from the LAN unless told otherwise. For ways in from another network
+that work behind CGNAT, see [`router/remote-access.md`](router/remote-access.md).
+
+Pushes that report the link going down are ignored for this, since they have
+no WAN address and leave by the backup line.
+
 ### Retention
 
 Readings arrive every 30 seconds, about 2,900 rows a day and over a million a
@@ -611,6 +631,10 @@ lib/
 router/quota-push.rsc        pushes counters to the app
 router/pppoe-reconnect.rsc   cycles the WAN session (daily scheduler, watchdog)
 router/internet-watchdog.md  netwatch setup for ISP outages
+router/dual-wan-setup.rsc    ether5 as a plug-and-play second WAN: failover and 2:1 load balancing
+router/backup-wan-quota.rsc  monthly data cap on the second WAN
+router/adblock-setup.rsc     network-wide ad blocking with the DNS adlist
+router/remote-access.md      reaching the router from another network behind CGNAT
 schema.sql               tables, migrations and the settings seed
 vitest.config.mts        test runner config; specs live beside their modules
 Dockerfile               production image

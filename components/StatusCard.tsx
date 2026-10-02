@@ -1,6 +1,8 @@
+import { CopyButton } from "@/components/CopyButton";
 import { formatBytes } from "@/lib/format";
 import { fill } from "@/lib/i18n";
 import { getI18n } from "@/lib/i18n/server";
+import { reachability, type RouterAddress } from "@/lib/router/address";
 import type { SessionSummary } from "@/lib/sessions";
 import type { TodayUsage } from "@/lib/usage";
 
@@ -37,6 +39,7 @@ export async function StatusCard({
   session = null,
   staleAfterMinutes = 0,
   staleAlertAt = null,
+  address,
 }: {
   usage: TodayUsage;
   pollingEnabled: boolean;
@@ -51,6 +54,12 @@ export async function StatusCard({
   staleAfterMinutes?: number;
   /** When the newest "router has gone quiet" mail was sent, or null. */
   staleAlertAt?: string | null;
+  /**
+   * The router's addresses. Left out (undefined) on the share page, which must
+   * not hand the home's address to whoever holds the link; null when the
+   * router has not reported one yet.
+   */
+  address?: RouterAddress | null;
 }) {
   const { d, f } = await getI18n();
   const state = linkState(session, staleAfterMinutes > 0 ? staleAfterMinutes * 60 : SILENT_AFTER_SECONDS);
@@ -152,6 +161,8 @@ export async function StatusCard({
           )}
         </div>
 
+        {address !== undefined && <AddressRow address={address} timezone={usage.timezone} />}
+
         <div>
           <dt className="text-xs text-muted">{d.router.monitoring}</dt>
           <dd className={`font-medium ${pollingEnabled ? "" : "text-amber-700 dark:text-status-warning"}`}>
@@ -160,5 +171,51 @@ export async function StatusCard({
         </div>
       </dl>
     </section>
+  );
+}
+
+async function AddressRow({ address, timezone }: { address: RouterAddress | null; timezone: string }) {
+  const { d, f } = await getI18n();
+  const shown = address?.public_ip ?? address?.wan_ip ?? null;
+  if (!address || !shown) {
+    return (
+      <div>
+        <dt className="text-xs text-muted">{d.router.address}</dt>
+        <dd className="text-xs text-muted">{d.router.addressPending}</dd>
+      </div>
+    );
+  }
+  const reach = reachability(address.wan_ip, address.public_ip);
+  return (
+    <div>
+      <dt className="text-xs text-muted">{d.router.address}</dt>
+      <dd className="flex flex-wrap items-center gap-2">
+        {/* An address reads left to right in either language. */}
+        <span dir="ltr" className="font-mono font-medium tabular-nums">
+          {shown}
+        </span>
+        <CopyButton
+          text={shown}
+          label={d.router.copyIp}
+          copiedLabel={d.router.copiedIp}
+          failedLabel={d.router.copyIpFailed}
+        />
+      </dd>
+      {address.wan_ip && address.wan_ip !== shown && (
+        <dd className="text-xs text-muted">
+          {fill(d.router.addressWan, { ip: address.wan_ip })}
+        </dd>
+      )}
+      <dd className="text-xs text-muted">
+        {fill(d.router.addressSince, { time: f.stamp(address.changed_at, timezone) })}
+      </dd>
+      {reach === "public" && <dd className="text-xs text-muted">{d.router.addressPublic}</dd>}
+      {reach === "cgnat" && (
+        <dd className="text-xs text-amber-700 dark:text-status-warning">{d.router.addressCgnat}</dd>
+      )}
+      {reach === "nat" && (
+        <dd className="text-xs text-amber-700 dark:text-status-warning">{d.router.addressNat}</dd>
+      )}
+    </div>
   );
 }
