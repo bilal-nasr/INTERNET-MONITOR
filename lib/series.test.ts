@@ -8,6 +8,7 @@ import {
   formatBucketTitle,
   hourProfile,
   peakCell,
+  summariseFree,
   weekdayProfile,
 } from "@/lib/series";
 
@@ -192,5 +193,41 @@ describe("bucket labels", () => {
 
   test("titles a week bucket as the week it starts", () => {
     expect(formatBucketTitle("2026-09-07T00:00:00", "week", en)).toBe("Week of 7 Sep 2026");
+  });
+});
+
+describe("summariseFree", () => {
+  const window = { start: "23:00", end: "06:59" };
+  const day = (date: string, total: number, free: number, readings = 24): SeriesPoint => ({
+    bucket: `${date}T00:00:00`,
+    total_bytes: total,
+    tx_bytes: 0,
+    rx_bytes: total,
+    readings,
+    free_bytes: free,
+  });
+
+  test("sums the range and lists the days newest first", () => {
+    const s = summariseFree(
+      [day("2026-10-01", 10e9, 4e9), day("2026-10-02", 20e9, 6e9), day("2026-10-03", 10e9, 0)],
+      window,
+    );
+    expect(s).toMatchObject({ total_bytes: 40e9, free_bytes: 10e9, counted_bytes: 30e9, free_share: 25 });
+    expect(s.days.map((d) => d.day)).toEqual(["2026-10-03", "2026-10-02", "2026-10-01"]);
+    expect(s.days[1]).toEqual({ day: "2026-10-02", total_bytes: 20e9, free_bytes: 6e9, counted_bytes: 14e9 });
+    expect(s.heaviest?.day).toBe("2026-10-02");
+    expect(s.average_free_bytes).toBe(Math.round(10e9 / 3));
+    expect(s.window).toEqual(window);
+  });
+
+  test("leaves out days nothing was measured on, so they do not pull the average down", () => {
+    const s = summariseFree([day("2026-10-01", 10e9, 4e9), day("2026-10-02", 0, 0, 0)], window);
+    expect(s.days_measured).toBe(1);
+    expect(s.average_free_bytes).toBe(4e9);
+  });
+
+  test("has no heaviest day and no share without free traffic", () => {
+    expect(summariseFree([day("2026-10-01", 10e9, 0)], window)).toMatchObject({ heaviest: null, free_share: 0 });
+    expect(summariseFree([], window)).toMatchObject({ heaviest: null, free_share: 0, days_measured: 0, days: [] });
   });
 });

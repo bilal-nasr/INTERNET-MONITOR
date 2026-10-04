@@ -7,6 +7,8 @@ import { Card, StatTiles, type Tile } from "@/components/stats/chrome";
 import { ComplianceChart } from "@/components/stats/ComplianceChart";
 import { CycleGauge } from "@/components/stats/CycleGauge";
 import { CycleHistoryChart } from "@/components/stats/CycleHistoryChart";
+import { FreeDaysTable } from "@/components/stats/FreeDaysTable";
+import { FreeHoursChart } from "@/components/stats/FreeHoursChart";
 import { AvailabilityDonut, TrafficSplitDonut } from "@/components/stats/Donuts";
 import { DurationChart, HourProfileChart, WeekdayProfileChart } from "@/components/stats/Profiles";
 import { TopSessionsTable } from "@/components/stats/TopSessionsTable";
@@ -29,10 +31,12 @@ import {
 import {
   describeStatsReport,
   isStatsView,
+  loadFreeFigures,
   loadOverviewFigures,
   loadPatternFigures,
   loadQuotaFigures,
   loadReliabilityFigures,
+  type FreeFigures,
   type OverviewFigures,
   type PatternFigures,
   type ReliabilityFigures,
@@ -41,6 +45,7 @@ import {
 } from "@/lib/report";
 import { getSettings, type SettingsRow } from "@/lib/settings";
 import type { ComplianceSummary } from "@/lib/stats";
+import type { FreeSummary } from "@/lib/series";
 
 export async function generateMetadata(): Promise<Metadata> {
   const { d } = await getI18n();
@@ -92,7 +97,11 @@ export default async function StatsPage({ searchParams }: { searchParams: Promis
   // never waits on a figure.
   const report = describeStatsReport(settings, range, d);
   const requested = one(params.view);
-  const view: StatsView = isStatsView(requested) ? requested : "overview";
+  // The free-hours view exists only while free hours are on; a link to it
+  // kept from before they were turned off opens the overview instead.
+  const hasFree = report.quota.free_window !== null;
+  const view: StatsView =
+    isStatsView(requested) && (requested !== "free" || hasFree) ? requested : "overview";
   // Views already opened are kept while the range stays the same.
   const cacheKey = [range.preset, range.from_input ?? "", range.to_input ?? "", range.bucket].join("|");
 
@@ -132,6 +141,7 @@ export default async function StatsPage({ searchParams }: { searchParams: Promis
           { id: "patterns", label: d.stats.tabs.patterns },
           { id: "reliability", label: d.stats.tabs.reliability },
           { id: "quota", label: d.stats.tabs.quota },
+          ...(hasFree ? [{ id: "free", label: d.stats.tabs.free }] : []),
         ]}
         fallback={<PanelSkeleton />}
         // Awaited, not wrapped in Suspense: Tabs keeps this element to show
@@ -246,6 +256,31 @@ async function StatsPanel({
     );
   }
 
+  // Null while the free hours are off, which is also when the view is never
+  // chosen (see `hasFree`).
+  const freeFigures: FreeFigures | null = view === "free" ? await loadFreeFigures(settings, range) : null;
+  if (freeFigures) {
+    const { free } = freeFigures;
+    return (
+      <>
+        <StatTiles tiles={freeTiles(free, w)} />
+        <Card
+          title={fill(d.stats.freeOverTime, { bucket: d.buckets[report.range.bucket as BucketUnit] })}
+          hint={<FreeWindowHint free={free} d={d} />}
+        >
+          <FreeHoursChart
+            series={freeFigures.series}
+            bucket={report.range.bucket as BucketUnit}
+            totals={free}
+          />
+        </Card>
+        <Card title={d.stats.freePerDay} hint={d.stats.freePerDayHint}>
+          <FreeDaysTable days={free.days} />
+        </Card>
+      </>
+    );
+  }
+
   const figures = await loadOverviewFigures(settings, range);
   return (
     <>
@@ -301,11 +336,16 @@ function perSecond(bytes: number): string {
 
 function volumeTiles(report: OverviewFigures, { d, f }: Words): Tile[] {
   const { summary, cycle } = report;
+  // The series carries each bucket's free-hours part, so the range's share
+  // costs no further query. Only said while the free hours are on.
+  const freeBytes = cycle.free ? report.series.reduce((sum, p) => sum + p.free_bytes, 0) : 0;
   return [
     {
       label: d.stats.tiles.totalUsed,
       value: formatBytes(summary.total_bytes),
-      hint: fill(d.common.readingsCount, { count: f.count(summary.readings) }),
+      hint: cycle.free
+        ? fill(d.stats.tiles.inFreeHours, { bytes: formatBytes(freeBytes) })
+        : fill(d.common.readingsCount, { count: f.count(summary.readings) }),
     },
     {
       label: d.stats.tiles.downloaded,
@@ -438,6 +478,52 @@ function complianceTiles(c: ComplianceSummary, { locale, d, f }: Words): Tile[] 
       hint: c.worst_day ? c.worst_day.day : d.stats.tiles.noDaysMeasured,
     },
   ];
+}
+
+function freeTiles(free: FreeSummary, { locale, d }: Words): Tile[] {
+  return [
+    {
+      label: d.stats.tiles.freeHours,
+      value: formatBytes(free.free_bytes),
+      hint:
+        free.total_bytes > 0
+          ? fill(d.stats.tiles.freeShare, { percent: free.free_share.toFixed(0) })
+          : d.common.noTrafficYet,
+      tone: free.free_bytes > 0 ? "good" : undefined,
+    },
+    {
+      label: d.stats.tiles.counted,
+      value: formatBytes(free.counted_bytes),
+      hint: d.stats.tiles.countedHint,
+    },
+    {
+      label: d.stats.tiles.averageFreeDay,
+      value: formatBytes(free.average_free_bytes),
+      hint:
+        free.days_measured > 0
+          ? plural(locale, d.stats.tiles.averageFreeDayHint, free.days_measured)
+          : d.stats.tiles.noDaysMeasured,
+    },
+    {
+      label: d.stats.tiles.heaviestFreeDay,
+      value: free.heaviest ? formatBytes(free.heaviest.free_bytes) : d.common.empty,
+      hint: free.heaviest ? free.heaviest.day : d.stats.tiles.noFreeTraffic,
+    },
+  ];
+}
+
+/** "free hours 23:00-06:59", the times kept in clock order in Arabic too. */
+function FreeWindowHint({ free, d }: { free: FreeSummary; d: Dictionary }) {
+  const [before, after] = d.stats.freeWindowHint.split("{range}");
+  return (
+    <>
+      {before}
+      <span dir="ltr">
+        {free.window.start}-{free.window.end}
+      </span>
+      {after}
+    </>
+  );
 }
 
 function share(part: number, whole: number, d: Dictionary): string {

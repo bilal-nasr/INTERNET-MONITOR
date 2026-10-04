@@ -13,7 +13,7 @@ import { cycleBounds } from "@/lib/billing";
 import { fill, type Dictionary } from "@/lib/i18n";
 import type { BucketUnit } from "@/lib/range";
 import type { HeatCell, SeriesPoint } from "@/lib/stats";
-import { localParts } from "@/lib/time";
+import { localParts, type FreeWindow } from "@/lib/time";
 
 /**
  * A local wall clock, carried in a Date whose UTC fields hold the local
@@ -251,4 +251,68 @@ export function peakCell(cells: HeatCell[]): HeatCell | null {
     (best, cell) => (best === null || cell.total_bytes > best.total_bytes ? cell : best),
     null,
   );
+}
+
+export interface FreeDay {
+  /** Local date, "YYYY-MM-DD". */
+  day: string;
+  total_bytes: number;
+  free_bytes: number;
+  /** What the monthly cap counted that day: everything but the free hours. */
+  counted_bytes: number;
+}
+
+export interface FreeSummary {
+  window: FreeWindow;
+  total_bytes: number;
+  free_bytes: number;
+  counted_bytes: number;
+  /** Free traffic as a percentage of all traffic in the range. */
+  free_share: number;
+  /** Days in the range that have readings at all. */
+  days_measured: number;
+  average_free_bytes: number;
+  heaviest: FreeDay | null;
+  /** One row per day with readings, newest first. */
+  days: FreeDay[];
+}
+
+/**
+ * Day buckets, as `getSeries` returns them with free hours, summed into the
+ * free-hours figures for a range.
+ *
+ * The buckets are not filled first: a day without a reading is not a day with
+ * no free traffic, it is a day nothing was measured, and counting it would
+ * pull the average down. The sums are exact for the range even when its first
+ * or last day is partial, because each bucket only holds the deltas inside it.
+ */
+export function summariseFree(dayPoints: SeriesPoint[], window: FreeWindow): FreeSummary {
+  const days: FreeDay[] = dayPoints
+    .filter((p) => p.readings > 0)
+    .map((p) => ({
+      day: p.bucket.slice(0, 10),
+      total_bytes: p.total_bytes,
+      free_bytes: p.free_bytes,
+      counted_bytes: p.total_bytes - p.free_bytes,
+    }))
+    .sort((a, b) => (a.day < b.day ? 1 : a.day > b.day ? -1 : 0));
+
+  const total = days.reduce((sum, d) => sum + d.total_bytes, 0);
+  const free = days.reduce((sum, d) => sum + d.free_bytes, 0);
+  const heaviest = days.reduce<FreeDay | null>(
+    (best, d) => (d.free_bytes > 0 && (best === null || d.free_bytes > best.free_bytes) ? d : best),
+    null,
+  );
+
+  return {
+    window,
+    total_bytes: total,
+    free_bytes: free,
+    counted_bytes: total - free,
+    free_share: total > 0 ? (free / total) * 100 : 0,
+    days_measured: days.length,
+    average_free_bytes: days.length > 0 ? Math.round(free / days.length) : 0,
+    heaviest,
+    days,
+  };
 }

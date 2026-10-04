@@ -15,12 +15,14 @@ import {
   foldIntoCycles,
   hourProfile,
   peakCell,
+  summariseFree,
   weekdayProfile,
   type CycleTotal,
+  type FreeSummary,
   type ProfileBar,
 } from "@/lib/series";
 import { dailyQuotaGb, type SettingsRow } from "@/lib/settings";
-import { freeWindowOf } from "@/lib/time";
+import { freeWindowOf, type FreeWindow } from "@/lib/time";
 import {
   getComplianceDays,
   getCycleUsageFor,
@@ -66,6 +68,8 @@ export interface StatsReport {
     cycle_day: number;
     window_start: string;
     window_end: string;
+    /** The free hours, or null while they are off. */
+    free_window: FreeWindow | null;
   };
   summary: RangeSummary;
   series: SeriesPoint[];
@@ -80,11 +84,13 @@ export interface StatsReport {
   top_sessions: TopSession[];
   cycle: CycleUsage;
   cycle_history: CycleTotal[];
+  /** Free-hours traffic over the range, per day; null while the free hours are off. */
+  free: FreeSummary | null;
   first_reading_at: string | null;
 }
 
 /** The views of the statistics page, each of which reads only its own figures. */
-export const STATS_VIEWS = ["overview", "patterns", "reliability", "quota"] as const;
+export const STATS_VIEWS = ["overview", "patterns", "reliability", "quota", "free"] as const;
 export type StatsView = (typeof STATS_VIEWS)[number];
 
 export function isStatsView(value: unknown): value is StatsView {
@@ -118,6 +124,7 @@ export function describeStatsReport(
       cycle_day: settings.billing_cycle_day,
       window_start: settings.window_start.slice(0, 5),
       window_end: settings.window_end.slice(0, 5),
+      free_window: freeWindowOf(settings),
     },
   };
 }
@@ -126,6 +133,11 @@ export type OverviewFigures = Pick<StatsReport, "summary" | "series" | "cycle">;
 export type PatternFigures = Pick<StatsReport, "summary" | "heatmap" | "hours" | "weekdays" | "peak">;
 export type ReliabilityFigures = Pick<StatsReport, "sessions" | "durations" | "top_sessions">;
 export type QuotaFigures = Pick<StatsReport, "compliance" | "cycle" | "cycle_history">;
+export interface FreeFigures {
+  free: FreeSummary;
+  /** The range's buckets, each carrying its free-hours part. */
+  series: SeriesPoint[];
+}
 
 /*
  * One loader per view of the statistics page. The page shows one view at a
@@ -138,7 +150,8 @@ export async function loadOverviewFigures(settings: SettingsRow, range: Resolved
   const params = { from: range.from, to: range.to };
   const [summary, rawSeries, cycle] = await Promise.all([
     getRangeSummary(params),
-    getSeries(params, range.bucket, settings.timezone),
+    // With the free hours, so the timeline can say how much of each bucket fell in them.
+    getSeries(params, range.bucket, settings.timezone, freeWindowOf(settings)),
     getCycleUsageFor(settings),
   ]);
   return {
@@ -197,6 +210,25 @@ export async function loadQuotaFigures(
 }
 
 /**
+ * The free-hours view: the range's buckets, and its days for the table. A
+ * range already bucketed by day needs only the one query. Null while the free
+ * hours are off, since the view is not offered then.
+ */
+export async function loadFreeFigures(settings: SettingsRow, range: ResolvedRange): Promise<FreeFigures | null> {
+  const free = freeWindowOf(settings);
+  if (!free) return null;
+  const params = { from: range.from, to: range.to };
+  const [rawSeries, rawDays] = await Promise.all([
+    getSeries(params, range.bucket, settings.timezone, free),
+    range.bucket === "day" ? null : getSeries(params, "day", settings.timezone, free),
+  ]);
+  return {
+    free: summariseFree(rawDays ?? rawSeries, free),
+    series: fillSeries(rawSeries, range.from, range.to, range.bucket, settings.timezone),
+  };
+}
+
+/**
  * `d` is the language the report is written in. The figures are language-free,
  * but a report also carries names -- the range, the weekdays, the session
  * length bands -- and those are resolved once here so the page and /api/stats
@@ -214,6 +246,7 @@ export async function buildStatsReport(
   // oldest cycle it shows, which is a wider span than the selected range.
   const oldestCycle = cycleBounds(now, settings.billing_cycle_day, settings.timezone, -(CYCLE_HISTORY - 1));
   const quotaGb = dailyQuotaGb(settings);
+  const free = freeWindowOf(settings);
 
   const [
     summary,
@@ -226,9 +259,10 @@ export async function buildStatsReport(
     cycle,
     cycleDays,
     firstReadingAt,
+    freeDays,
   ] = await Promise.all([
     getRangeSummary(params),
-    getSeries(params, range.bucket, settings.timezone),
+    getSeries(params, range.bucket, settings.timezone, free),
     getHeatmap(params, settings.timezone),
     quotaGb === null
       ? null
@@ -239,6 +273,7 @@ export async function buildStatsReport(
     getCycleUsageFor(settings, now),
     getSeries({ from: oldestCycle.start, to: now }, "day", settings.timezone, freeWindowOf(settings)),
     getFirstReadingAt(),
+    free === null || range.bucket === "day" ? null : getSeries(params, "day", settings.timezone, free),
   ]);
 
   return {
@@ -261,6 +296,7 @@ export async function buildStatsReport(
       CYCLE_HISTORY,
       now,
     ),
+    free: free === null ? null : summariseFree(freeDays ?? rawSeries, free),
     first_reading_at: firstReadingAt,
   };
 }

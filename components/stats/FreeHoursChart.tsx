@@ -29,26 +29,24 @@ import { formatBucketLabel, formatBucketTitle } from "@/lib/series";
 import type { SeriesPoint } from "@/lib/stats";
 
 /**
- * Traffic over time, download stacked on upload.
- *
- * Few buckets are drawn as bars, because each one is a discrete total worth
- * comparing; many buckets become a filled area, where the shape of the curve is
- * what carries the meaning and individual bars would be slivers.
+ * Traffic over time, what the cap counted stacked under what fell in the free
+ * hours. Same shape rules as the usage timeline: bars while there are few
+ * buckets, a filled area once there are too many for bars to read.
  */
 const BAR_LIMIT = 60;
 
 interface Row extends SeriesPoint {
   label: string;
-  rx: number;
-  tx: number;
+  counted: number;
+  free: number;
 }
 
 function toRows(series: SeriesPoint[], unit: BucketUnit, d: Dictionary): Row[] {
   return series.map((p) => ({
     ...p,
     label: formatBucketLabel(p.bucket, unit, d),
-    rx: bytesToGb(p.rx_bytes),
-    tx: bytesToGb(p.tx_bytes),
+    counted: bytesToGb(p.total_bytes - p.free_bytes),
+    free: bytesToGb(p.free_bytes),
   }));
 }
 
@@ -58,36 +56,34 @@ function makeTooltip(unit: BucketUnit, d: Dictionary) {
     const row = payload[0].payload as Row;
     return (
       <TooltipShell title={formatBucketTitle(row.bucket, unit, d)}>
-        <TooltipRow label={d.common.download} value={formatBytes(row.rx_bytes)} color="var(--series-1)" />
-        <TooltipRow label={d.common.upload} value={formatBytes(row.tx_bytes)} color="var(--series-2)" />
+        <TooltipRow
+          label={d.stats.freeTable.counted}
+          value={formatBytes(row.total_bytes - row.free_bytes)}
+          color="var(--series-1)"
+        />
+        <TooltipRow label={d.stats.freeTable.free} value={formatBytes(row.free_bytes)} color="var(--series-3)" />
         <TooltipRow label={d.common.total} value={formatBytes(row.total_bytes)} />
-        {row.free_bytes > 0 ? (
-          <TooltipRow label={d.cycle.freeHours} value={formatBytes(row.free_bytes)} color="var(--series-3)" />
-        ) : null}
-        <TooltipRow label={d.common.readings} value={String(row.readings)} />
       </TooltipShell>
     );
   };
 }
 
-export function UsageTimeline({
+export function FreeHoursChart({
   series,
   bucket,
   totals,
 }: {
   series: SeriesPoint[];
   bucket: BucketUnit;
-  totals: { rx_bytes: number; tx_bytes: number };
+  totals: { counted_bytes: number; free_bytes: number };
 }) {
   const { d, dir } = useI18n();
   const rows = toRows(series, bucket, d);
-  const hasData = rows.some((r) => r.total_bytes > 0);
   const asBars = rows.length <= BAR_LIMIT;
-  // Stacked, so the axis reaches the tallest total rather than the tallest series.
-  const maxGb = Math.max(0, ...rows.map((r) => r.rx + r.tx));
+  const maxGb = Math.max(0, ...rows.map((r) => r.counted + r.free));
   const ChartTooltip = makeTooltip(bucket, d);
 
-  if (!hasData) {
+  if (!rows.some((r) => r.total_bytes > 0)) {
     return <Empty>{d.charts.noTraffic}</Empty>;
   }
 
@@ -95,20 +91,15 @@ export function UsageTimeline({
     <div className="space-y-3">
       <Legend
         items={[
-          { label: d.common.download, color: "var(--series-1)", value: formatBytes(totals.rx_bytes) },
-          { label: d.common.upload, color: "var(--series-2)", value: formatBytes(totals.tx_bytes) },
+          { label: d.stats.freeTable.counted, color: "var(--series-1)", value: formatBytes(totals.counted_bytes) },
+          { label: d.stats.freeTable.free, color: "var(--series-3)", value: formatBytes(totals.free_bytes) },
         ]}
       />
       <div className="h-56 w-full sm:h-72">
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={rows} margin={chartMargin(dir)}>
             <CartesianGrid vertical={false} stroke="var(--border)" />
-            <XAxis
-              dataKey="label"
-              {...AXIS}
-              axisLine={{ stroke: "var(--border)" }}
-              minTickGap={24}
-            />
+            <XAxis dataKey="label" {...AXIS} axisLine={{ stroke: "var(--border)" }} minTickGap={24} />
             <YAxis
               {...AXIS}
               axisLine={false}
@@ -120,10 +111,8 @@ export function UsageTimeline({
             <Tooltip content={ChartTooltip} cursor={{ fill: "var(--border)", opacity: 0.4 }} />
             {asBars ? (
               <>
-                {/* A 2px gap between the stacked segments keeps the boundary
-                    readable when both are dark. */}
                 <Bar
-                  dataKey="rx"
+                  dataKey="counted"
                   stackId="traffic"
                   fill="var(--series-1)"
                   maxBarSize={28}
@@ -132,9 +121,9 @@ export function UsageTimeline({
                   strokeWidth={1}
                 />
                 <Bar
-                  dataKey="tx"
+                  dataKey="free"
                   stackId="traffic"
-                  fill="var(--series-2)"
+                  fill="var(--series-3)"
                   radius={[4, 4, 0, 0]}
                   maxBarSize={28}
                   isAnimationActive={false}
@@ -145,7 +134,7 @@ export function UsageTimeline({
             ) : (
               <>
                 <Area
-                  dataKey="rx"
+                  dataKey="counted"
                   stackId="traffic"
                   stroke="var(--series-1)"
                   strokeWidth={2}
@@ -154,11 +143,11 @@ export function UsageTimeline({
                   isAnimationActive={false}
                 />
                 <Area
-                  dataKey="tx"
+                  dataKey="free"
                   stackId="traffic"
-                  stroke="var(--series-2)"
+                  stroke="var(--series-3)"
                   strokeWidth={2}
-                  fill="var(--series-2)"
+                  fill="var(--series-3)"
                   fillOpacity={0.25}
                   isAnimationActive={false}
                 />
