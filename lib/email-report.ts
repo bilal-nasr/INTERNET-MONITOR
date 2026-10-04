@@ -16,6 +16,7 @@ import { DEFAULT_LOCALE, type Locale } from "@/lib/i18n/config";
 import { alertLocale, type SettingsRow } from "@/lib/settings";
 import {
   getComplianceDays,
+  getFreeSplit,
   getRangeSummary,
   getSeries,
   getSessionStats,
@@ -102,33 +103,53 @@ export async function buildAlertReport(input: AlertReportInput): Promise<AlertRe
   const now = input.now ?? new Date();
 
   const todayRange = windowRange(settings, date, now);
+  const free = freeWindowOf(settings);
   const historyFrom = localTimeInstant(shiftDate(date, -(HISTORY_DAYS - 1)), "00:00", settings.timezone);
   const historyRange = historyFrom ? { from: historyFrom, to: now } : null;
 
-  const [todaySummary, todayHours, cycle, complianceDays, sessions] = await Promise.allSettled([
+  const [todaySummary, todayHours, cycle, complianceDays, sessions, todayFree] = await Promise.allSettled([
     todayRange ? getRangeSummary(todayRange) : Promise.reject(new Error("no window today")),
     todayRange
-      ? getSeries(todayRange, "hour", settings.timezone)
+      ? getSeries(todayRange, "hour", settings.timezone, free)
       : Promise.reject(new Error("no window today")),
     getCycleUsageFor(settings, now, {
       atCycleEnd: input.atCycleEnd,
     }),
     // The week strip is a compliance chart, so it has nothing to say without a quota.
     historyRange && quotaBytes !== null
-      ? getComplianceDays(historyRange, settings.timezone, settings.window_start, settings.window_end, freeWindowOf(settings))
+      ? getComplianceDays(
+          historyRange,
+          settings.timezone,
+          settings.window_start,
+          settings.window_end,
+          free,
+        )
       : Promise.reject(new Error("no history range")),
     historyRange ? getSessionStats(historyRange) : Promise.reject(new Error("no history range")),
+    // The free part of the day's upload and download, which the headline leaves out.
+    todayRange && free
+      ? getFreeSplit(todayRange, settings.timezone, free)
+      : Promise.resolve({ tx_bytes: 0, rx_bytes: 0 }),
   ]);
 
   const summary = todaySummary.status === "fulfilled" ? todaySummary.value : null;
+  // Without the free part the split cannot be told apart from the free hours,
+  // so it is left out like a missing summary rather than shown too large.
+  const freeSplit = todayFree.status === "fulfilled" ? todayFree.value : null;
+  const split =
+    summary && freeSplit
+      ? { tx: summary.tx_bytes - freeSplit.tx_bytes, rx: summary.rx_bytes - freeSplit.rx_bytes }
+      : { tx: 0, rx: 0 };
 
   // The busiest hour of the day, which is usually where the breach came from.
+  // Measured on counted traffic, so a heavy free hour is never named as the cause.
   let peakHour: number | null = null;
   let peakHourBytes = 0;
   if (todayHours.status === "fulfilled") {
     for (const point of todayHours.value) {
-      if (point.total_bytes > peakHourBytes) {
-        peakHourBytes = point.total_bytes;
+      const counted = point.total_bytes - point.free_bytes;
+      if (counted > peakHourBytes) {
+        peakHourBytes = counted;
         peakHour = Number(point.bucket.slice(11, 13));
       }
     }
@@ -153,9 +174,10 @@ export async function buildAlertReport(input: AlertReportInput): Promise<AlertRe
       ...quotaFigures(usedBytes, quotaBytes),
       // The split is measured over the window, so it can differ from the
       // baseline total by a reading or two. Scaling it to match would invent
-      // precision the counters do not have.
-      tx_bytes: summary?.tx_bytes ?? 0,
-      rx_bytes: summary?.rx_bytes ?? 0,
+      // precision the counters do not have. Free hours are left out, as they
+      // are from the headline.
+      tx_bytes: split.tx,
+      rx_bytes: split.rx,
       peak_bytes_per_second: summary?.peak_bytes_per_second ?? 0,
       avg_bytes_per_second: summary?.avg_bytes_per_second ?? 0,
       peak_hour: peakHour,

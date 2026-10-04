@@ -147,6 +147,25 @@ export async function getRangeSummary({ from, to }: RangeParams): Promise<RangeS
   };
 }
 
+/**
+ * Upload and download inside the free hours over a range, for the figures that
+ * have to leave them out (the daily alert's breakdown). Kept out of
+ * `getRangeSummary`, whose callers want every byte.
+ */
+export function getFreeSplit(
+  { from, to }: RangeParams,
+  timezone: string,
+  free: FreeWindow,
+): Promise<{ tx_bytes: number; rx_bytes: number }> {
+  return db.one<{ tx_bytes: number; rx_bytes: number }>(
+    `WITH ${DELTAS}
+     SELECT COALESCE(SUM(tx_delta) FILTER (WHERE ${IN_FREE_HOURS}), 0)::bigint AS tx_bytes,
+            COALESCE(SUM(rx_delta) FILTER (WHERE ${IN_FREE_HOURS}), 0)::bigint AS rx_bytes
+     FROM d`,
+    { from, to, timezone, ...freeHoursBounds(free) },
+  );
+}
+
 // ------------------------------------------------------------- series ----
 
 export interface SeriesPoint {
