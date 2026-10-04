@@ -16,7 +16,7 @@ import { getRouterAddress } from "@/lib/router/address-store";
 import { getLatestSessionSummary } from "@/lib/sessions";
 import { getSettings, type SettingsRow } from "@/lib/settings";
 import { setupStatus } from "@/lib/setup-status";
-import { getCycleUsage } from "@/lib/stats";
+import { getCycleUsageFor } from "@/lib/stats";
 import { ratesFromReadings } from "@/lib/throughput";
 import { getDailyHistory, getLatestReading, getRecentReadings, getTodayUsage } from "@/lib/usage";
 
@@ -39,7 +39,7 @@ export default async function DashboardPage() {
     getTodayUsage(settings),
     getDailyHistory(30, settings.timezone),
     getLatestSessionSummary(),
-    getCycleUsage(settings.monthly_quota_gb, settings.billing_cycle_day, settings.timezone),
+    getCycleUsageFor(settings),
     latestAlert("link_stale", "link").catch(() => null),
     getLatestReading(),
     getRecentReadings(THROUGHPUT_MINUTES),

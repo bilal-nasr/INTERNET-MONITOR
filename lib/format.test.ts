@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { escapeHtml, formatBytes, formatRate, quotaBytes } from "@/lib/format";
+import { clockRange, escapeHtml, formatBytes, formatRate, quotaBytes } from "@/lib/format";
 
 describe("formatRate", () => {
   test("writes bits per second in decimal units", () => {
@@ -49,5 +49,15 @@ describe("escapeHtml", () => {
   test("leaves a value with nothing to escape untouched", () => {
     expect(escapeHtml("pppoe-out1")).toBe("pppoe-out1");
     expect(escapeHtml("")).toBe("");
+  });
+});
+
+describe("clockRange", () => {
+  test("is plain in left-to-right text", () => {
+    expect(clockRange("23:00", "06:59", "ltr")).toBe("23:00-06:59");
+  });
+
+  test("leads with a left-to-right mark in right-to-left text", () => {
+    expect(clockRange("23:00", "06:59", "rtl")).toBe("‎23:00-06:59");
   });
 });

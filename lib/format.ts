@@ -55,3 +55,15 @@ export function formatRate(bytesPerSecond: number): string {
   if (bits >= 1e3) return `${Math.round(bits / 1e3)} kbit/s`;
   return `${Math.round(bits)} bit/s`;
 }
+
+/**
+ * "23:00-06:59", kept in clock order inside right-to-left text.
+ *
+ * Mail has no `<span dir="ltr">` to lean on in its plain-text body, and in an
+ * Arabic sentence the digits after an Arabic letter read as Arabic numbers,
+ * which the hyphen does not join: the two times trade places. A left-to-right
+ * mark in front makes the whole range one left-to-right run, in both bodies.
+ */
+export function clockRange(start: string, end: string, dir: "ltr" | "rtl"): string {
+  return `${dir === "rtl" ? "\u200E" : ""}${start}-${end}`;
+}

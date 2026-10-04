@@ -1,5 +1,12 @@
 import { describe, expect, test } from "vitest";
-import { localTimeInstant, previousLocalDate, windowSeconds, zonedTimeToUtc } from "@/lib/time";
+import {
+  freeWindowOf,
+  freeWindowSeconds,
+  localTimeInstant,
+  previousLocalDate,
+  windowSeconds,
+  zonedTimeToUtc,
+} from "@/lib/time";
 
 describe("windowSeconds", () => {
   test("converts the window to seconds since local midnight", () => {
@@ -22,6 +29,29 @@ describe("windowSeconds", () => {
 
   test("falls back to the whole day when a time cannot be parsed", () => {
     expect(windowSeconds("not-a-time", "23:59:00")).toEqual({ start: 0, end: 86_400 });
+  });
+});
+
+describe("free hours", () => {
+  const row = { free_window_enabled: true, free_window_start: "02:00:00", free_window_end: "07:59:00" };
+
+  test("are read from the settings row as HH:MM, or null while off", () => {
+    expect(freeWindowOf(row)).toEqual({ start: "02:00", end: "07:59" });
+    expect(freeWindowOf({ ...row, free_window_enabled: false })).toBeNull();
+  });
+
+  test("become seconds with an exclusive end", () => {
+    expect(freeWindowSeconds({ start: "02:00", end: "07:59" })).toEqual({ start: 7_200, end: 28_800 });
+    expect(freeWindowSeconds({ start: "00:00", end: "23:59" })).toEqual({ start: 0, end: 86_400 });
+  });
+
+  test("may cross midnight, which leaves the end before the start", () => {
+    expect(freeWindowSeconds({ start: "23:00", end: "06:59" })).toEqual({ start: 82_800, end: 25_200 });
+  });
+
+  test("count nothing as free when off or unparseable", () => {
+    expect(freeWindowSeconds(null)).toBeNull();
+    expect(freeWindowSeconds({ start: "25:00", end: "06:59" })).toBeNull();
   });
 });
 

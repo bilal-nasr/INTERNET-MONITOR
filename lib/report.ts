@@ -20,9 +20,10 @@ import {
   type ProfileBar,
 } from "@/lib/series";
 import { dailyQuotaGb, type SettingsRow } from "@/lib/settings";
+import { freeWindowOf } from "@/lib/time";
 import {
   getComplianceDays,
-  getCycleUsage,
+  getCycleUsageFor,
   getFirstReadingAt,
   getHeatmap,
   getRangeSummary,
@@ -138,7 +139,7 @@ export async function loadOverviewFigures(settings: SettingsRow, range: Resolved
   const [summary, rawSeries, cycle] = await Promise.all([
     getRangeSummary(params),
     getSeries(params, range.bucket, settings.timezone),
-    getCycleUsage(settings.monthly_quota_gb, settings.billing_cycle_day, settings.timezone),
+    getCycleUsageFor(settings),
   ]);
   return {
     summary,
@@ -185,8 +186,8 @@ export async function loadQuotaFigures(
     quotaGb === null
       ? null
       : getComplianceDays(params, settings.timezone, settings.window_start, settings.window_end),
-    getCycleUsage(settings.monthly_quota_gb, settings.billing_cycle_day, settings.timezone, now),
-    getSeries({ from: oldestCycle.start, to: now }, "day", settings.timezone),
+    getCycleUsageFor(settings, now),
+    getSeries({ from: oldestCycle.start, to: now }, "day", settings.timezone, freeWindowOf(settings)),
   ]);
   return {
     compliance: quotaGb === null || complianceDays === null ? null : summariseCompliance(complianceDays, quotaGb),
@@ -235,8 +236,8 @@ export async function buildStatsReport(
     getSessionStats(params),
     getSessionDurations(params, d),
     getTopSessions(params, TOP_SESSIONS),
-    getCycleUsage(settings.monthly_quota_gb, settings.billing_cycle_day, settings.timezone, now),
-    getSeries({ from: oldestCycle.start, to: now }, "day", settings.timezone),
+    getCycleUsageFor(settings, now),
+    getSeries({ from: oldestCycle.start, to: now }, "day", settings.timezone, freeWindowOf(settings)),
     getFirstReadingAt(),
   ]);
 

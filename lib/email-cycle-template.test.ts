@@ -23,6 +23,7 @@ function report(overrides: Partial<CycleReport> = {}): CycleReport {
       daily_budget_bytes: 7.6e9,
       daily_average_bytes: 32.4e9,
       over: false,
+      free: null,
     },
     ...overrides,
   };
@@ -94,5 +95,23 @@ describe("renderCycleEmail", () => {
     const { html } = renderCycleEmail(report({ timezone: "<script>" }));
     expect(html).not.toContain("<script>");
     expect(html).toContain("&lt;script&gt;");
+  });
+});
+
+describe("renderCycleEmail with free hours", () => {
+  test("adds a row for them in both bodies", () => {
+    const { text, html } = renderCycleEmail(
+      report({ cycle: { ...report().cycle, free: { start: "02:00", end: "07:59", bytes: 41.5e9 } } }),
+    );
+    for (const body of [text, html]) {
+      expect(body).toContain("Free hours");
+      expect(body).toContain("41.50 GB in 02:00-07:59, not counted against the cap");
+    }
+  });
+
+  test("has no such row while they are off", () => {
+    const { text, html } = renderCycleEmail(report());
+    expect(text).not.toContain("Free hours");
+    expect(html).not.toContain("Free hours");
   });
 });

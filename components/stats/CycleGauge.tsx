@@ -146,6 +146,22 @@ export async function CycleGauge({
           hint={cycle.over ? d.cycle.capExceeded : d.cycle.beforeTheCap}
         />
       </dl>
+
+      {/* Recorded on its own: none of the figures above include it. */}
+      {cycle.free && (
+        <div className="mt-4 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-t border-border pt-3 text-xs">
+          <span className="text-muted">
+            {d.cycle.freeHours}{" "}
+            <span dir="ltr">
+              {cycle.free.start}-{cycle.free.end}
+            </span>
+          </span>
+          <span>
+            <span className="font-medium tabular-nums">{formatBytes(cycle.free.bytes)}</span>{" "}
+            <span className="text-muted">{d.cycle.freeHoursHint}</span>
+          </span>
+        </div>
+      )}
     </section>
   );
 }

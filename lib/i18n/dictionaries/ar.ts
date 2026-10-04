@@ -246,6 +246,8 @@ export const ar = {
     remaining: "المتبقي",
     capExceeded: "تم تجاوز السقف",
     beforeTheCap: "قبل بلوغ السقف",
+    freeHours: "الساعات المجانية",
+    freeHoursHint: "غير محتسبة من السقف",
   },
 
   stats: {
@@ -532,12 +534,22 @@ export const ar = {
     timezoneHint: "اسم IANA. يحدّد اليوم الذي تنتمي إليه القراءة ووقت فتح النافذة.",
     monthlySection: "السقف الشهري",
     monthlySectionHint:
-      "الإجمالي المسموح به خلال دورة فوترة واحدة، ويشمل كل حركة البيانات في كل الساعات، لا النافذة اليومية أعلاه فقط.",
+      "الإجمالي المسموح به خلال دورة فوترة واحدة، ويشمل كل حركة البيانات في كل الساعات، لا النافذة اليومية أعلاه فقط. تُستثنى منه الساعات المجانية أدناه فقط.",
     monthlyQuotaGb: "الحد الأقصى للاستهلاك",
     monthlyQuotaGbHint: "يظهر كحلقة في لوحة التحكم، مع توقّع لاستهلاك الدورة.",
     billingCycleDay: "تبدأ الدورة في اليوم",
     billingCycleDayHint:
       "يوم الشهر الذي يُعاد فيه ضبط السقف. إذا تجاوز اليوم نهاية شهر قصير، يُستخدم آخر يوم في ذلك الشهر.",
+    freeSection: "الساعات المجانية",
+    freeSectionHint:
+      "ساعات لا يحتسبها مزوّد الخدمة. تُسجَّل حركة البيانات خلالها على حدة ولا تُحتسب من السقف الشهري. الأوقات بالمنطقة الزمنية أعلاه.",
+    freeEnabled: "الساعات المجانية مفعّلة",
+    freeDisabled: "الساعات المجانية متوقفة",
+    freeHint:
+      "فعّلها إذا كانت باقتك تتضمن ساعات مجانية، مثل الليالي غير المحتسبة. تعرض لوحة التحكم ما استُهلك فيها خلال هذه الدورة بمعزل عن السقف. لا تتأثر الحصة اليومية.",
+    freeStart: "مجاني من",
+    freeEnd: "مجاني حتى",
+    freeEndHint: "شاملةً الدقيقة الأخيرة. إذا كانت النهاية قبل البداية فالفترة تمتد بعد منتصف الليل، مثل 23:00 إلى 06:59.",
     alertsSection: "التنبيهات",
     alertEmail: "بريد التنبيهات",
     alertEmailHint: "تُرسل الرسالة التجريبية إلى العنوان المحفوظ. احفظ أولاً إن كنت قد غيّرته للتو.",
@@ -608,6 +620,9 @@ export const ar = {
     fields: {
       quota_gb: "الحصة (GB)",
       daily_quota_enabled: "الحصة اليومية",
+      free_window_enabled: "الساعات المجانية",
+      free_window_start: "مجاني من",
+      free_window_end: "مجاني حتى",
       monthly_quota_gb: "الحد الأقصى للاستهلاك (GB)",
       billing_cycle_day: "تبدأ الدورة في اليوم",
       window_start: "بداية النافذة",
@@ -896,6 +911,7 @@ export const ar = {
       progress: "التقدم",
       dailyAverage: "المعدل اليومي",
       budgetLeft: "المتاح يومياً",
+      freeHours: "الساعات المجانية",
       sessions: "الجلسات",
       drops: "الانقطاعات",
       availability: "نسبة التوفر",
@@ -911,6 +927,7 @@ export const ar = {
     textProgress:
       "اليوم {elapsed} من أصل {total}، ويتبقى {remaining}",
     textBudget: "{bytes} لكل يوم متبقٍ",
+    textFreeHours: "{bytes} خلال {range}، غير محتسبة",
     textMeanUptime: "{duration} بين الانقطاعات",
     textOverMarker: "  تجاوز",
     textDaysOver:
@@ -951,6 +968,7 @@ export const ar = {
     cycleStatus: "حالة الدورة",
     overCap: "تجاوز السقف",
     withinCap: "ضمن السقف",
+    freeHoursNotCounted: "الساعات المجانية {range}، غير محتسبة",
     lastSevenDays: "آخر 7 أيام",
     weekIntro:
       "حركة البيانات داخل نافذة الحصة. الأعمدة الحمراء تجاوزت {quota}.",
@@ -1013,6 +1031,8 @@ export const ar = {
     progressValue: "اليوم {elapsed} من {total}، بقي {remaining}",
     dailyAverage: "المتوسط اليومي حتى الآن",
     budget: "الميزانية لكل يوم متبقٍ",
+    freeHours: "الساعات المجانية",
+    freeHoursValue: "{bytes} خلال {range}، غير محتسبة من السقف",
     footerThreshold: "ستصلك رسالة أخرى عند العلامة التالية، ورسالة إضافية إذا تم تجاوز السقف.",
     footerOver: "تم تجاوز سقف هذه الدورة. لن تصلك رسالة أخرى بخصوص السقف خلال هذه الدورة.",
     footerPace: "يُرسل تحذير التوقّع هذا مرة واحدة في كل دورة.",

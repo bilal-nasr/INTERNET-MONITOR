@@ -78,7 +78,7 @@ function advance(wall: Date, bucket: BucketUnit): Date {
 }
 
 function emptyPoint(bucket: string): SeriesPoint {
-  return { bucket, total_bytes: 0, tx_bytes: 0, rx_bytes: 0, readings: 0 };
+  return { bucket, total_bytes: 0, tx_bytes: 0, rx_bytes: 0, readings: 0, free_bytes: 0 };
 }
 
 /**
@@ -123,6 +123,8 @@ export interface CycleTotal {
   total_bytes: number;
   tx_bytes: number;
   rx_bytes: number;
+  /** The part of `total_bytes` inside the free hours, which the cap does not count. */
+  free_bytes: number;
   current: boolean;
 }
 
@@ -159,6 +161,7 @@ export function foldIntoCycles(
       total_bytes: inCycle.reduce((sum, d) => sum + d.total_bytes, 0),
       tx_bytes: inCycle.reduce((sum, d) => sum + d.tx_bytes, 0),
       rx_bytes: inCycle.reduce((sum, d) => sum + d.rx_bytes, 0),
+      free_bytes: inCycle.reduce((sum, d) => sum + d.free_bytes, 0),
       current: offset === 0,
     });
   }

@@ -19,7 +19,7 @@ import {
   getRangeSummary,
   getSeries,
   getSessionStats,
-  getCycleUsage,
+  getCycleUsageFor,
   summariseCompliance,
   type ComplianceDay,
 } from "@/lib/stats";
@@ -110,7 +110,7 @@ export async function buildAlertReport(input: AlertReportInput): Promise<AlertRe
     todayRange
       ? getSeries(todayRange, "hour", settings.timezone)
       : Promise.reject(new Error("no window today")),
-    getCycleUsage(settings.monthly_quota_gb, settings.billing_cycle_day, settings.timezone, now, {
+    getCycleUsageFor(settings, now, {
       atCycleEnd: input.atCycleEnd,
     }),
     // The week strip is a compliance chart, so it has nothing to say without a quota.
@@ -176,6 +176,7 @@ export async function buildAlertReport(input: AlertReportInput): Promise<AlertRe
             daily_budget_bytes: cycle.value.daily_budget_bytes,
             daily_average_bytes: cycle.value.daily_average_bytes,
             over: cycle.value.over,
+            free: cycle.value.free,
           }
         : null,
 
@@ -320,6 +321,7 @@ export function sampleAlertReport(now = new Date(), locale: Locale = DEFAULT_LOC
       daily_budget_bytes: 19.5e9,
       daily_average_bytes: 13.3e9,
       over: false,
+      free: null,
     },
     week: {
       days,

@@ -1,6 +1,7 @@
 import { cycleBounds } from "@/lib/billing";
 import type { SettingsRow } from "@/lib/settings";
 import { getCycleUsage, type CycleUsage } from "@/lib/stats";
+import { freeWindowOf } from "@/lib/time";
 
 /**
  * The cycle total is one aggregate over the whole cycle, tens of thousands of
@@ -10,10 +11,10 @@ import { getCycleUsage, type CycleUsage } from "@/lib/stats";
  * those five minutes is enforced on the next refresh, which is well inside the
  * accuracy anyone expects of a monthly cap.
  *
- * The cache key is everything the figure depends on: a changed cap or cycle
- * day drops the value on the next call rather than waiting for the ttl, and so
- * does the start of the cycle, so a rollover can never serve the previous
- * cycle's verdict out of a warm instance.
+ * The cache key is everything the figure depends on: a changed cap, cycle
+ * day or free hours drops the value on the next call rather than waiting for
+ * the ttl, and so does the start of the cycle, so a rollover can never serve
+ * the previous cycle's verdict out of a warm instance.
  *
  * The loader reads the clock itself. It is run again every time the ttl lapses
  * -- on an instance the push keeps warm, that is forever -- so a timestamp
@@ -74,7 +75,9 @@ let inflight: Promise<CycleUsage> | null = null;
 export function getCycleUsageCached(settings: SettingsRow, now = new Date()): Promise<CycleUsage> {
   const { monthly_quota_gb, billing_cycle_day, timezone } = settings;
   const { start } = cycleBounds(now, billing_cycle_day, timezone);
-  const next = `${monthly_quota_gb}|${billing_cycle_day}|${timezone}|${start.toISOString()}`;
+  const free = freeWindowOf(settings);
+  const freeKey = free ? `${free.start}-${free.end}` : "none";
+  const next = `${monthly_quota_gb}|${billing_cycle_day}|${timezone}|${freeKey}|${start.toISOString()}`;
   if (next !== key) {
     key = next;
     cell = null;
@@ -89,7 +92,7 @@ export function getCycleUsageCached(settings: SettingsRow, now = new Date()): Pr
     // The key this load belongs to. A load that finishes after the key moved on
     // must not fill the cache, nor clear the newer load's handle.
     const loadedFor = key;
-    inflight = getCycleUsage(monthly_quota_gb, billing_cycle_day, timezone, new Date()).then(
+    inflight = getCycleUsage(monthly_quota_gb, billing_cycle_day, timezone, new Date(), { free }).then(
       (data) => {
         if (key === loadedFor) {
           cell = { at: Date.now(), data };

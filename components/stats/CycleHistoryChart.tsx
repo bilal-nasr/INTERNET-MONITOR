@@ -46,7 +46,10 @@ function makeCycleTooltip(d: Dictionary) {
     const row = payload[0].payload as Row;
     return (
       <TooltipShell title={fill(d.cycle.span, { start: row.start_date, end: row.end_date })}>
-        <TooltipRow label={d.common.used} value={formatBytes(row.total_bytes)} color="var(--series-1)" />
+        <TooltipRow label={d.common.used} value={formatBytes(row.total_bytes - row.free_bytes)} color="var(--series-1)" />
+        {row.free_bytes > 0 ? (
+          <TooltipRow label={d.cycle.freeHours} value={formatBytes(row.free_bytes)} />
+        ) : null}
         <TooltipRow label={d.common.download} value={formatBytes(row.rx_bytes)} />
         <TooltipRow label={d.common.upload} value={formatBytes(row.tx_bytes)} />
         {row.current ? (
@@ -65,10 +68,11 @@ export function CycleHistoryChart({ cycles, capGb }: { cycles: CycleTotal[]; cap
   }
 
   const capBytes = capGb * 1e9;
+  // The bar is what the cap counted, so the free hours are left out of it.
   const rows: Row[] = cycles.map((c) => ({
     ...c,
-    value: bytesToGb(c.total_bytes),
-    over: c.total_bytes > capBytes,
+    value: bytesToGb(c.total_bytes - c.free_bytes),
+    over: c.total_bytes - c.free_bytes > capBytes,
   }));
 
   const peakGb = Math.max(...rows.map((r) => r.value));

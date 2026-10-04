@@ -36,6 +36,7 @@ function report(overrides: Partial<AlertReport> = {}): AlertReport {
       daily_budget_bytes: 19.5e9,
       daily_average_bytes: 13.3e9,
       over: false,
+      free: null,
     },
     week: {
       days: [
@@ -338,5 +339,33 @@ describe("no daily quota", () => {
     expect(subjectLine(noQuota({ kind: "digest", digest: "cycle" }))).toBe(
       "Billing cycle report: 12.40 GB on 2026-09-11",
     );
+  });
+});
+
+describe("free hours in the billing cycle", () => {
+  const withFree = (locale: AlertReport["locale"] = "en") =>
+    report({
+      locale,
+      cycle: { ...report().cycle!, free: { start: "23:00", end: "06:59", bytes: 30e9 } },
+    });
+
+  test("are a line of their own in both bodies", () => {
+    const { text, html } = renderAlertEmail(withFree());
+    expect(text).toContain("Free hours    30.00 GB in 23:00-06:59, not counted");
+    expect(html).toContain("Free hours 23:00-06:59, not counted");
+    expect(html).toContain("30.00 GB");
+  });
+
+  test("are written in Arabic for an Arabic mail", () => {
+    const { text, html } = renderAlertEmail(withFree("ar"));
+    // The left-to-right mark keeps the two times in clock order (see clockRange).
+    expect(text).toContain("30.00 GB خلال ‎23:00-06:59، غير محتسبة");
+    expect(html).toContain("الساعات المجانية ‎23:00-06:59، غير محتسبة");
+  });
+
+  test("leave no trace while they are off", () => {
+    const { text, html } = renderAlertEmail(report());
+    expect(text).not.toContain("Free hours");
+    expect(html).not.toContain("Free hours");
   });
 });

@@ -3,7 +3,7 @@ import { errorResponse } from "@/lib/api";
 import { dictionaryFromRequest } from "@/lib/i18n/request";
 import { getSettings, getShareToken } from "@/lib/settings";
 import { tokensMatch } from "@/lib/share";
-import { getCycleUsage } from "@/lib/stats";
+import { getCycleUsageFor } from "@/lib/stats";
 import { getTodayUsage } from "@/lib/usage";
 
 export const maxDuration = 30;
@@ -36,7 +36,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
     const now = new Date();
     const [today, cycle] = await Promise.all([
       getTodayUsage(settings, now),
-      getCycleUsage(settings.monthly_quota_gb, settings.billing_cycle_day, settings.timezone, now),
+      getCycleUsageFor(settings, now),
     ]);
     return NextResponse.json(
       { generated_at: now.toISOString(), today, cycle },

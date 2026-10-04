@@ -9,6 +9,7 @@ const sample: MetricsSample = {
   cycle_used_bytes: 187_000_000_000,
   cycle_cap_bytes: 600_000_000_000,
   cycle_percent: 31.1667,
+  cycle_free_bytes: null,
   last_reading_age_seconds: 27,
   link_up: true,
   session_uptime_seconds: 42_000,

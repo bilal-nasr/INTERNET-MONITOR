@@ -12,18 +12,9 @@ vi.mock("@/lib/db", () => ({ db: { one: vi.fn() } }));
 
 const one = vi.mocked(db.one);
 
-/** Stand-in for getRangeSummary's row: only the total matters here. */
-function summaryRow(totalBytes: number) {
-  return {
-    readings: 1,
-    total_bytes: totalBytes,
-    tx_bytes: 0,
-    rx_bytes: totalBytes,
-    first_reading_at: null,
-    last_reading_at: null,
-    measured_seconds: 0,
-    peak_bytes_per_second: 0,
-  };
+/** Stand-in for the cycle aggregate's row: the total and its free-hours part. */
+function summaryRow(totalBytes: number, freeBytes = 0) {
+  return { total_bytes: totalBytes, free_bytes: freeBytes };
 }
 
 describe("getCycleUsage for the closed-cycle digest", () => {
@@ -68,5 +59,36 @@ describe("getCycleUsage for the closed-cycle digest", () => {
     const unset = await getCycleUsage(600, 1, "UTC", mid, {});
     expect(unset).toEqual(live);
     expect([live.days_elapsed, live.days_remaining]).toEqual([10, 21]);
+  });
+});
+
+describe("getCycleUsage with free hours", () => {
+  const mid = new Date("2026-08-11T12:00:00Z");
+
+  beforeEach(() => {
+    one.mockReset().mockResolvedValue(summaryRow(500e9, 200e9));
+  });
+
+  test("leaves the free traffic out of the cap and reports it on its own", async () => {
+    const cycle = await getCycleUsage(600, 1, "UTC", mid, { free: { start: "02:00", end: "07:59" } });
+    expect(cycle.used_bytes).toBe(300e9);
+    expect(cycle.percent_of_cap).toBe(50);
+    expect(cycle.over).toBe(false);
+    expect(cycle.free).toEqual({ start: "02:00", end: "07:59", bytes: 200e9 });
+  });
+
+  test("passes the window to the query as seconds, end exclusive", async () => {
+    await getCycleUsage(600, 1, "Asia/Beirut", mid, { free: { start: "23:00", end: "06:59" } });
+    const params = one.mock.calls[0][1] as Record<string, unknown>;
+    expect(params).toMatchObject({ freeStart: 82_800, freeEnd: 25_200, timezone: "Asia/Beirut" });
+  });
+
+  test("without free hours there is no free figure and nothing is asked for", async () => {
+    one.mockResolvedValue(summaryRow(500e9));
+    const cycle = await getCycleUsage(600, 1, "UTC", mid);
+    expect(cycle.used_bytes).toBe(500e9);
+    expect(cycle.free).toBeNull();
+    const params = one.mock.calls[0][1] as Record<string, unknown>;
+    expect(params).toMatchObject({ freeStart: null, freeEnd: null });
   });
 });

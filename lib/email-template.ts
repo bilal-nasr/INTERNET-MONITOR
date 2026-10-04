@@ -21,7 +21,7 @@
  * relied on to inherit `dir` into a nested table.
  */
 
-import { escapeHtml as esc, formatBytes } from "@/lib/format";
+import { clockRange, escapeHtml as esc, formatBytes } from "@/lib/format";
 import { fill, getDictionaryFor, type Dictionary } from "@/lib/i18n";
 import { DIRECTION, type Direction, type Locale } from "@/lib/i18n/config";
 import { formatDuration } from "@/lib/time";
@@ -86,6 +86,8 @@ export interface AlertReport {
     daily_budget_bytes: number;
     daily_average_bytes: number;
     over: boolean;
+    /** Traffic in the free hours, left out of every figure above; null while they are off. */
+    free: { start: string; end: string; bytes: number } | null;
   } | null;
 
   week: {
@@ -536,6 +538,17 @@ function renderText(report: AlertReport, st: Style): string {
       line(L.dailyAverage, formatBytes(cycle.daily_average_bytes)),
       line(L.budgetLeft, fill(t.textBudget, { bytes: formatBytes(cycle.daily_budget_bytes) })),
     );
+    if (cycle.free) {
+      lines.push(
+        line(
+          L.freeHours,
+          fill(t.textFreeHours, {
+            bytes: formatBytes(cycle.free.bytes),
+            range: clockRange(cycle.free.start, cycle.free.end, st.dir),
+          }),
+        ),
+      );
+    }
   }
 
   if (week && week.days.length > 0) {
@@ -716,7 +729,17 @@ function renderHtml(report: AlertReport, st: Style): string {
                 value: cycle.over ? t.overCap : t.withinCap,
                 color: cycle.over ? C.red : C.green,
               },
-            ]),
+            ]) +
+            // Recorded on its own: none of the figures above include it.
+            (cycle.free
+              ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-top:1px solid ${C.border};margin-top:4px" class="dm-divider">` +
+                kv(
+                  st,
+                  fill(t.freeHoursNotCounted, { range: clockRange(cycle.free.start, cycle.free.end, st.dir) }),
+                  formatBytes(cycle.free.bytes),
+                ) +
+                `</table>`
+              : ""),
         ),
       ),
       spacer(14),

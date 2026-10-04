@@ -37,6 +37,10 @@ function patchSchema(d: Dictionary) {
         .max(31, e.cycleDayRange),
       window_start: hhmm,
       window_end: hhmm,
+      free_window_enabled: z.boolean(),
+      // No order rule: free hours may run past midnight (23:00 to 06:59).
+      free_window_start: hhmm,
+      free_window_end: hhmm,
       timezone: z.string().trim().min(1).refine(isValidTimeZone, e.unknownTimezone),
       alert_email_to: z.email(e.invalidEmail).trim().nullable(),
       wan_interface_name: z.string().trim().min(1, e.interfaceRequired).max(100),

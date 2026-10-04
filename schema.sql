@@ -21,6 +21,12 @@ CREATE TABLE IF NOT EXISTS settings (
   -- Day of the month the billing cycle rolls over on. Clamped to the last day
   -- of shorter months by the application, so 31 is a valid choice.
   billing_cycle_day   INTEGER NOT NULL DEFAULT 5 CHECK (billing_cycle_day BETWEEN 1 AND 31),
+  -- Free hours: traffic in this local-time range is recorded on its own and
+  -- left out of the monthly cap. The end is inclusive to the minute, like the
+  -- daily window, and a start after the end runs past midnight (23:00-06:59).
+  free_window_enabled BOOLEAN NOT NULL DEFAULT false,
+  free_window_start   TIME NOT NULL DEFAULT '02:00',
+  free_window_end     TIME NOT NULL DEFAULT '07:59',
   window_start        TIME NOT NULL DEFAULT '14:00',
   window_end          TIME NOT NULL DEFAULT '23:59',
   timezone            TEXT NOT NULL DEFAULT 'UTC',
@@ -182,6 +188,12 @@ ALTER TABLE settings ADD COLUMN IF NOT EXISTS language TEXT NOT NULL DEFAULT 'en
 
 -- Daily quota switch. Existing databases keep their quota on.
 ALTER TABLE settings ADD COLUMN IF NOT EXISTS daily_quota_enabled BOOLEAN NOT NULL DEFAULT true;
+
+-- Free hours. Existing databases start with them off, so the cap counts every
+-- byte until /settings says otherwise.
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS free_window_enabled BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS free_window_start   TIME NOT NULL DEFAULT '02:00';
+ALTER TABLE settings ADD COLUMN IF NOT EXISTS free_window_end     TIME NOT NULL DEFAULT '07:59';
 
 -- Enforcement switches. Existing databases start with both off, so nothing
 -- changes on the router until /settings says so.

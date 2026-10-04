@@ -5,7 +5,7 @@
  */
 
 import type { RenderedEmail } from "@/lib/email-template";
-import { escapeHtml as esc, formatBytes } from "@/lib/format";
+import { clockRange, escapeHtml as esc, formatBytes } from "@/lib/format";
 import { fill, getDictionaryFor } from "@/lib/i18n";
 import { DIRECTION, type Locale } from "@/lib/i18n/config";
 import { previousLocalDate } from "@/lib/time";
@@ -37,6 +37,8 @@ export interface CycleReport {
     daily_budget_bytes: number;
     daily_average_bytes: number;
     over: boolean;
+    /** Traffic in the free hours, left out of every figure above; null while they are off. */
+    free: { start: string; end: string; bytes: number } | null;
   };
 }
 
@@ -84,6 +86,14 @@ export function renderCycleEmail(report: CycleReport): RenderedEmail {
     [t.progress, fill(t.progressValue, { elapsed: c.days_elapsed, total: c.days_total, remaining: c.days_remaining })],
     [t.dailyAverage, formatBytes(c.daily_average_bytes)],
     [t.budget, formatBytes(c.daily_budget_bytes)],
+    ...(c.free
+      ? [
+          [
+            t.freeHours,
+            fill(t.freeHoursValue, { bytes: formatBytes(c.free.bytes), range: clockRange(c.free.start, c.free.end, dir) }),
+          ] as [string, string],
+        ]
+      : []),
   ];
 
   const text = [

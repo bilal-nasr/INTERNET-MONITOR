@@ -18,7 +18,8 @@ import { quotaBytes } from "@/lib/format";
 import type { Dictionary } from "@/lib/i18n";
 import type { BucketUnit } from "@/lib/range";
 import { THINNED_SAMPLE_GAP_SECONDS } from "@/lib/retention";
-import { windowSeconds } from "@/lib/time";
+import type { SettingsRow } from "@/lib/settings";
+import { freeWindowOf, freeWindowSeconds, windowSeconds, type FreeWindow } from "@/lib/time";
 
 /**
  * Readings just before the range, so the first reading inside it has a
@@ -84,6 +85,30 @@ const DELTAS = `
     FROM r
     WHERE (\${from} IS NULL OR recorded_at >= \${from}::timestamptz)
   )`;
+
+/**
+ * Whether a row of `d` falls inside the free hours, as a SQL condition. Takes
+ * the named parameters `freeStart` and `freeEnd` (seconds since local
+ * midnight, end exclusive, both null when there are no free hours) and
+ * `timezone`. A start after the end is a range that crosses midnight. Like the
+ * daily window, a delta belongs to the reading that closes it.
+ */
+const IN_FREE_HOURS = `(
+  \${freeStart}::int IS NOT NULL AND (
+    CASE WHEN \${freeStart}::int < \${freeEnd}::int
+         THEN EXTRACT(EPOCH FROM (recorded_at AT TIME ZONE \${timezone})::time) >= \${freeStart}::int
+          AND EXTRACT(EPOCH FROM (recorded_at AT TIME ZONE \${timezone})::time) <  \${freeEnd}::int
+         ELSE EXTRACT(EPOCH FROM (recorded_at AT TIME ZONE \${timezone})::time) >= \${freeStart}::int
+           OR EXTRACT(EPOCH FROM (recorded_at AT TIME ZONE \${timezone})::time) <  \${freeEnd}::int
+    END
+  )
+)`;
+
+/** The named parameters `IN_FREE_HOURS` reads. */
+function freeParams(free: FreeWindow | null) {
+  const seconds = freeWindowSeconds(free);
+  return { freeStart: seconds?.start ?? null, freeEnd: seconds?.end ?? null };
+}
 
 // ------------------------------------------------------------- totals ----
 
@@ -151,6 +176,8 @@ export interface SeriesPoint {
   tx_bytes: number;
   rx_bytes: number;
   readings: number;
+  /** The part of `total_bytes` inside the free hours; 0 when none were asked about. */
+  free_bytes: number;
 }
 
 /**
@@ -162,6 +189,7 @@ export function getSeries(
   { from, to }: RangeParams,
   bucket: BucketUnit,
   timezone: string,
+  free: FreeWindow | null = null,
 ): Promise<SeriesPoint[]> {
   return db.any<SeriesPoint>(
     `WITH ${DELTAS}
@@ -170,11 +198,12 @@ export function getSeries(
             COALESCE(SUM(delta), 0)::bigint          AS total_bytes,
             COALESCE(SUM(tx_delta), 0)::bigint       AS tx_bytes,
             COALESCE(SUM(rx_delta), 0)::bigint       AS rx_bytes,
-            COUNT(*)::int                            AS readings
+            COUNT(*)::int                            AS readings,
+            COALESCE(SUM(delta) FILTER (WHERE ${IN_FREE_HOURS}), 0)::bigint AS free_bytes
      FROM d
      GROUP BY 1
      ORDER BY 1`,
-    { from, to, bucket, timezone },
+    { from, to, bucket, timezone, ...freeParams(free) },
   );
 }
 
@@ -520,7 +549,14 @@ export async function getSelectedSessionTotals(ids: number[]): Promise<SelectedS
 export interface CycleUsage {
   start: string;
   end: string;
+  /** Traffic counted against the cap: everything except the free hours. */
   used_bytes: number;
+  /**
+   * The free hours and the traffic inside them this cycle, kept on its own and
+   * left out of `used_bytes` and every figure derived from it. Null while the
+   * free hours are off.
+   */
+  free: (FreeWindow & { bytes: number }) | null;
   cap_bytes: number;
   cap_gb: number;
   percent_of_cap: number;
@@ -555,6 +591,26 @@ export interface CycleUsageOptions {
    * question, where flooring is right.
    */
   atCycleEnd?: boolean;
+  /** Free hours whose traffic is left out of the cap. See `getCycleUsageFor`. */
+  free?: FreeWindow | null;
+}
+
+/**
+ * The cycle's traffic and the part of it inside the free hours, in one
+ * aggregate so the free hours cost the dashboard no extra round trip.
+ */
+async function getCycleTraffic(
+  { from, to }: RangeParams,
+  timezone: string,
+  free: FreeWindow | null,
+): Promise<{ total_bytes: number; free_bytes: number }> {
+  return db.one<{ total_bytes: number; free_bytes: number }>(
+    `WITH ${DELTAS}
+     SELECT COALESCE(SUM(delta), 0)::bigint AS total_bytes,
+            COALESCE(SUM(delta) FILTER (WHERE ${IN_FREE_HOURS}), 0)::bigint AS free_bytes
+     FROM d`,
+    { from, to, timezone, ...freeParams(free) },
+  );
 }
 
 export async function getCycleUsage(
@@ -569,7 +625,9 @@ export async function getCycleUsage(
   // through the cycle we are moves to the boundary.
   const progressAt = options.atCycleEnd ? end : now;
   const progress = options.atCycleEnd ? closedCycleProgress(start, end) : cycleProgress(now, start, end);
-  const { total_bytes: used } = await getRangeSummary({ from: start, to: now });
+  const free = options.free ?? null;
+  const traffic = await getCycleTraffic({ from: start, to: now }, timezone, free);
+  const used = traffic.total_bytes - traffic.free_bytes;
 
   const cap = quotaBytes(monthlyQuotaGb);
   const projected = projectCycleUsage(used, progressAt, start, end);
@@ -579,6 +637,7 @@ export async function getCycleUsage(
     start: start.toISOString(),
     end: end.toISOString(),
     used_bytes: used,
+    free: free && { ...free, bytes: traffic.free_bytes },
     cap_bytes: cap,
     cap_gb: monthlyQuotaGb,
     percent_of_cap: cap > 0 ? (used / cap) * 100 : 0,
@@ -593,6 +652,33 @@ export async function getCycleUsage(
       progress.days_elapsed > 0 ? Math.round(used / progress.days_elapsed) : used,
     over: used > cap,
   };
+}
+
+/** The settings a cycle figure depends on. */
+export type CycleSettings = Pick<
+  SettingsRow,
+  | "monthly_quota_gb"
+  | "billing_cycle_day"
+  | "timezone"
+  | "free_window_enabled"
+  | "free_window_start"
+  | "free_window_end"
+>;
+
+/**
+ * `getCycleUsage` for the saved settings, free hours included. Every caller
+ * that has the settings row goes through here, so none of them can forget to
+ * leave the free hours out of the cap.
+ */
+export function getCycleUsageFor(
+  settings: CycleSettings,
+  now = new Date(),
+  options: Omit<CycleUsageOptions, "free"> = {},
+): Promise<CycleUsage> {
+  return getCycleUsage(settings.monthly_quota_gb, settings.billing_cycle_day, settings.timezone, now, {
+    ...options,
+    free: freeWindowOf(settings),
+  });
 }
 
 // ------------------------------------------------------------ history ----

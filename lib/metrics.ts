@@ -16,6 +16,8 @@ export interface MetricsSample {
   cycle_used_bytes: number;
   cycle_cap_bytes: number;
   cycle_percent: number;
+  /** Null, and so omitted, while the free hours are off. */
+  cycle_free_bytes: number | null;
   last_reading_age_seconds: number | null;
   link_up: boolean | null;
   session_uptime_seconds: number | null;
@@ -32,6 +34,7 @@ const HELP: Record<keyof MetricsSample, string> = {
   cycle_used_bytes: "Traffic this billing cycle in bytes",
   cycle_cap_bytes: "Monthly cap in bytes",
   cycle_percent: "This cycle's usage as a percentage of the cap",
+  cycle_free_bytes: "Traffic this billing cycle inside the free hours, not counted against the cap",
   last_reading_age_seconds: "Seconds since the router last pushed a reading",
   link_up: "1 while the WAN link is up and the router is reporting",
   session_uptime_seconds: "Seconds the current WAN session has been up",

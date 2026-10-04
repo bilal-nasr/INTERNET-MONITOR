@@ -27,6 +27,9 @@ interface FormState {
   daily_quota_enabled: boolean;
   monthly_quota_gb: string;
   billing_cycle_day: string;
+  free_window_enabled: boolean;
+  free_window_start: string;
+  free_window_end: string;
   window_start: string;
   window_end: string;
   timezone: string;
@@ -54,6 +57,9 @@ const FIELD_TAB: Record<keyof FormState, SettingsTab> = {
   timezone: "limits",
   monthly_quota_gb: "limits",
   billing_cycle_day: "limits",
+  free_window_enabled: "limits",
+  free_window_start: "limits",
+  free_window_end: "limits",
   alert_email_to: "alerts",
   language: "alerts",
   alert_thresholds: "alerts",
@@ -75,6 +81,9 @@ function toForm(s: PublicSettings): FormState {
     daily_quota_enabled: s.daily_quota_enabled,
     monthly_quota_gb: String(s.monthly_quota_gb),
     billing_cycle_day: String(s.billing_cycle_day),
+    free_window_enabled: s.free_window_enabled,
+    free_window_start: s.free_window_start,
+    free_window_end: s.free_window_end,
     window_start: s.window_start,
     window_end: s.window_end,
     timezone: s.timezone,
@@ -272,6 +281,9 @@ export function SettingsForm({
         daily_quota_enabled: form.daily_quota_enabled,
         monthly_quota_gb: Number(form.monthly_quota_gb),
         billing_cycle_day: Number(form.billing_cycle_day),
+        free_window_enabled: form.free_window_enabled,
+        free_window_start: form.free_window_start,
+        free_window_end: form.free_window_end,
         window_start: form.window_start,
         window_end: form.window_end,
         timezone: form.timezone,
@@ -508,6 +520,41 @@ export function SettingsForm({
                       required
                       value={form.billing_cycle_day}
                       onChange={(e) => update("billing_cycle_day", e.target.value)}
+                      className={inputClass}
+                    />
+                  </Field>
+                </div>
+              </SettingsCard>
+
+              <SettingsCard title={d.settings.freeSection} description={d.settings.freeSectionHint}>
+                <Switch
+                  checked={form.free_window_enabled}
+                  onChange={(v) => update("free_window_enabled", v)}
+                  label={form.free_window_enabled ? d.settings.freeEnabled : d.settings.freeDisabled}
+                  hint={d.settings.freeHint}
+                />
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {/* Kept while the free hours are off, like the daily quota, so
+                      turning them back on restores the old times. */}
+                  <Field id="free_window_start" label={d.settings.freeStart}>
+                    <input
+                      id="free_window_start"
+                      type="time"
+                      required
+                      disabled={!form.free_window_enabled}
+                      value={form.free_window_start}
+                      onChange={(e) => update("free_window_start", e.target.value)}
+                      className={inputClass}
+                    />
+                  </Field>
+                  <Field id="free_window_end" label={d.settings.freeEnd} hint={d.settings.freeEndHint}>
+                    <input
+                      id="free_window_end"
+                      type="time"
+                      required
+                      disabled={!form.free_window_enabled}
+                      value={form.free_window_end}
+                      onChange={(e) => update("free_window_end", e.target.value)}
                       className={inputClass}
                     />
                   </Field>

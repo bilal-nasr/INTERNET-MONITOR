@@ -45,6 +45,7 @@ export async function GET(request: Request) {
       cycle_used_bytes: cycle.used_bytes,
       cycle_cap_bytes: cycle.cap_bytes,
       cycle_percent: cycle.percent_of_cap,
+      cycle_free_bytes: cycle.free?.bytes ?? null,
       last_reading_age_seconds: usage.last_reading
         ? Math.max(0, Math.round((now.getTime() - new Date(usage.last_reading.recorded_at).getTime()) / 1000))
         : null,

@@ -11,7 +11,7 @@ import { getI18n } from "@/lib/i18n/server";
 import { getLatestSessionSummary } from "@/lib/sessions";
 import { getSettings, getShareToken } from "@/lib/settings";
 import { tokensMatch } from "@/lib/share";
-import { getCycleUsage } from "@/lib/stats";
+import { getCycleUsageFor } from "@/lib/stats";
 import { SHARE_PASS_COOKIE, getTurnstileSiteKey, sharePassValid } from "@/lib/turnstile";
 import { getTodayUsage } from "@/lib/usage";
 
@@ -49,7 +49,7 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
   const [usage, session, cycle] = await Promise.all([
     getTodayUsage(settings),
     getLatestSessionSummary(),
-    getCycleUsage(settings.monthly_quota_gb, settings.billing_cycle_day, settings.timezone),
+    getCycleUsageFor(settings),
   ]);
 
   return (

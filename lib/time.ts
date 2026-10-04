@@ -77,6 +77,38 @@ export function windowSeconds(start: string, end: string): { start: number; end:
   return { start: startMinutes * 60, end: (endMinutes + 1) * 60 };
 }
 
+/** The free hours as stored, "HH:MM" each; the end is inclusive to the minute. */
+export interface FreeWindow {
+  start: string;
+  end: string;
+}
+
+/** The free hours a settings row describes, or null while they are off. */
+export function freeWindowOf(row: {
+  free_window_enabled: boolean;
+  free_window_start: string;
+  free_window_end: string;
+}): FreeWindow | null {
+  if (!row.free_window_enabled) return null;
+  return { start: toHHMM(row.free_window_start), end: toHHMM(row.free_window_end) };
+}
+
+/**
+ * The free hours as seconds since local midnight, with an exclusive end.
+ *
+ * Unlike the daily window these may cross midnight: a start after the end
+ * (23:00-06:59) means "from start, through midnight, to end". An unparseable
+ * time yields null, which counts nothing as free -- the cap over-reports
+ * rather than quietly forgiving traffic.
+ */
+export function freeWindowSeconds(window: FreeWindow | null): { start: number; end: number } | null {
+  if (!window) return null;
+  const start = timeToMinutes(window.start);
+  const end = timeToMinutes(window.end);
+  if (start === null || end === null) return null;
+  return { start: start * 60, end: (end + 1) * 60 };
+}
+
 /** Inclusive check: start <= now <= end. Windows never cross midnight (enforced by validation). */
 export function isWithinWindow(nowMinutes: number, windowStart: string, windowEnd: string): boolean {
   const start = timeToMinutes(windowStart);

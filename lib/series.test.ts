@@ -12,7 +12,7 @@ import {
 } from "@/lib/series";
 
 function point(bucket: string, total: number): SeriesPoint {
-  return { bucket, total_bytes: total, tx_bytes: 0, rx_bytes: total, readings: 1 };
+  return { bucket, total_bytes: total, tx_bytes: 0, rx_bytes: total, readings: 1, free_bytes: 0 };
 }
 
 describe("fillSeries", () => {

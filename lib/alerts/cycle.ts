@@ -5,7 +5,7 @@ import { nextThreshold } from "@/lib/alerts/thresholds";
 import { db } from "@/lib/db";
 import { renderCycleEmail, type CycleReport } from "@/lib/email-cycle-template";
 import { alertLocale, type SettingsRow } from "@/lib/settings";
-import { getCycleUsage, type CycleUsage } from "@/lib/stats";
+import { getCycleUsageFor, type CycleUsage } from "@/lib/stats";
 import { localParts } from "@/lib/time";
 
 /**
@@ -57,6 +57,7 @@ function toReport(kind: CycleReport["kind"], threshold: number | null, settings:
       daily_budget_bytes: cycle.daily_budget_bytes,
       daily_average_bytes: cycle.daily_average_bytes,
       over: cycle.over,
+      free: cycle.free,
     },
   };
 }
@@ -70,7 +71,7 @@ export async function checkCycleAlerts(settings: SettingsRow, now = new Date()):
 
   const sent: AlertKind[] = [];
   try {
-    const cycle = await getCycleUsage(settings.monthly_quota_gb, settings.billing_cycle_day, settings.timezone, now);
+    const cycle = await getCycleUsageFor(settings, now);
     const cycleStart = localParts(new Date(cycle.start), settings.timezone).date;
 
     const state = await db.one<CycleAlertRow>(

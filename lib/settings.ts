@@ -19,6 +19,10 @@ export interface SettingsRow {
   daily_quota_enabled: boolean;
   monthly_quota_gb: number;
   billing_cycle_day: number;
+  /** Whether traffic inside the free hours is left out of the monthly cap. */
+  free_window_enabled: boolean;
+  free_window_start: string; // "HH:MM:SS" from Postgres TIME
+  free_window_end: string;
   window_start: string; // "HH:MM:SS" from Postgres TIME
   window_end: string;
   timezone: string;
@@ -80,6 +84,9 @@ export interface PublicSettings {
   daily_quota_enabled: boolean;
   monthly_quota_gb: number;
   billing_cycle_day: number;
+  free_window_enabled: boolean;
+  free_window_start: string; // "HH:MM"
+  free_window_end: string;
   window_start: string; // "HH:MM"
   window_end: string;
   timezone: string;
@@ -106,6 +113,9 @@ export type SettingsPatch = Partial<
     | "daily_quota_enabled"
     | "monthly_quota_gb"
     | "billing_cycle_day"
+    | "free_window_enabled"
+    | "free_window_start"
+    | "free_window_end"
     | "window_start"
     | "window_end"
     | "timezone"
@@ -149,7 +159,8 @@ export function getSettings(): Promise<SettingsRow> {
 
 async function loadSettings(): Promise<SettingsRow> {
   const row = await db.oneOrNone<SettingsRow>(
-    `SELECT id, quota_gb, daily_quota_enabled, monthly_quota_gb, billing_cycle_day, window_start,
+    `SELECT id, quota_gb, daily_quota_enabled, monthly_quota_gb, billing_cycle_day,
+            free_window_enabled, free_window_start, free_window_end, window_start,
             window_end, timezone, alert_email_to, wan_interface_name,
             polling_enabled, language, alert_thresholds, cycle_alert_thresholds,
             cycle_pace_alert, stale_after_minutes, digest,
@@ -184,6 +195,9 @@ export function toPublicSettings(row: SettingsRow): PublicSettings {
     daily_quota_enabled: row.daily_quota_enabled,
     monthly_quota_gb: row.monthly_quota_gb,
     billing_cycle_day: row.billing_cycle_day,
+    free_window_enabled: row.free_window_enabled,
+    free_window_start: row.free_window_start.slice(0, 5),
+    free_window_end: row.free_window_end.slice(0, 5),
     window_start: row.window_start.slice(0, 5),
     window_end: row.window_end.slice(0, 5),
     timezone: row.timezone,
@@ -214,6 +228,9 @@ const WRITABLE = new Set<string>([
   "daily_quota_enabled",
   "monthly_quota_gb",
   "billing_cycle_day",
+  "free_window_enabled",
+  "free_window_start",
+  "free_window_end",
   "window_start",
   "window_end",
   "timezone",
@@ -260,8 +277,9 @@ export async function updateSettings(patch: SettingsPatch): Promise<SettingsRow>
   );
   // A read that raced the write may have refilled the cache with the old row.
   cached.invalidate();
-  // The cycle figure is keyed on the cap, the cycle day and the timezone, so a
-  // change to any of them is caught by the key -- but the cached figure also
+  // The cycle figure is keyed on the cap, the cycle day, the timezone and the
+  // free hours, so a change to any of them is caught by the key -- but the
+  // cached figure also
   // holds a `used` and an `over` measured before this save, and the ingest path
   // answers the router from it for up to five minutes. Dropping it here is what
   // makes a lowered cap take effect on the next push rather than at the next
