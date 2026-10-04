@@ -23,7 +23,7 @@ import {
   summariseCompliance,
   type ComplianceDay,
 } from "@/lib/stats";
-import { localParts, localTimeInstant, toHHMM } from "@/lib/time";
+import { freeWindowOf, localParts, localTimeInstant, toHHMM } from "@/lib/time";
 
 /** How many days the history strip and the connection figures look back over. */
 const HISTORY_DAYS = 7;
@@ -115,7 +115,7 @@ export async function buildAlertReport(input: AlertReportInput): Promise<AlertRe
     }),
     // The week strip is a compliance chart, so it has nothing to say without a quota.
     historyRange && quotaBytes !== null
-      ? getComplianceDays(historyRange, settings.timezone, settings.window_start, settings.window_end)
+      ? getComplianceDays(historyRange, settings.timezone, settings.window_start, settings.window_end, freeWindowOf(settings))
       : Promise.reject(new Error("no history range")),
     historyRange ? getSessionStats(historyRange) : Promise.reject(new Error("no history range")),
   ]);

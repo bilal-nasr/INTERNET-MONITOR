@@ -60,10 +60,12 @@ the window. It is reported on the dashboard and on `/stats`, and it has its own 
 Free hours are optional (`settings.free_window_enabled`, off by default). When a plan does not
 count some hours, such as unmetered nights, set them under Settings, Limits: traffic between
 `free_window_start` and `free_window_end` (local time, end inclusive to the minute; an end before
-the start runs past midnight) is recorded on its own and left out of the monthly cap. The cap
-gauge, its alerts, the cap throttle and the cycle-history chart all count without it, and the
-dashboard shows the free traffic of the cycle as a separate figure
-(`quota_monitor_cycle_free_bytes` in `/api/metrics`). The daily quota is unaffected.
+the start runs past midnight) is recorded on its own and left out of both the monthly cap and the
+daily quota. The cap gauge, its alerts, the cap throttle and the cycle-history chart count without
+it, and so do the daily window's figure, its marks, the daily throttle and the compliance chart.
+The dashboard shows a badge while the free hours are running and the free traffic of the day and
+of the cycle as separate figures (`quota_monitor_cycle_free_bytes` in `/api/metrics`), and
+`/stats` has a Free hours tab with the figures for any range, per day.
 
 ### Alerts
 

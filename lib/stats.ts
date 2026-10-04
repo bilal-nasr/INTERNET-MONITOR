@@ -15,11 +15,12 @@
 import { closedCycleProgress, cycleBounds, cycleProgress, projectCycleUsage } from "@/lib/billing";
 import { db } from "@/lib/db";
 import { quotaBytes } from "@/lib/format";
+import { freeHoursBounds, inFreeHoursSql } from "@/lib/free-hours";
 import type { Dictionary } from "@/lib/i18n";
 import type { BucketUnit } from "@/lib/range";
 import { THINNED_SAMPLE_GAP_SECONDS } from "@/lib/retention";
 import type { SettingsRow } from "@/lib/settings";
-import { freeWindowOf, freeWindowSeconds, windowSeconds, type FreeWindow } from "@/lib/time";
+import { freeWindowOf, windowSeconds, type FreeWindow } from "@/lib/time";
 
 /**
  * Readings just before the range, so the first reading inside it has a
@@ -86,29 +87,8 @@ const DELTAS = `
     WHERE (\${from} IS NULL OR recorded_at >= \${from}::timestamptz)
   )`;
 
-/**
- * Whether a row of `d` falls inside the free hours, as a SQL condition. Takes
- * the named parameters `freeStart` and `freeEnd` (seconds since local
- * midnight, end exclusive, both null when there are no free hours) and
- * `timezone`. A start after the end is a range that crosses midnight. Like the
- * daily window, a delta belongs to the reading that closes it.
- */
-const IN_FREE_HOURS = `(
-  \${freeStart}::int IS NOT NULL AND (
-    CASE WHEN \${freeStart}::int < \${freeEnd}::int
-         THEN EXTRACT(EPOCH FROM (recorded_at AT TIME ZONE \${timezone})::time) >= \${freeStart}::int
-          AND EXTRACT(EPOCH FROM (recorded_at AT TIME ZONE \${timezone})::time) <  \${freeEnd}::int
-         ELSE EXTRACT(EPOCH FROM (recorded_at AT TIME ZONE \${timezone})::time) >= \${freeStart}::int
-           OR EXTRACT(EPOCH FROM (recorded_at AT TIME ZONE \${timezone})::time) <  \${freeEnd}::int
-    END
-  )
-)`;
-
-/** The named parameters `IN_FREE_HOURS` reads. */
-function freeParams(free: FreeWindow | null) {
-  const seconds = freeWindowSeconds(free);
-  return { freeStart: seconds?.start ?? null, freeEnd: seconds?.end ?? null };
-}
+/** The free-hours condition over `d`, with the named parameters every query here passes. */
+const IN_FREE_HOURS = inFreeHoursSql("${freeStart}", "${freeEnd}", "${timezone}");
 
 // ------------------------------------------------------------- totals ----
 
@@ -203,7 +183,7 @@ export function getSeries(
      FROM d
      GROUP BY 1
      ORDER BY 1`,
-    { from, to, bucket, timezone, ...freeParams(free) },
+    { from, to, bucket, timezone, ...freeHoursBounds(free) },
   );
 }
 
@@ -240,7 +220,7 @@ export function getHeatmap({ from, to }: RangeParams, timezone: string): Promise
 
 export interface ComplianceDay {
   day: string;
-  /** Traffic inside the daily quota window only. */
+  /** Traffic inside the daily quota window only, less any free hours. */
   used_bytes: number;
   /** Whether the over-quota alert was sent for that day. */
   notified: boolean;
@@ -248,7 +228,7 @@ export interface ComplianceDay {
 
 /**
  * Per-day usage measured over the daily quota window, which is the figure the
- * quota actually governs. Unlike the dashboard's baseline arithmetic this works
+ * quota actually governs. Free hours inside the window are free here too. Unlike the dashboard's baseline arithmetic this works
  * for any past day, including days the application never saw live.
  */
 export function getComplianceDays(
@@ -256,6 +236,7 @@ export function getComplianceDays(
   timezone: string,
   windowStart: string,
   windowEnd: string,
+  free: FreeWindow | null = null,
 ): Promise<ComplianceDay[]> {
   const { start: startSeconds, end: endSeconds } = windowSeconds(windowStart, windowEnd);
   return db.any<ComplianceDay>(
@@ -270,6 +251,7 @@ export function getComplianceDays(
                >= \${startSeconds}
          AND EXTRACT(EPOCH FROM (recorded_at AT TIME ZONE \${timezone})::time)
                < \${endSeconds}
+         AND NOT ${IN_FREE_HOURS}
      )
      SELECT w.day::text                       AS day,
             COALESCE(SUM(w.delta), 0)::bigint AS used_bytes,
@@ -278,7 +260,7 @@ export function getComplianceDays(
      LEFT JOIN daily_windows dw ON dw.window_date = w.day
      GROUP BY w.day
      ORDER BY w.day`,
-    { from, to, timezone, startSeconds, endSeconds },
+    { from, to, timezone, startSeconds, endSeconds, ...freeHoursBounds(free) },
   );
 }
 
@@ -609,7 +591,7 @@ async function getCycleTraffic(
      SELECT COALESCE(SUM(delta), 0)::bigint AS total_bytes,
             COALESCE(SUM(delta) FILTER (WHERE ${IN_FREE_HOURS}), 0)::bigint AS free_bytes
      FROM d`,
-    { from, to, timezone, ...freeParams(free) },
+    { from, to, timezone, ...freeHoursBounds(free) },
   );
 }
 

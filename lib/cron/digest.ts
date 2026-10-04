@@ -28,7 +28,7 @@ import { buildAlertReport, minimalAlertReport, type AlertReportInput } from "@/l
 import { renderAlertEmail } from "@/lib/email-template";
 import { quotaBytes } from "@/lib/format";
 import { getComplianceDays } from "@/lib/stats";
-import { localTimeInstant } from "@/lib/time";
+import { freeWindowOf, localTimeInstant } from "@/lib/time";
 
 const JOB_NAME = "digest";
 
@@ -47,7 +47,7 @@ async function windowUsageOn(date: string, ctx: JobContext): Promise<number> {
   const from = localTimeInstant(date, "00:00", settings.timezone);
   const to = localTimeInstant(date, "00:00", settings.timezone, 1440);
   if (!from || !to) return 0;
-  const days = await getComplianceDays({ from, to }, settings.timezone, settings.window_start, settings.window_end);
+  const days = await getComplianceDays({ from, to }, settings.timezone, settings.window_start, settings.window_end, freeWindowOf(settings));
   return days.find((row) => row.day === date)?.used_bytes ?? 0;
 }
 

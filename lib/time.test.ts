@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import {
   freeWindowOf,
   freeWindowSeconds,
+  isWithinFreeWindow,
   localTimeInstant,
   previousLocalDate,
   windowSeconds,
@@ -47,6 +48,18 @@ describe("free hours", () => {
 
   test("may cross midnight, which leaves the end before the start", () => {
     expect(freeWindowSeconds({ start: "23:00", end: "06:59" })).toEqual({ start: 82_800, end: 25_200 });
+  });
+
+  test("tell whether a local minute is inside them, end minute included", () => {
+    const morning = { start: "00:00", end: "12:00" };
+    expect(isWithinFreeWindow(0, morning)).toBe(true);
+    expect(isWithinFreeWindow(12 * 60, morning)).toBe(true);
+    expect(isWithinFreeWindow(12 * 60 + 1, morning)).toBe(false);
+    const night = { start: "23:00", end: "06:59" };
+    expect(isWithinFreeWindow(23 * 60 + 30, night)).toBe(true);
+    expect(isWithinFreeWindow(3 * 60, night)).toBe(true);
+    expect(isWithinFreeWindow(7 * 60, night)).toBe(false);
+    expect(isWithinFreeWindow(12 * 60, null)).toBe(false);
   });
 
   test("count nothing as free when off or unparseable", () => {

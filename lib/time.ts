@@ -109,6 +109,14 @@ export function freeWindowSeconds(window: FreeWindow | null): { start: number; e
   return { start: start * 60, end: (end + 1) * 60 };
 }
 
+/** Whether a local time, in minutes since midnight, is inside the free hours. */
+export function isWithinFreeWindow(nowMinutes: number, window: FreeWindow | null): boolean {
+  const bounds = freeWindowSeconds(window);
+  if (!bounds) return false;
+  const t = nowMinutes * 60;
+  return bounds.start < bounds.end ? t >= bounds.start && t < bounds.end : t >= bounds.start || t < bounds.end;
+}
+
 /** Inclusive check: start <= now <= end. Windows never cross midnight (enforced by validation). */
 export function isWithinWindow(nowMinutes: number, windowStart: string, windowEnd: string): boolean {
   const start = timeToMinutes(windowStart);

@@ -198,7 +198,7 @@ export async function loadQuotaFigures(
   const [complianceDays, cycle, cycleDays] = await Promise.all([
     quotaGb === null
       ? null
-      : getComplianceDays(params, settings.timezone, settings.window_start, settings.window_end),
+      : getComplianceDays(params, settings.timezone, settings.window_start, settings.window_end, freeWindowOf(settings)),
     getCycleUsageFor(settings, now),
     getSeries({ from: oldestCycle.start, to: now }, "day", settings.timezone, freeWindowOf(settings)),
   ]);
@@ -266,7 +266,7 @@ export async function buildStatsReport(
     getHeatmap(params, settings.timezone),
     quotaGb === null
       ? null
-      : getComplianceDays(params, settings.timezone, settings.window_start, settings.window_end),
+      : getComplianceDays(params, settings.timezone, settings.window_start, settings.window_end, freeWindowOf(settings)),
     getSessionStats(params),
     getSessionDurations(params, d),
     getTopSessions(params, TOP_SESSIONS),

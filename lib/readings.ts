@@ -5,7 +5,7 @@ import { renderAlertEmail } from "@/lib/email-template";
 import { buildAlertReport, minimalAlertReport } from "@/lib/email-report";
 import { quotaBytes } from "@/lib/format";
 import type { SettingsRow } from "@/lib/settings";
-import { isWithinWindow, localParts, localTimeInstant, toHHMM } from "@/lib/time";
+import { freeWindowOf, isWithinWindow, localParts, localTimeInstant, toHHMM } from "@/lib/time";
 import { getDailyWindow, getLatestReading, sumUsageSince, type Reading } from "@/lib/usage";
 
 export interface WanCounters {
@@ -157,7 +157,14 @@ export async function recordReading(
   // current_total - baseline_bytes when no reboot happened, and falls back to
   // the post-reboot accumulated readings when one did.
   const windowEnd = localTimeInstant(local.date, settings.window_end, settings.timezone, 1);
-  const used = await sumUsageSince(window!.baseline_recorded_at, windowEnd);
+  // Free hours are free against the daily quota too, so the marks and the
+  // throttle never react to traffic the plan does not count.
+  const used = await sumUsageSince(
+    window!.baseline_recorded_at,
+    windowEnd,
+    freeWindowOf(settings),
+    settings.timezone,
+  );
   // With the daily quota off the window is still measured, for the dashboard,
   // but nothing is compared against it: no marks, no breach, no throttle.
   const quotaOn = settings.daily_quota_enabled;

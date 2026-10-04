@@ -1,7 +1,16 @@
 import { db } from "@/lib/db";
 import { quotaBytes } from "@/lib/format";
+import { freeHoursBounds, inFreeHoursSql } from "@/lib/free-hours";
 import type { SettingsRow } from "@/lib/settings";
-import { isWithinWindow, localParts, localTimeInstant, toHHMM } from "@/lib/time";
+import {
+  freeWindowOf,
+  isWithinFreeWindow,
+  isWithinWindow,
+  localParts,
+  localTimeInstant,
+  toHHMM,
+  type FreeWindow,
+} from "@/lib/time";
 
 export interface Reading {
   id: number;
@@ -36,14 +45,23 @@ export interface DailyWindow {
  * `until` bounds the sum, so usage stays fixed once the quota window closes
  * instead of continuing to climb on traffic the quota does not govern.
  *
+ * Traffic inside the free hours is left out: the daily quota does not count it
+ * any more than the monthly cap does.
+ *
  * Done as an aggregate rather than in JavaScript because the router can push
  * every few seconds, which would otherwise mean transferring thousands of rows
  * on every single push.
  */
-export async function sumUsageSince(since: Date, until: Date | null = null): Promise<number> {
+export async function sumUsageSince(
+  since: Date,
+  until: Date | null = null,
+  free: FreeWindow | null = null,
+  timezone = "UTC",
+): Promise<number> {
+  const { freeStart, freeEnd } = freeHoursBounds(free);
   const row = await db.one<{ used: number }>(
     `WITH r AS (
-       SELECT total_bytes,
+       SELECT recorded_at, total_bytes,
               LAG(total_bytes) OVER (
                 PARTITION BY interface_name ORDER BY recorded_at, id
               ) AS prev
@@ -57,9 +75,9 @@ export async function sumUsageSince(since: Date, until: Date | null = null): Pro
          WHEN total_bytes >= prev THEN total_bytes - prev
          ELSE total_bytes
        END
-     ), 0)::bigint AS used
+     ) FILTER (WHERE NOT ${inFreeHoursSql("$3", "$4", "$5::text")}), 0)::bigint AS used
      FROM r`,
-    [since, until],
+    [since, until, freeStart, freeEnd, timezone],
   );
   return row.used;
 }
@@ -87,7 +105,8 @@ export async function getDailyWindow(date: string): Promise<DailyWindow | null> 
 }
 
 /**
- * The day's window row and the usage since its baseline, in one round trip.
+ * The day's window row and the usage since its baseline, in one round trip,
+ * split into what the quota counts and what fell in the free hours.
  *
  * Same arithmetic as `sumUsageSince`, with the window's baseline read inside
  * the query instead of fetched first and passed back in. The dashboard asks
@@ -97,35 +116,43 @@ export async function getDailyWindow(date: string): Promise<DailyWindow | null> 
 async function getWindowUsage(
   date: string,
   until: Date | null,
-): Promise<{ window: DailyWindow | null; used: number }> {
-  const row = await db.oneOrNone<DailyWindow & { used: number }>(
+  free: FreeWindow | null,
+  timezone: string,
+): Promise<{ window: DailyWindow | null; used: number; free: number }> {
+  const { freeStart, freeEnd } = freeHoursBounds(free);
+  const inFree = inFreeHoursSql("$3", "$4", "$5::text");
+  const row = await db.oneOrNone<DailyWindow & { used: number; free_bytes: number }>(
     `WITH w AS (
        SELECT id, window_date, baseline_bytes, baseline_recorded_at, notified, notified_level
        FROM daily_windows WHERE window_date = $1
      ),
      r AS (
-       SELECT ir.total_bytes,
+       SELECT ir.recorded_at, ir.total_bytes,
               LAG(ir.total_bytes) OVER (
                 PARTITION BY ir.interface_name ORDER BY ir.recorded_at, ir.id
               ) AS prev
        FROM interface_readings ir, w
        WHERE ir.recorded_at >= w.baseline_recorded_at
          AND ($2::timestamptz IS NULL OR ir.recorded_at < $2::timestamptz)
+     ),
+     d AS (
+       SELECT recorded_at,
+              CASE
+                WHEN prev IS NULL THEN 0
+                WHEN total_bytes >= prev THEN total_bytes - prev
+                ELSE total_bytes
+              END AS delta
+       FROM r
      )
      SELECT w.*,
-            (SELECT COALESCE(SUM(
-               CASE
-                 WHEN prev IS NULL THEN 0
-                 WHEN total_bytes >= prev THEN total_bytes - prev
-                 ELSE total_bytes
-               END
-             ), 0)::bigint FROM r) AS used
+            (SELECT COALESCE(SUM(delta) FILTER (WHERE NOT ${inFree}), 0)::bigint FROM d) AS used,
+            (SELECT COALESCE(SUM(delta) FILTER (WHERE ${inFree}), 0)::bigint FROM d) AS free_bytes
      FROM w`,
-    [date, until],
+    [date, until, freeStart, freeEnd, timezone],
   );
-  if (!row) return { window: null, used: 0 };
-  const { used, ...window } = row;
-  return { window, used };
+  if (!row) return { window: null, used: 0, free: 0 };
+  const { used, free_bytes, ...window } = row;
+  return { window, used, free: free_bytes };
 }
 
 export interface TodayUsage {
@@ -139,7 +166,14 @@ export interface TodayUsage {
   quota_gb: number | null;
   quota_bytes: number | null;
   baseline: { bytes: number; recorded_at: string } | null;
+  /** What the daily quota counts: the window's traffic, less any free hours. */
   used_since_baseline: number;
+  /**
+   * The free hours, whether they are running now, and the window's traffic
+   * inside them today -- not counted, and not part of `used_since_baseline`.
+   * Null while the free hours are off.
+   */
+  free: (FreeWindow & { active: boolean; bytes: number }) | null;
   percent_of_quota: number | null;
   notified: boolean;
   notified_level: number;
@@ -158,8 +192,9 @@ export async function getTodayUsage(settings: SettingsRow, now = new Date()): Pr
   // The window end is inclusive to the minute, so the exclusive bound is the
   // start of the following minute.
   const windowEnd = localTimeInstant(parts.date, settings.window_end, settings.timezone, 1);
-  const [{ window, used }, readingsCount, latest] = await Promise.all([
-    getWindowUsage(parts.date, windowEnd),
+  const freeWindow = freeWindowOf(settings);
+  const [{ window, used, free }, readingsCount, latest] = await Promise.all([
+    getWindowUsage(parts.date, windowEnd, freeWindow, settings.timezone),
     countReadingsForLocalDate(parts.date, settings.timezone),
     getLatestReading(),
   ]);
@@ -181,6 +216,11 @@ export async function getTodayUsage(settings: SettingsRow, now = new Date()): Pr
       ? { bytes: window.baseline_bytes, recorded_at: window.baseline_recorded_at.toISOString() }
       : null,
     used_since_baseline: used,
+    free: freeWindow && {
+      ...freeWindow,
+      active: isWithinFreeWindow(parts.minutes, freeWindow),
+      bytes: free,
+    },
     percent_of_quota: quota === null ? null : quota > 0 ? (used / quota) * 100 : 0,
     notified: window?.notified ?? false,
     notified_level: window?.notified_level ?? 0,

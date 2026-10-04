@@ -1,6 +1,7 @@
 import { connection } from "next/server";
 import { AnomalyList } from "@/components/AnomalyList";
 import { AutoRefresh } from "@/components/AutoRefresh";
+import { FreeHoursBadge } from "@/components/FreeHoursBadge";
 import { HistoryChart } from "@/components/HistoryChart";
 import { SetupChecklist } from "@/components/SetupChecklist";
 import { CycleGauge } from "@/components/stats/CycleGauge";
@@ -87,7 +88,10 @@ export default async function DashboardPage() {
           <h1 className="text-xl font-semibold tracking-tight">{d.dashboard.title}</h1>
           <p className="text-sm text-muted">{dateLine}</p>
         </div>
-        <AutoRefresh seconds={15} />
+        <div className="flex flex-wrap items-center gap-2">
+          {usage.free && <FreeHoursBadge free={usage.free} />}
+          <AutoRefresh seconds={15} />
+        </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">

@@ -45,6 +45,12 @@ export async function UsageProgress({ usage }: { usage: TodayUsage }) {
                 })
               : d.dashboard.usedInWindow}
           </div>
+          {/* Kept apart from the figure above, which does not include it. */}
+          {usage.free && usage.free.bytes > 0 && (
+            <div className="mt-1 text-xs text-green-700 dark:text-status-good">
+              {fill(d.dashboard.freeToday, { bytes: formatBytes(usage.free.bytes) })}
+            </div>
+          )}
         </div>
         {(hasQuota || usage.baseline === null) && (
           <Badge
