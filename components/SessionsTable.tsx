@@ -176,17 +176,21 @@ export function SessionsTable({
                 onClick={() => toggle(s.id)}
                 aria-pressed={checked}
                 className={`w-full rounded-xl border p-4 text-start transition-colors ${
-                  checked ? "border-series-1/50 bg-series-1/5" : "border-border bg-surface"
+                  checked ? "border-focus/50 bg-focus/5" : "border-border bg-surface"
                 }`}
               >
                 <div className="flex items-center gap-3">
                   <span
                     aria-hidden
                     className={`flex size-4 shrink-0 items-center justify-center rounded border ${
-                      checked ? "border-series-1 bg-series-1 text-white" : "border-border"
+                      checked ? "border-focus bg-focus text-surface" : "border-border"
                     }`}
                   >
-                    {checked ? "✓" : ""}
+                    {checked && (
+                      <svg viewBox="0 0 12 12" className="size-3" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M2.5 6.5l2.5 2.5 4.5-5.5" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    )}
                   </span>
                   <Status session={s} />
                   <span className="ms-auto font-semibold tabular-nums">
@@ -253,7 +257,7 @@ export function SessionsTable({
                   key={s.id}
                   onClick={() => toggle(s.id)}
                   className={`cursor-pointer border-b border-border/60 last:border-0 ${
-                    checked ? "bg-series-1/8" : "hover:bg-border/30"
+                    checked ? "bg-focus/8" : "hover:bg-surface-2/60"
                   }`}
                 >
                   <td className="px-4 py-3">
@@ -265,7 +269,7 @@ export function SessionsTable({
                       aria-label={fill(d.sessions.includeInTotal, {
                         time: f.dayMonthClock(s.started_at, timezone),
                       })}
-                      className="size-4 accent-[var(--series-1)]"
+                      className="size-4 accent-[var(--focus)]"
                     />
                   </td>
                   <td className="px-4 py-3">
@@ -374,7 +378,7 @@ function SelectAll({
       checked={checked}
       onChange={(e) => onChange(e.target.checked)}
       aria-label={d.sessions.selectEveryShown}
-      className="size-4 accent-[var(--series-1)]"
+      className="size-4 accent-[var(--focus)]"
     />
   );
 }
@@ -435,7 +439,7 @@ function SelectionSummary({ ids, onClear }: { ids: number[]; onClear: () => void
   }
 
   return (
-    <div className="rounded-xl border border-series-1/40 bg-series-1/5 px-4 py-3">
+    <div className="rounded-xl border border-focus/40 bg-focus/5 px-4 py-3">
       <div className="flex items-center gap-3">
         <div className="text-sm font-medium">
           {plural(locale, d.sessions.selectedCount, ids.length)}

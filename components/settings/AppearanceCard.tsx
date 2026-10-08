@@ -76,8 +76,8 @@ export function AppearanceCard() {
               onKeyDown={onKeyDown}
               className={`flex items-center gap-3 rounded-lg border px-4 py-3 text-start text-sm font-medium transition-colors ${
                 selected
-                  ? "border-series-1 bg-series-1/10 ring-1 ring-series-1"
-                  : "border-border hover:bg-border/40"
+                  ? "border-cabinet bg-cabinet text-cabinet-ink dark:border-focus/60"
+                  : "border-border hover:bg-surface-2"
               }`}
             >
               <svg
@@ -87,7 +87,7 @@ export function AppearanceCard() {
                 strokeWidth="1.75"
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                className={`size-5 shrink-0 ${selected ? "text-series-1" : "text-muted"}`}
+                className={`size-5 shrink-0 ${selected ? "text-cabinet-ink" : "text-muted"}`}
                 aria-hidden
               >
                 {ICON[option]}

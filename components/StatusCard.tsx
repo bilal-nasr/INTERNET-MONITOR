@@ -229,6 +229,7 @@ async function AddressRow({ address, timezone }: { address: RouterAddress | null
           label={d.router.copyIp}
           copiedLabel={d.router.copiedIp}
           failedLabel={d.router.copyIpFailed}
+          compact
         />
       </dd>
       {address.wan_ip && address.wan_ip !== shown && (

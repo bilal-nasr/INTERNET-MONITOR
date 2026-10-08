@@ -189,7 +189,7 @@ export function DataResetCard({ timezone }: { timezone: string }) {
                   </div>
                 ))}
               </dl>
-              <Link href={`/${locale}/export`} className="inline-block text-xs text-series-1 hover:underline">
+              <Link href={`/${locale}/export`} className="inline-block text-xs text-focus underline-offset-2 hover:underline">
                 {t.exportHint}
               </Link>
             </div>

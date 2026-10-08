@@ -10,7 +10,7 @@ import { fill } from "@/lib/i18n";
 import type { DeviceUsage } from "@/lib/devices/usage";
 
 const inputClass =
-  "w-full rounded-md border border-border bg-background px-2 py-1 text-sm outline-none focus:border-series-1 focus:ring-2 focus:ring-series-1/30";
+  "w-full rounded-md border border-border bg-background px-2 py-1 text-sm outline-none focus:border-focus focus:ring-2 focus:ring-focus/30";
 const buttonClass = "rounded-md border border-border px-2 py-1 text-xs hover:bg-surface-2 disabled:opacity-50";
 
 /** Rows per page. */

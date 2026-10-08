@@ -793,7 +793,7 @@ export function SettingsForm({
                 </Field>
                 <Link
                   href={`/${locale}/export`}
-                  className="inline-flex items-center gap-1 text-sm font-medium text-series-1 hover:underline"
+                  className="inline-flex items-center gap-1 text-sm font-medium text-focus underline-offset-2 hover:underline"
                 >
                   {d.settings.exportLink}
                   <span aria-hidden className="rtl:rotate-180">
@@ -921,7 +921,7 @@ function Switch({
         aria-describedby={hintId}
         onClick={toggle}
         className={`relative mt-0.5 h-6 w-11 shrink-0 rounded-full transition-colors ${
-          checked ? "bg-series-1" : "bg-border"
+          checked ? "bg-cabinet dark:bg-focus" : "bg-border"
         }`}
       >
         {/* The knob travels towards the end of the line, so in Arabic it

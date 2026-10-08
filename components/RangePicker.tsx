@@ -90,7 +90,7 @@ export function RangePicker({
           onChange={(e) => {
             if (e.target.value) go({ range: e.target.value, from: null, to: null });
           }}
-          className={`${pill(inMore)} cursor-pointer pe-7 outline-none focus-visible:ring-2 focus-visible:ring-series-1/40`}
+          className={`${pill(inMore)} cursor-pointer pe-7 outline-none focus-visible:ring-2 focus-visible:ring-focus/40`}
         >
           <option value="" disabled>
             {d.rangePicker.more}
@@ -146,7 +146,7 @@ function CustomRangeForm({
   }
 
   const field =
-    "mt-1 block rounded-md border border-border bg-background px-2.5 py-1.5 text-sm text-foreground outline-none focus:border-series-1 focus:ring-2 focus:ring-series-1/30";
+    "mt-1 block rounded-md border border-border bg-background px-2.5 py-1.5 text-sm text-foreground outline-none focus:border-focus focus:ring-2 focus:ring-focus/30";
 
   return (
     <form onSubmit={submit} className="flex flex-wrap items-end gap-3">
