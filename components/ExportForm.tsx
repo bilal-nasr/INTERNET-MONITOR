@@ -78,14 +78,14 @@ export function ExportForm() {
         <button
           type="button"
           onClick={() => download("csv")}
-          className="rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background hover:opacity-90"
+          className="rounded-md bg-cabinet px-4 py-2 text-sm font-medium text-cabinet-ink transition-colors hover:bg-cabinet-hover"
         >
           {d.export.downloadCsv}
         </button>
         <button
           type="button"
           onClick={() => download("json")}
-          className="rounded-md border border-border px-4 py-2 text-sm hover:bg-border/60"
+          className="rounded-md border border-border px-4 py-2 text-sm hover:bg-surface-2"
         >
           {d.export.downloadJson}
         </button>

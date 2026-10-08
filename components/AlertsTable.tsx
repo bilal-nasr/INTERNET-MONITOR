@@ -129,7 +129,7 @@ export function AlertsTable({
         }`}
       >
         <table className="w-full text-sm">
-          <thead className="text-xs text-muted">
+          <thead className="bg-surface-2/60 text-xs text-muted">
             <tr className="border-b border-border">
               <th className="px-4 py-2 text-start font-medium">{c.when}</th>
               <th className="px-4 py-2 text-start font-medium">{c.kind}</th>

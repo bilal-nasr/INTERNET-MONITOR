@@ -10,6 +10,7 @@ import {
   type TooltipContentProps,
 } from "recharts";
 import { useI18n } from "@/components/I18nProvider";
+import { MeterWindow } from "@/components/meter/MeterWindow";
 import { chartMargin, TooltipRow, TooltipShell, valueAxisSide } from "@/components/stats/chrome";
 import { formatRate } from "@/lib/format";
 import { fill } from "@/lib/i18n";
@@ -108,30 +109,24 @@ export function ThroughputCard({
   });
 
   return (
-    <section className="rounded-xl border border-border bg-surface p-5">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <h2 className="text-sm font-medium text-muted">{d.dashboard.throughputHeading}</h2>
-        <span className="text-xs text-muted">{fill(d.dashboard.throughputHint, { minutes })}</span>
-      </div>
-
+    <MeterWindow label={d.dashboard.throughputHeading} aside={fill(d.dashboard.throughputHint, { minutes })}>
       {latest ? (
         <>
-          <div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-            <span className="text-2xl font-semibold tabular-nums tracking-tight">
-              {formatRate(latest.bytes_per_second)}
+          {/* The swatches double as the chart's legend: the filled area is
+              download, the thin line upload. */}
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted">
+            <span className="inline-flex items-center gap-1.5">
+              <span aria-hidden className="size-2 rounded-sm bg-series-1" />
+              {d.common.download}{" "}
+              <span className="tabular-nums text-foreground">{formatRate(latest.rx_per_second)}</span>
             </span>
-            {/* The swatches double as the chart's legend: the filled area is
-                download, the thin line upload. */}
-            <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
-              <span>{d.dashboard.throughputNow}</span>
-              <span className="inline-flex items-center gap-1.5">
-                <span aria-hidden className="size-2 rounded-sm bg-series-1" />
-                {d.common.download} <span className="tabular-nums text-foreground">{formatRate(latest.rx_per_second)}</span>
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <span aria-hidden className="size-2 rounded-sm bg-series-2" />
-                {d.common.upload} <span className="tabular-nums text-foreground">{formatRate(latest.tx_per_second)}</span>
-              </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span aria-hidden className="size-2 rounded-sm bg-series-2" />
+              {d.common.upload} <span className="tabular-nums text-foreground">{formatRate(latest.tx_per_second)}</span>
+            </span>
+            <span>
+              {d.dashboard.throughputNow}{" "}
+              <span className="font-medium tabular-nums text-foreground">{formatRate(latest.bytes_per_second)}</span>
             </span>
           </div>
           <div className="mt-3 h-24 w-full">
@@ -171,8 +166,8 @@ export function ThroughputCard({
           </div>
         </>
       ) : (
-        <p className="mt-3 text-sm text-muted">{fill(d.dashboard.throughputEmpty, { minutes })}</p>
+        <p className="text-sm text-muted">{fill(d.dashboard.throughputEmpty, { minutes })}</p>
       )}
-    </section>
+    </MeterWindow>
   );
 }

@@ -49,7 +49,7 @@ export function AutoRefresh({ seconds = 15, label }: { seconds?: number; label?:
       type="button"
       onClick={refresh}
       title={fill(d.common.refreshHint, { seconds })}
-      className="inline-flex items-center gap-2 rounded-full border border-border px-2.5 py-1 text-xs text-muted transition-colors hover:text-foreground"
+      className="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-2.5 py-1 text-xs text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
     >
       <span className="relative flex size-2">
         <span

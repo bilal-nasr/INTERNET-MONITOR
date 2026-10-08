@@ -19,12 +19,12 @@ export function Card({
   className?: string;
 }) {
   return (
-    <section className={`rounded-xl border border-border bg-surface p-4 sm:p-5 ${className}`}>
-      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <h2 className="text-sm font-medium text-muted">{title}</h2>
+    <section className={`rounded-lg border border-border bg-surface ${className}`}>
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5 border-b border-border bg-surface-2/60 px-4 py-2">
+        <h2 className="plate-label">{title}</h2>
         {hint ? <span className="text-xs text-muted">{hint}</span> : null}
       </div>
-      <div className="mt-4">{children}</div>
+      <div className="p-4 sm:p-5">{children}</div>
     </section>
   );
 }
@@ -50,10 +50,10 @@ export function StatTiles({ tiles, columns = 4 }: { tiles: Tile[]; columns?: 3 |
   return (
     <div className={`grid gap-3 sm:gap-4 ${grid}`}>
       {tiles.map((t) => (
-        <div key={t.label} className="rounded-xl border border-border bg-surface p-3 sm:p-4">
-          <div className="text-xs text-muted">{t.label}</div>
+        <div key={t.label} className="rounded-lg border border-border bg-surface p-3 sm:p-4">
+          <div className="plate-label">{t.label}</div>
           <div
-            className={`mt-1 text-xl font-semibold tabular-nums tracking-tight sm:text-2xl ${
+            className={`mt-1.5 text-xl font-semibold tabular-nums ${
               t.tone ? TONES[t.tone] : ""
             }`}
           >

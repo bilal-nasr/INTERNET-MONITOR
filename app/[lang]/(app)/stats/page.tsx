@@ -108,7 +108,7 @@ export default async function StatsPage({ searchParams }: { searchParams: Promis
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-semibold tracking-tight">{d.stats.title}</h1>
+        <h1 className="text-lg font-semibold">{d.stats.title}</h1>
         <p className="text-sm text-muted">
           {fill(d.stats.subtitle, { range: report.range.label, timezone: report.timezone })}
           {" · "}

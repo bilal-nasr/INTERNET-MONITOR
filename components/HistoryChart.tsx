@@ -15,6 +15,7 @@ import {
   type TooltipContentProps,
 } from "recharts";
 import { useI18n } from "@/components/I18nProvider";
+import { MeterWindow } from "@/components/meter/MeterWindow";
 import { chartMargin, valueAxisSide } from "@/components/stats/chrome";
 import { bytesToGb, formatBytes } from "@/lib/format";
 import { fill, type Dictionary } from "@/lib/i18n";
@@ -134,16 +135,11 @@ export function HistoryChart({ history, quotaGb, today, days = 30, anomalies = [
   }
 
   return (
-    <section className="rounded-xl border border-border bg-surface p-5">
-      <div className="flex items-baseline justify-between">
-        <h2 className="text-sm font-medium text-muted">
-          {fill(d.dashboard.historyHeading, { days })}
-        </h2>
-        <span className="text-xs text-muted">
-          {quotaGb === null ? d.dashboard.historyHintNoQuota : fill(d.dashboard.historyHint, { quota: quotaGb })}
-        </span>
-      </div>
-      <div className="mt-4 h-64 w-full">
+    <MeterWindow
+      label={fill(d.dashboard.historyHeading, { days })}
+      aside={quotaGb === null ? d.dashboard.historyHintNoQuota : fill(d.dashboard.historyHint, { quota: quotaGb })}
+    >
+      <div className="h-64 w-full">
         {hasData ? (
           <ResponsiveContainer width="100%" height="100%">
             <BarChart
@@ -237,6 +233,6 @@ export function HistoryChart({ history, quotaGb, today, days = 30, anomalies = [
           <p className="mt-2 text-xs text-muted">{d.dashboard.drillHint}</p>
         </>
       ) : null}
-    </section>
+    </MeterWindow>
   );
 }

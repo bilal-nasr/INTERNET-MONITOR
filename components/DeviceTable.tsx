@@ -11,7 +11,7 @@ import type { DeviceUsage } from "@/lib/devices/usage";
 
 const inputClass =
   "w-full rounded-md border border-border bg-background px-2 py-1 text-sm outline-none focus:border-series-1 focus:ring-2 focus:ring-series-1/30";
-const buttonClass = "rounded-md border border-border px-2 py-1 text-xs hover:bg-border/60 disabled:opacity-50";
+const buttonClass = "rounded-md border border-border px-2 py-1 text-xs hover:bg-surface-2 disabled:opacity-50";
 
 /** Rows per page. */
 const PAGE_SIZE = 10;
@@ -95,7 +95,7 @@ export function DeviceTable({
     <div ref={top} className="scroll-mt-4 space-y-4">
       <div className="overflow-x-auto rounded-xl border border-border bg-surface">
         <table className="w-full text-sm">
-          <thead className="text-xs text-muted">
+          <thead className="bg-surface-2/60 text-xs text-muted">
             <tr className="border-b border-border">
               <th className="px-4 py-2 text-start font-medium">{d.devices.device}</th>
               <th className="px-4 py-2 text-end font-medium">{d.common.download}</th>

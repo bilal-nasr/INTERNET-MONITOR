@@ -13,7 +13,7 @@ export default async function ExportPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-semibold tracking-tight">{d.export.title}</h1>
+        <h1 className="text-lg font-semibold">{d.export.title}</h1>
         <p className="text-sm text-muted">{d.export.subtitle}</p>
       </div>
       <ExportForm />

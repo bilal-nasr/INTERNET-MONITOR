@@ -18,7 +18,7 @@ export async function MonitoringGaps({ gaps, timezone }: { gaps: StoredSilence[]
   return (
     <section className="rounded-xl border border-border bg-surface p-4 sm:p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <h2 className="text-sm font-medium text-muted">{s.gapsHeading}</h2>
+        <h2 className="plate-label">{s.gapsHeading}</h2>
         <span className="text-xs text-muted">{s.gapsHint}</span>
       </div>
       <ul className="mt-3 space-y-1 text-sm">

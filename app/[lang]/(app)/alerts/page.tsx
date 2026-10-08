@@ -25,7 +25,7 @@ export default async function AlertsPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">{d.alerts.title}</h1>
+          <h1 className="text-lg font-semibold">{d.alerts.title}</h1>
           <p className="text-sm text-muted">{fill(d.alerts.subtitle, { timezone: settings.timezone })}</p>
         </div>
         <AutoRefresh seconds={30} />

@@ -42,7 +42,7 @@ export default async function DevicesPage({ searchParams }: { searchParams: Prom
   if (!settings.devices_enabled) {
     return (
       <div className="space-y-6">
-        <h1 className="text-xl font-semibold tracking-tight">{d.devices.title}</h1>
+        <h1 className="text-lg font-semibold">{d.devices.title}</h1>
         <section className="rounded-xl border border-border bg-surface p-5">
           <h2 className="font-semibold">{d.devices.disabledTitle}</h2>
           <p className="mt-2 text-sm text-muted">
@@ -110,7 +110,7 @@ export default async function DevicesPage({ searchParams }: { searchParams: Prom
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">{d.devices.title}</h1>
+          <h1 className="text-lg font-semibold">{d.devices.title}</h1>
           <p className="text-sm text-muted">{fill(d.devices.subtitle, { timezone: settings.timezone })}</p>
         </div>
         <AutoRefresh seconds={60} />

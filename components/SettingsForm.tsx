@@ -138,7 +138,7 @@ function parseMarks(text: string): number[] {
 }
 
 const primaryButtonClass =
-  "inline-flex items-center justify-center rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background transition-opacity hover:opacity-90 disabled:opacity-50";
+  "inline-flex items-center justify-center rounded-md bg-cabinet px-4 py-2 text-sm font-medium text-cabinet-ink transition-colors hover:bg-cabinet-hover disabled:opacity-50";
 
 /**
  * The settings page body: the tab list, the settings form spread over the
@@ -811,7 +811,7 @@ export function SettingsForm({
               data-unsaved-bar
               className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-surface/95 shadow-[0_-4px_16px_rgb(0_0_0/0.06)] backdrop-blur"
             >
-              <div className="mx-auto flex w-full max-w-5xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 sm:px-6">
+              <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 sm:px-6">
                 <p role="status" aria-live="polite" className="min-w-0 flex-1 text-sm">
                   {saveError ? (
                     <span className="text-status-critical">{saveError}</span>

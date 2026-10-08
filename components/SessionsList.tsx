@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useI18n } from "@/components/I18nProvider";
+import { Stamp } from "@/components/meter/Stamp";
 import { Toast, type ToastState } from "@/components/Toast";
 import { readApiError, secondaryButtonClass } from "@/components/auth/fields";
 import { SettingsCard } from "@/components/settings/SettingsCard";
@@ -122,7 +123,7 @@ export function SessionsList({ timezone }: { timezone: string }) {
     <SettingsCard title={s.section} description={s.sectionHint}>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead className="text-xs text-muted">
+          <thead className="bg-surface-2/60 text-xs text-muted">
             <tr className="text-start">
               <th className="py-2 pe-3 text-start font-medium">{s.device}</th>
               <th className="py-2 pe-3 text-start font-medium">{s.address}</th>
@@ -137,9 +138,9 @@ export function SessionsList({ timezone }: { timezone: string }) {
                 <td className="py-2 pe-3">
                   {deviceLabel(row.device, d)}
                   {row.current && (
-                    <span className="ms-2 rounded-full bg-series-1/10 px-2 py-0.5 text-xs text-series-1">
+                    <Stamp tone="neutral" className="ms-2">
                       {s.thisBrowser}
-                    </span>
+                    </Stamp>
                   )}
                 </td>
                 {/* An address is an identifier; it reads left to right in both languages. */}

@@ -47,9 +47,14 @@ export function setAppearance(appearance: Appearance) {
     // Storage refused (private mode, blocked site data): the choice still
     // applies to this page, it just is not remembered.
   }
+  applyAppearance(appearance);
+  window.dispatchEvent(new Event(CHANGE_EVENT));
+}
+
+/** Put a choice on `<html data-theme>`; "system" is the attribute's absence. */
+export function applyAppearance(appearance: Appearance) {
   if (appearance === "system") document.documentElement.removeAttribute("data-theme");
   else document.documentElement.setAttribute("data-theme", appearance);
-  window.dispatchEvent(new Event(CHANGE_EVENT));
 }
 
 /** Call `onChange` when the choice changes, in this tab or another. */

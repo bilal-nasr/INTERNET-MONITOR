@@ -30,12 +30,29 @@
  * "Others" band with: the two least separable colours in that stack were the
  * two stacked against each other.
  */
+/*
+ * The neutrals are the meter box on a building stairwell: a brushed plate for
+ * the ground, the enamel-green cabinet for the shell and anything selected,
+ * black number drums with a red last wheel for the counters. Every neutral is
+ * tinted toward that green so the page reads as one object, not a grey kit.
+ */
 :root {
-  --background: #fafaf9;
-  --foreground: #171717;
-  --surface: #ffffff;
-  --border: #e5e5e5;
-  --muted: #71717a;
+  --background: #e7eae3;
+  --foreground: #161a16;
+  --surface: #f6f7f3;
+  --surface-2: #dde2d9;
+  --border: #c5ccc0;
+  --muted: #545e55;
+
+  --cabinet: #24402f;
+  --cabinet-hover: #2f5240;
+  --cabinet-ink: #eef2ea;
+  --cabinet-muted: #a9bcae;
+  --focus: #1f7a4d;
+
+  --drum: #141614;
+  --drum-ink: #f2f2ec;
+  --drum-tenths: #c8302a;
 
   --series-1: #2a78d6;
   --series-2: #eb6834;
@@ -64,6 +81,15 @@
   --color-surface: var(--surface);
   --color-border: var(--border);
   --color-muted: var(--muted);
+  --color-surface-2: var(--surface-2);
+  --color-cabinet: var(--cabinet);
+  --color-cabinet-hover: var(--cabinet-hover);
+  --color-cabinet-ink: var(--cabinet-ink);
+  --color-cabinet-muted: var(--cabinet-muted);
+  --color-focus: var(--focus);
+  --color-drum: var(--drum);
+  --color-drum-ink: var(--drum-ink);
+  --color-drum-tenths: var(--drum-tenths);
   --color-series-1: var(--series-1);
   --color-series-2: var(--series-2);
   --color-series-3: var(--series-3);
@@ -75,17 +101,42 @@
   --color-status-good: var(--status-good);
   --color-status-warning: var(--status-warning);
   --color-status-critical: var(--status-critical);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-readex), system-ui, sans-serif;
   --font-mono: var(--font-geist-mono);
+}
+
+/*
+ * Meter plates are cut square. Tailwind's rounded-* steps are redefined here
+ * rather than rewritten at every call site, so a plate, a button and an input
+ * all share the same nearly-square corner. rounded-full is left alone: a dot
+ * is still a dot.
+ */
+@theme {
+  --radius-sm: 1px;
+  --radius-md: 2px;
+  --radius-lg: 3px;
+  --radius-xl: 3px;
+  --radius-2xl: 4px;
 }
 
 :root {
   @variant dark {
-    --background: #121211;
-    --foreground: #ededed;
-    --surface: #1a1a19;
-    --border: #2e2e2c;
-    --muted: #a1a1aa;
+    --background: #0f1511;
+    --foreground: #e6ebe4;
+    --surface: #161e19;
+    --surface-2: #1c2620;
+    --border: #2b382f;
+    --muted: #96a699;
+
+    --cabinet: #1a3324;
+    --cabinet-hover: #24432f;
+    --cabinet-ink: #e6efe7;
+    --cabinet-muted: #9fb7a6;
+    --focus: #6fd19b;
+
+    --drum: #070908;
+    --drum-ink: #f2f2ec;
+    --drum-tenths: #b8322b;
 
     --series-1: #3987e5;
     --series-2: #d95926;
@@ -128,6 +179,113 @@ html {
 body {
   background: var(--background);
   color: var(--foreground);
+  caret-color: var(--focus);
+  accent-color: var(--cabinet);
+  scrollbar-color: var(--border) transparent;
+}
+
+/*
+ * The parts the browser draws itself carry the meter too: selection is the
+ * cabinet green, focus is one ring in one colour on every control, and figures
+ * in tables line up by default.
+ */
+::selection {
+  background: var(--cabinet);
+  color: var(--cabinet-ink);
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+table,
+dd,
+output {
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * A plate's own heading: small, set in capitals with open tracking, the way the
+ * makers' plate on a meter is engraved. Rank on these pages comes from weight
+ * and case, never from size alone, so headings stay inside one tight scale.
+ */
+.plate-label {
+  font-size: 0.6875rem;
+  line-height: 1rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/*
+ * Rolling digits. Each digit is a window onto a column of the ten digits; the
+ * column slides to the current digit, so a counter that moves on a new push
+ * rolls the way a meter's wheels do. The window's edges fade slightly, which
+ * is all the wheel it needs to suggest. The roll is the only motion the
+ * counters have, and it is dropped entirely when the reader asks for less.
+ */
+.drum-cell {
+  position: relative;
+  display: inline-block;
+  height: 1.2em;
+  overflow: hidden;
+  line-height: 1.2em;
+  font-variant-numeric: tabular-nums;
+  -webkit-mask-image: linear-gradient(transparent, #000 14%, #000 86%, transparent);
+  mask-image: linear-gradient(transparent, #000 14%, #000 86%, transparent);
+}
+
+.drum-reel {
+  display: flex;
+  flex-direction: column;
+  transform: translateY(calc(var(--digit) * -1.2em));
+  transition: transform 700ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drum-reel {
+    transition: none;
+  }
+}
+
+/*
+ * The meter's disc, seen the way it is on a real meter: edge-on through a slot,
+ * a ticked rim sliding past with one heavier mark per turn. It moves at the
+ * speed of the line; the period is set inline from the live rate, and a stopped
+ * line parks it. One turn is 48px of rim.
+ */
+.meter-band {
+  background-image:
+    linear-gradient(90deg, transparent 0 21px, var(--foreground) 21px 27px, transparent 27px),
+    repeating-linear-gradient(90deg, var(--muted) 0 1px, transparent 1px 6px);
+  background-size:
+    48px 100%,
+    6px 55%;
+  background-position:
+    0 0,
+    0 50%;
+  background-repeat: repeat-x;
+  opacity: 0.85;
+}
+
+@keyframes meter-band {
+  to {
+    background-position:
+      48px 0,
+      48px 50%;
+  }
+}
+
+.meter-band[data-spinning] {
+  animation: meter-band var(--period, 4s) linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .meter-band[data-spinning] {
+    animation: none;
+  }
 }
 
 /*
@@ -146,23 +304,26 @@ body:has([data-unsaved-bar]) [data-toast] {
 /*
  * Arabic.
  *
- * Geist carries no Arabic glyphs, so without this the script falls through to
- * whatever each machine happens to have and the page lands differently on every
- * device. Cairo is a sans in the same register and covers both scripts, which
- * matters because these pages mix Arabic prose with Latin identifiers that are
- * never translated: GB, pppoe-out1, Asia/Beirut.
+ * Readex Pro is one family drawn for both scripts, so a page that mixes Arabic
+ * prose with Latin identifiers that are never translated (GB, pppoe-out1,
+ * Asia/Beirut) stays in one voice in either language.
  *
- * Arabic has no capitals and its letters carry their weight lower, so the
- * tracking that tightens Geist headings works against it; it is reset, and the
- * line height is opened up for the ascenders and the dots below the baseline.
+ * Arabic has no capitals and its letters carry their weight lower, so tracking
+ * works against it; it is reset, the plate labels drop their open spacing, and
+ * the line height is opened up for the ascenders and the dots below the
+ * baseline.
  */
 :lang(ar) body {
-  font-family: var(--font-cairo), system-ui, sans-serif;
   line-height: 1.7;
 }
 
-:lang(ar) .tracking-tight {
+:lang(ar) .tracking-tight,
+:lang(ar) .plate-label {
   letter-spacing: normal;
+}
+
+:lang(ar) .plate-label {
+  font-size: 0.75rem;
 }
 
 /*

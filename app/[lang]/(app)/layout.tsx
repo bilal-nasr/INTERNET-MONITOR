@@ -30,8 +30,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <>
       <Nav username={auth.user.username} devicesEnabled={devicesEnabled} />
-      <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6">{children}</main>
-      <footer className="mx-auto w-full max-w-5xl px-4 pb-6 text-xs text-zinc-500 sm:px-6">
+      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-6">{children}</main>
+      <footer className="mx-auto w-full max-w-6xl px-4 pb-6 text-xs text-muted sm:px-6">
         <Interpolate template={d.footer.ingest} values={{ path: <code>/api/ingest</code> }} />
       </footer>
     </>

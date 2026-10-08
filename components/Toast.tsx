@@ -36,7 +36,9 @@ export function Toast({ toast, onDismiss }: { toast: ToastState | null; onDismis
         className="ms-3 text-xs text-muted hover:text-foreground"
         aria-label={d.common.dismiss}
       >
-        &#10005;
+        <svg viewBox="0 0 12 12" className="size-3" aria-hidden>
+          <path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="square" />
+        </svg>
       </button>
     </div>
   );

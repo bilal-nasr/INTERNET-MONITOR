@@ -4,7 +4,7 @@ import { useI18n } from "@/components/I18nProvider";
 import { fill } from "@/lib/i18n";
 
 const buttonClass =
-  "rounded-md border border-border px-2.5 py-1.5 text-xs transition-colors hover:bg-border/60 hover:text-foreground disabled:pointer-events-none disabled:opacity-40";
+  "rounded-md border border-border px-2.5 py-1.5 text-xs transition-colors hover:bg-surface-2 hover:text-foreground disabled:pointer-events-none disabled:opacity-40";
 
 /**
  * The controls under a paged table: where the reader is, and the way to the

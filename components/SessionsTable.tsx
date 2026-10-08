@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useI18n } from "@/components/I18nProvider";
+import { Stamp } from "@/components/meter/Stamp";
 import { CauseChips } from "@/components/CauseChips";
 import { Pager, revealTop } from "@/components/Pager";
 import { useKeysetPages, type KeysetPage } from "@/components/useKeysetPages";
@@ -225,7 +226,7 @@ export function SessionsTable({
         }`}
       >
         <table className="w-full min-w-[58rem] text-sm">
-          <thead>
+          <thead className="bg-surface-2/60">
             <tr className="border-b border-border text-start text-xs text-muted">
               <th className="w-10 px-4 py-3">
                 <SelectAll
@@ -330,28 +331,24 @@ function Status({ session }: { session: SessionSummary }) {
 
   if (session.open && session.seconds_since_seen <= SILENT_AFTER_SECONDS) {
     return (
-      <span className="inline-flex items-center gap-1.5 rounded-full bg-status-good/15 px-2 py-0.5 text-xs font-medium text-green-700 dark:text-status-good">
-        <span className="size-1.5 rounded-full bg-status-good" />
-        {d.sessions.live}
-      </span>
+      <Stamp tone="good">{d.sessions.live}</Stamp>
     );
   }
   if (session.open) {
     return (
       <span
-        className="inline-flex items-center gap-1.5 rounded-full bg-status-critical/15 px-2 py-0.5 text-xs font-medium text-status-critical"
         title={fill(d.sessions.nothingHeardFor, {
           duration: f.duration(session.seconds_since_seen),
         })}
       >
-        &#9888; {d.sessions.noContact}
+        <Stamp tone="critical">{d.sessions.noContact}</Stamp>
       </span>
     );
   }
   return (
-    <span className="text-xs text-muted">
+    <Stamp tone={session.end_reason === "restart" ? "warning" : "neutral"}>
       {session.end_reason === "restart" ? d.sessions.dropped : d.sessions.closedStatus}
-    </span>
+    </Stamp>
   );
 }
 
@@ -446,7 +443,7 @@ function SelectionSummary({ ids, onClear }: { ids: number[]; onClear: () => void
         <button
           type="button"
           onClick={onClear}
-          className="ms-auto rounded-md border border-border px-2.5 py-1 text-xs text-muted transition-colors hover:bg-border/60 hover:text-foreground"
+          className="ms-auto rounded-md border border-border px-2.5 py-1 text-xs text-muted transition-colors hover:bg-surface-2 hover:text-foreground"
         >
           {d.common.clear}
         </button>

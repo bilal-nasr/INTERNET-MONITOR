@@ -8,7 +8,7 @@ import { causeSide, segmentSeconds, type CauseSegment, type CauseSide } from "@/
 const TONE: Record<CauseSide, string> = {
   yours: "border-status-warning/40 bg-status-warning/10 text-amber-700 dark:text-status-warning",
   isp: "border-status-critical/40 bg-status-critical/10 text-status-critical",
-  neutral: "border-border bg-border/40 text-muted",
+  neutral: "border-border bg-surface-2 text-muted",
   unknown: "border-dashed border-border text-muted",
 };
 
@@ -31,7 +31,7 @@ export function CauseChips({ causes }: { causes: CauseSegment[] }) {
               →
             </span>
           )}
-          <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${TONE[causeSide(segment.cause)]}`}>
+          <span className={`rounded-sm border-[1.5px] px-1.5 py-px text-xs font-medium ${TONE[causeSide(segment.cause)]}`}>
             {fill(d.sessions.causeSegment, {
               cause: d.sessions.causes[segment.cause],
               duration: f.duration(segmentSeconds(segment)),

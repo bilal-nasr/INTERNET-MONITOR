@@ -11,10 +11,10 @@ export async function FreeHoursBadge({ free }: { free: NonNullable<TodayUsage["f
   return (
     <span
       title={free.active ? d.dashboard.freeNowHint : d.dashboard.freeLaterHint}
-      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${
+      className={`inline-flex items-center gap-1.5 rounded-sm border-[1.5px] px-2 py-0.5 text-xs font-medium ${
         free.active
-          ? "bg-status-good/15 text-green-700 dark:text-status-good"
-          : "border border-border text-muted"
+          ? "border-green-700/50 bg-green-700/8 text-green-800 dark:border-status-good/50 dark:text-status-good"
+          : "border-border text-muted"
       }`}
     >
       {free.active && <span aria-hidden className="size-1.5 rounded-full bg-status-good" />}

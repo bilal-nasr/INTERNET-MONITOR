@@ -29,7 +29,7 @@ export default async function SettingsPage({
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-semibold tracking-tight">{d.settings.title}</h1>
+        <h1 className="text-lg font-semibold">{d.settings.title}</h1>
         <p className="text-sm text-muted">{d.settings.subtitle}</p>
       </div>
       <SettingsForm

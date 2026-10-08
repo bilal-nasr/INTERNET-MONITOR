@@ -82,7 +82,7 @@ export default async function SessionsPage({ searchParams }: { searchParams: Pro
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">{d.sessions.title}</h1>
+          <h1 className="text-lg font-semibold">{d.sessions.title}</h1>
           <p className="text-sm text-muted">
             {fill(d.sessions.subtitle, { timezone: settings.timezone })}
           </p>

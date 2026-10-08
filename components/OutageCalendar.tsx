@@ -72,7 +72,7 @@ export async function OutageCalendar({
   return (
     <section className="rounded-xl border border-border bg-surface p-4 sm:p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <h2 className="text-sm font-medium text-muted">{s.calendarHeading}</h2>
+        <h2 className="plate-label">{s.calendarHeading}</h2>
         <span className="text-xs text-muted">{s.calendarHint}</span>
       </div>
       {tooLong ? (

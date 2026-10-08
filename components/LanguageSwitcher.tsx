@@ -14,7 +14,7 @@ import { fill } from "@/lib/i18n";
  * along too: a statistics page is a range as much as it is a page, and losing
  * the range on a language change would throw away what the reader had chosen.
  */
-export function LanguageSwitcher() {
+export function LanguageSwitcher({ onCabinet = false }: { onCabinet?: boolean }) {
   const { locale, d } = useI18n();
   const pathname = usePathname();
   const params = useSearchParams();
@@ -36,9 +36,13 @@ export function LanguageSwitcher() {
             aria-current={current ? "true" : undefined}
             title={fill(d.language.switchTo, { language: LOCALE_NAMES[option] })}
             className={`rounded-md px-2 py-1 text-xs transition-colors ${
-              current
-                ? "bg-foreground text-background"
-                : "border border-border text-muted hover:bg-border/60 hover:text-foreground"
+              onCabinet
+                ? current
+                  ? "bg-cabinet-ink text-cabinet"
+                  : "border border-cabinet-muted/40 text-cabinet-muted hover:bg-cabinet-hover hover:text-cabinet-ink"
+                : current
+                  ? "bg-cabinet text-cabinet-ink"
+                  : "border border-border text-muted hover:bg-surface-2 hover:text-foreground"
             }`}
           >
             {LOCALE_NAMES[option]}

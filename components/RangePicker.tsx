@@ -35,8 +35,8 @@ const MORE: RangePreset[] = [
 const pill = (active: boolean) =>
   `rounded-md px-2.5 py-1.5 text-xs transition-colors ${
     active
-      ? "bg-foreground text-background"
-      : "border border-border text-muted hover:bg-border/60 hover:text-foreground"
+      ? "bg-cabinet font-medium text-cabinet-ink"
+      : "border border-border text-muted hover:bg-surface-2 hover:text-foreground"
   }`;
 
 export function RangePicker({
@@ -172,7 +172,7 @@ function CustomRangeForm({
       </label>
       <button
         type="submit"
-        className="rounded-md bg-foreground px-3 py-1.5 text-sm text-background transition-opacity hover:opacity-90"
+        className="rounded-md bg-cabinet px-3 py-1.5 text-sm font-medium text-cabinet-ink transition-colors hover:bg-cabinet-hover"
       >
         {d.common.apply}
       </button>

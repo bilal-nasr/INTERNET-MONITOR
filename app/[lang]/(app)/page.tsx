@@ -71,7 +71,7 @@ export default async function DashboardPage() {
       <div className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="text-xl font-semibold tracking-tight">{d.dashboard.title}</h1>
+            <h1 className="text-lg font-semibold">{d.dashboard.title}</h1>
             <p className="text-sm text-muted">{dateLine}</p>
           </div>
           <AutoRefresh seconds={15} />
@@ -82,10 +82,10 @@ export default async function DashboardPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">{d.dashboard.title}</h1>
+          <h1 className="text-lg font-semibold">{d.dashboard.title}</h1>
           <p className="text-sm text-muted">{dateLine}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -94,8 +94,11 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
+      {/* The three readings the owner opens the app for, as three equal faces
+          of one meter. On a phone they stack in the same order. */}
+      <div className="grid gap-4 lg:grid-cols-3">
         <UsageProgress usage={usage} />
+        <CycleGauge cycle={cycle} timezone={settings.timezone} />
         <StatusCard
           usage={usage}
           pollingEnabled={settings.polling_enabled}
@@ -108,12 +111,11 @@ export default async function DashboardPage() {
           // the user was emailed when nobody was.
           staleAlertAt={staleAlert?.status === "sent" ? staleAlert.created_at.toISOString() : null}
           address={address}
+          rate={rates.length ? rates[rates.length - 1] : null}
         />
       </div>
 
       <ThroughputCard rates={rates} minutes={THROUGHPUT_MINUTES} timezone={settings.timezone} />
-
-      <CycleGauge cycle={cycle} timezone={settings.timezone} />
 
       <HistoryChart
         history={history}
@@ -129,7 +131,7 @@ export default async function DashboardPage() {
 async function SetupError({ message }: { message: string }) {
   const { d } = await getI18n();
   return (
-    <div className="rounded-xl border border-status-critical/40 bg-status-critical/5 p-5">
+    <div className="rounded-lg border border-status-critical/50 bg-status-critical/5 p-5">
       <h1 className="font-semibold text-status-critical">{d.setupError.title}</h1>
       <p className="mt-2 text-sm">
         <Interpolate

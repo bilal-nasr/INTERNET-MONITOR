@@ -1,31 +1,27 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
-import { Cairo } from "next/font/google";
+import { Geist_Mono, Readex_Pro } from "next/font/google";
+import { AppearanceSync } from "@/components/AppearanceSync";
 import { I18nProvider } from "@/components/I18nProvider";
+import { InlineScript } from "@/components/InlineScript";
 import { APPEARANCE_SCRIPT } from "@/lib/appearance";
 import { DIRECTION, LOCALES } from "@/lib/i18n/config";
 import { getI18n } from "@/lib/i18n/server";
 import "../globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
+/**
+ * One family for both scripts. Readex Pro was drawn for Arabic and Latin
+ * together, in the squared, engineered register of a maker's plate, so a page
+ * that mixes Arabic prose with Latin units (GB, pppoe-out1) keeps one voice.
+ */
+const readex = Readex_Pro({
+  variable: "--font-readex",
+  subsets: ["arabic", "latin"],
 });
 
+/** Code only: the router script, paths, environment variables. */
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
-});
-
-/**
- * Geist has no Arabic glyphs, so Arabic text would fall through to whatever the
- * system happens to offer and land inconsistently across machines. Cairo is a
- * sans in the same register and carries both scripts, which keeps a page that
- * mixes Arabic prose with Latin units (GB, pppoe-out1) in one voice.
- */
-const cairo = Cairo({
-  variable: "--font-cairo",
-  subsets: ["arabic", "latin"],
 });
 
 /** Both languages are known ahead of time, so both can be prerendered. */
@@ -35,7 +31,7 @@ export function generateStaticParams() {
 
 /** The browser chrome colour once installed, the same ink as the manifest. */
 export const viewport: Viewport = {
-  themeColor: "#171717",
+  themeColor: "#24402f",
 };
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -66,13 +62,14 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     <html
       lang={locale}
       dir={dir}
-      className={`${geistSans.variable} ${geistMono.variable} ${cairo.variable} h-full antialiased`}
+      className={`${readex.variable} ${geistMono.variable} h-full antialiased`}
       suppressHydrationWarning
     >
       <head>
-        <script dangerouslySetInnerHTML={{ __html: APPEARANCE_SCRIPT }} />
+        <InlineScript html={APPEARANCE_SCRIPT} />
       </head>
       <body className="min-h-full flex flex-col font-sans">
+        <AppearanceSync />
         <I18nProvider locale={locale} dictionary={d}>
           {children}
         </I18nProvider>
