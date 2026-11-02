@@ -3,23 +3,23 @@ import { hashPassword, verifyPassword } from "./password";
 
 describe("password hashing", () => {
   it("verifies the password it hashed and rejects another", async () => {
-    const stored = await hashPassword("admin123");
+    const stored = await hashPassword("correct horse");
     expect(stored.startsWith("scrypt$16384$8$1$")).toBe(true);
-    expect(await verifyPassword("admin123", stored)).toBe(true);
+    expect(await verifyPassword("correct horse", stored)).toBe(true);
     expect(await verifyPassword("admin124", stored)).toBe(false);
     expect(await verifyPassword("", stored)).toBe(false);
   });
 
   it("salts, so the same password hashes differently twice", async () => {
-    const a = await hashPassword("admin123");
-    const b = await hashPassword("admin123");
+    const a = await hashPassword("correct horse");
+    const b = await hashPassword("correct horse");
     expect(a).not.toBe(b);
   });
 
-  it("is deterministic for a given salt, which is what the schema seed relies on", async () => {
-    const salt = Buffer.from("quota-monitor-seed", "utf8");
-    const a = await hashPassword("admin123", salt);
-    const b = await hashPassword("admin123", salt);
+  it("is deterministic for a given salt", async () => {
+    const salt = Buffer.from("fixed-test-salt", "utf8");
+    const a = await hashPassword("correct horse", salt);
+    const b = await hashPassword("correct horse", salt);
     expect(a).toBe(b);
   });
 

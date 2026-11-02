@@ -99,7 +99,7 @@ CREATE TABLE IF NOT EXISTS sessions (
 
 -- ------------------------------------------------------------- accounts ----
 
--- Who may sign in. The seed below creates one account; there is no sign-up.
+-- Who may sign in. There is no sign-up: scripts/create-user.mjs makes the account.
 CREATE TABLE IF NOT EXISTS users (
   id             SERIAL PRIMARY KEY,
   username       TEXT NOT NULL,
@@ -404,14 +404,8 @@ INSERT INTO settings (
 )
 ON CONFLICT (id) DO NOTHING;
 
--- Seed the first account: username bilalnasr, password admin123 (stored as an
--- scrypt hash with a fixed salt, so re-running this file yields the same row).
--- Change the password from /settings as soon as the app is reachable by anyone
--- but you. A no-op once any user exists, so a changed password is never undone.
-INSERT INTO users (username, email, password_hash)
-SELECT 'bilalnasr', NULL,
-       'scrypt$16384$8$1$cXVvdGEtbW9uaXRvci1zZWVk$yMXSIcsj4xKiN0h6biQqvOmyM3jipC20hCWReHtRCkaqQWIg/ymzm9AEU38c5UzIWxR2G0+Mqlw2TZQqb9pwtw=='
-WHERE NOT EXISTS (SELECT 1 FROM users);
+-- No account is seeded: a public default login is a live credential on any
+-- reachable install. Create the first one with scripts/create-user.mjs.
 
 -- Backfill the interface name on readings stored before that column existed.
 -- Runs after the seed so the settings row is guaranteed to be there.

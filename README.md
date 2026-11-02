@@ -8,13 +8,13 @@ Stack: Next.js 16 (App Router, TypeScript), Postgres via `pg-promise`, Resend fo
 
 ## Signing in
 
-Every page and every API route except the router's push, the health probe and the sign-in endpoints requires a signed-in user. `schema.sql` seeds one account:
+Every page and every API route except the router's push, the health probe and the sign-in endpoints requires a signed-in user. There is no sign-up and no default account, so create the first one yourself after running `schema.sql`:
 
-| Username | Password |
-| --- | --- |
-| `bilalnasr` | `admin123` |
+```bash
+node scripts/create-user.mjs <username>
+```
 
-**Change that password on `/settings` before the app is reachable by anyone but you.** The Account section there also takes an email address, which is where a "forgot password" link is sent; while it is empty the link goes to the alert email instead.
+It asks for a password and prints one `INSERT` statement. Run that against the database, then sign in. The Account section on `/settings` changes the password and takes an email address, which is where a "forgot password" link is sent; while it is empty the link goes to the alert email instead.
 
 How a session works:
 
@@ -214,7 +214,7 @@ rest:
 
 ### 1. Database
 
-Any Postgres works. Run `schema.sql` once; it is idempotent and seeds the settings row and the first account (see [Signing in](#signing-in)).
+Any Postgres works. Run `schema.sql` once; it is idempotent and seeds the settings row. Then create your account (see [Signing in](#signing-in)).
 
 ```bash
 psql "$DATABASE_URL" -f schema.sql
